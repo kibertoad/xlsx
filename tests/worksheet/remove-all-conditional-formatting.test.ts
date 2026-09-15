@@ -1,12 +1,12 @@
 // Tests for removeAllConditionalFormatting.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { addCellIsRule, addColorScaleRule } from '../../src/worksheet/conditional-formatting';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { addCellIsRule, addColorScaleRule } from '../../src/worksheet/conditional-formatting.js';
 import {
   getConditionalFormatting,
   removeAllConditionalFormatting,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('removeAllConditionalFormatting', () => {
   it('drops every CF block and returns the count', () => {

@@ -6,12 +6,12 @@
 // modelling vt:vector explicitly is a phase-3 concern at the earliest. See row
 // for `packaging/extended.py`.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { fromTree, toTree } from '../schema/serialize';
-import { XPROPS_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
-import type { XmlNode } from '../xml/tree';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { fromTree, toTree } from '../schema/serialize.js';
+import { XPROPS_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
+import type { XmlNode } from '../xml/tree.js';
 
 export interface ExtendedProperties {
   application?: string;
@@ -123,7 +123,7 @@ export function extendedPropsFromBytes(bytes: Uint8Array | string): ExtendedProp
 
 // ---- Workbook ergonomic helpers ----------------------------------------
 
-import type { Workbook } from '../workbook/workbook';
+import type { Workbook } from '../workbook/workbook.js';
 
 const ensureAppProperties = (wb: Workbook): ExtendedProperties => {
   if (!wb.appProperties) wb.appProperties = {};

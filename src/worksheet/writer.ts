@@ -9,36 +9,36 @@
 // prioritises correctness — once loadWorkbook → saveWorkbook round-trips, we
 // can swap the body for a streaming writer without callers noticing.
 
-import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell';
-import type { Relationships } from '../packaging/relationships';
-import { dateToExcel, durationToExcel } from '../utils/datetime';
-import { escapeCellString, escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import type { SharedStringsTable } from '../workbook/shared-strings';
-import { addSharedRichText, addSharedString } from '../workbook/shared-strings';
-import { MARKUP_COMPAT_NS, SHEET_MAIN_NS, X14_NS } from '../xml/namespaces';
-import { serializeXml } from '../xml/serializer';
-import type { XmlNode } from '../xml/tree';
-import type { AutoFilter } from './auto-filter';
-import { multiCellRangeToString, rangeToString } from './cell-range';
-import type { ConditionalFormatting, ConditionalFormattingRule } from './conditional-formatting';
-import type { DataValidation } from './data-validations';
-import type { ColumnDimension, RowDimension } from './dimensions';
-import type { CellWatch, IgnoredError } from './errors';
-import type { Hyperlink } from './hyperlinks';
-import type { DataConsolidate, DataReference } from './data-consolidate';
-import type { Scenario, ScenarioInputCell, ScenarioList } from './scenarios';
-import type { HeaderFooter, PageBreak, PageMargins, PageSetup, PrintOptions } from './page-setup';
-import type { WorksheetPhoneticProperties } from './phonetic';
-import type { WebPublishItem, WorksheetCustomProperty } from './web-publish';
-import type { SheetProperties } from './properties';
-import type { SheetProtection } from './protection';
-import type { ProtectedRange } from './protected-ranges';
-import type { SortCondition, SortState } from './sort-state';
-import type { FormControl, OleObject } from './ole-objects';
-import type { CustomSheetView } from './custom-sheet-views';
-import type { Pane, Selection, SheetView } from './views';
-import type { Worksheet } from './worksheet';
+import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell.js';
+import type { Relationships } from '../packaging/relationships.js';
+import { dateToExcel, durationToExcel } from '../utils/datetime.js';
+import { escapeCellString, escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import type { SharedStringsTable } from '../workbook/shared-strings.js';
+import { addSharedRichText, addSharedString } from '../workbook/shared-strings.js';
+import { MARKUP_COMPAT_NS, SHEET_MAIN_NS, X14_NS } from '../xml/namespaces.js';
+import { serializeXml } from '../xml/serializer.js';
+import type { XmlNode } from '../xml/tree.js';
+import type { AutoFilter } from './auto-filter.js';
+import { multiCellRangeToString, rangeToString } from './cell-range.js';
+import type { ConditionalFormatting, ConditionalFormattingRule } from './conditional-formatting.js';
+import type { DataValidation } from './data-validations.js';
+import type { ColumnDimension, RowDimension } from './dimensions.js';
+import type { CellWatch, IgnoredError } from './errors.js';
+import type { Hyperlink } from './hyperlinks.js';
+import type { DataConsolidate, DataReference } from './data-consolidate.js';
+import type { Scenario, ScenarioInputCell, ScenarioList } from './scenarios.js';
+import type { HeaderFooter, PageBreak, PageMargins, PageSetup, PrintOptions } from './page-setup.js';
+import type { WorksheetPhoneticProperties } from './phonetic.js';
+import type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
+import type { SheetProperties } from './properties.js';
+import type { SheetProtection } from './protection.js';
+import type { ProtectedRange } from './protected-ranges.js';
+import type { SortCondition, SortState } from './sort-state.js';
+import type { FormControl, OleObject } from './ole-objects.js';
+import type { CustomSheetView } from './custom-sheet-views.js';
+import type { Pane, Selection, SheetView } from './views.js';
+import type { Worksheet } from './worksheet.js';
 
 const HYPERLINK_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink';
 
@@ -64,7 +64,7 @@ export interface WorksheetWriteContext {
    * ("../tables/tableN.xml") + the worksheet-rels rId. Called once per
    * `ws.tables` entry while serialising.
    */
-  registerTable?: (table: import('./table').TableDefinition) => { rId: string };
+  registerTable?: (table: import('./table.js').TableDefinition) => { rId: string };
   /**
    * Comments / VML drawing allocator. saveWorkbook emits the comments part + a
    * placeholder VML drawing for all comments on the sheet, and returns the
@@ -72,14 +72,14 @@ export interface WorksheetWriteContext {
    * `<legacyDrawing r:id>`. Called once per worksheet that carries any
    * comments.
    */
-  registerComments?: (comments: ReadonlyArray<import('./comments').LegacyComment>) => { vmlRelId: string };
+  registerComments?: (comments: ReadonlyArray<import('./comments.js').LegacyComment>) => { vmlRelId: string };
   /**
    * Drawing allocator. saveWorkbook emits xl/drawings/drawingN.xml under a
    * workbook-global counter, registers a `${REL_NS}/drawing` rel on the
    * worksheet rels, and returns the worksheet-rels rId — splatted into
    * `<drawing r:id>` by the writer. Called once when ws.drawing is set.
    */
-  registerDrawing?: (drawing: import('../drawing/drawing').Drawing) => { rId: string };
+  registerDrawing?: (drawing: import('../drawing/drawing.js').Drawing) => { rId: string };
 }
 
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
@@ -314,7 +314,7 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext): string =>
     // which is where Excel itself stores it — per-run formatting is honoured
     // from there, and a formatted string repeated across cells costs one slot
     // instead of one copy per cell.
-    const runs = (value as { kind: 'rich-text'; runs: import('../cell/rich-text').RichText }).runs;
+    const runs = (value as { kind: 'rich-text'; runs: import('../cell/rich-text.js').RichText }).runs;
     const id = addSharedRichText(ctx.sharedStrings, runs);
     return `<c r="${ref}"${styleAttr} t="s"><v>${id}</v></c>`;
   }
@@ -653,7 +653,7 @@ export const serializePageSetup = (ps: PageSetup): string | undefined => {
 };
 
 const serializeSmartTags = (
-  st: ReadonlyArray<import('./smart-tags').CellSmartTags>,
+  st: ReadonlyArray<import('./smart-tags.js').CellSmartTags>,
 ): string => {
   const parts: string[] = ['<smartTags>'];
   for (const cst of st) {

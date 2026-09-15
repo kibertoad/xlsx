@@ -1,7 +1,7 @@
 // Tests for bulk hide/unhide row + column helpers.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   getColumnDimension,
   getRowDimension,
@@ -10,7 +10,7 @@ import {
   setColumnWidth,
   unhideColumns,
   unhideRows,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('hideRows / unhideRows', () => {
   it('hideRows stamps every row in the range with hidden=true', () => {

@@ -2,12 +2,12 @@
 // models.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeFunctionGroups } from '../../src/workbook/function-groups';
-import { makeSmartTagProperties, makeSmartTagType } from '../../src/workbook/smart-tags';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeFunctionGroups } from '../../src/workbook/function-groups.js';
+import { makeSmartTagProperties, makeSmartTagType } from '../../src/workbook/smart-tags.js';
 
 describe('smartTagPr round-trip', () => {
   it('preserves embed + show', async () => {

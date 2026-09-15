@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { type ChartSpace, makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml';
-import { makeTwoCellAnchor } from '../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import type { Worksheet } from '../../src/worksheet/worksheet';
+import { type ChartSpace, makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml.js';
+import { makeTwoCellAnchor } from '../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import type { Worksheet } from '../../src/worksheet/worksheet.js';
 
-const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet').Chartsheet | undefined): Worksheet => {
+const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined): Worksheet => {
   if (!ws) throw new Error('expected sheet');
   if (!('rows' in ws)) throw new Error('expected worksheet, got chartsheet');
   return ws;
@@ -157,7 +157,7 @@ describe('full chart round-trip through saveWorkbook → loadWorkbook', () => {
     ]);
     const bytes = await workbookToBytes(wb);
     const wb2 = await loadWorkbook(fromBuffer(bytes));
-    const titles = (sheet: Worksheet | import('../../src/chartsheet/chartsheet').Chartsheet | undefined): string[] =>
+    const titles = (sheet: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined): string[] =>
       (sheet?.drawing?.items ?? [])
         .map((i) => (i.content.kind === 'chart' ? i.content.chart.space?.title?.text : undefined))
         .filter((t): t is string => t !== undefined);

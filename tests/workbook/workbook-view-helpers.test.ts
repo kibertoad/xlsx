@@ -1,9 +1,9 @@
 // Tests for the get/set helpers over Workbook.bookViews[0].
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
 import {
   getActiveTab,
   getFirstSheet,
@@ -12,8 +12,8 @@ import {
   setShowSheetTabs,
   setTabRatio,
   setWorkbookWindow,
-} from '../../src/workbook/views';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/workbook/views.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('workbook view helpers', () => {
   it('getActiveTab returns 0 on a fresh workbook with no bookViews', () => {

@@ -1,8 +1,8 @@
 // Tests for isWorksheetEmpty — short-circuiting populated check.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { isWorksheetEmpty, setCell } from '../../src/worksheet/worksheet';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { isWorksheetEmpty, setCell } from '../../src/worksheet/worksheet.js';
 
 describe('isWorksheetEmpty', () => {
   it('returns true for a freshly created sheet', () => {

@@ -5,7 +5,7 @@
 // spreadsheets. customFilters / top10 / dynamicFilter / colorFilter /
 // iconFilter / SortState are reserved for later iterations.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 export type FilterColumn = {
   kind: 'filters';
@@ -41,7 +41,7 @@ export function makeFilterColumn(opts: {
 
 // ---- Worksheet ergonomic builders ---------------------------------------
 
-import type { Worksheet } from './worksheet';
+import type { Worksheet } from './worksheet.js';
 
 /** Add an AutoFilter dropdown header strip to the given range. */
 export const addAutoFilter = (ws: Worksheet, ref: string): AutoFilter => {

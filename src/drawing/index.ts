@@ -11,7 +11,7 @@ export type {
   Drawing,
   DrawingItem,
   PictureReference,
-} from './drawing';
+} from './drawing.js';
 export {
   addChartAt,
   addImageAt,
@@ -23,21 +23,21 @@ export {
   removeAllCharts,
   removeAllDrawingItems,
   removeAllImages,
-} from './drawing';
-export type { XlsxImage, XlsxImageFormat } from './image';
-export { loadImage } from './image';
+} from './drawing.js';
+export type { XlsxImage, XlsxImageFormat } from './image.js';
+export { loadImage } from './image.js';
 export type {
   AnchorMarker,
   DrawingAnchor,
   Point2D,
   PositiveSize2D,
-} from './anchor';
-export { makeOneCellAnchor } from './anchor';
-export type { BlackWhiteMode, ShapeProperties, Transform2D } from './dml/shape-properties';
-export { makeShapeProperties } from './dml/shape-properties';
+} from './anchor.js';
+export { makeOneCellAnchor } from './anchor.js';
+export type { BlackWhiteMode, ShapeProperties, Transform2D } from './dml/shape-properties.js';
+export { makeShapeProperties } from './dml/shape-properties.js';
 
 // ---- DML colours -----------------------------------------------------------
-export type { ColorMod, DmlColor, DmlColorWithMods, SchemeColorName } from './dml/colors';
+export type { ColorMod, DmlColor, DmlColorWithMods, SchemeColorName } from './dml/colors.js';
 export {
   makeColor,
   makeSchemeColor,
@@ -45,7 +45,7 @@ export {
   SCHEME_COLOR_NAMES,
   VALUED_COLOR_MOD_KINDS,
   VALUELESS_COLOR_MOD_KINDS,
-} from './dml/colors';
+} from './dml/colors.js';
 
 // ---- DML fills -------------------------------------------------------------
 export type {
@@ -57,14 +57,14 @@ export type {
   RelativeRect,
   TileFill,
   TileFlip,
-} from './dml/fill';
+} from './dml/fill.js';
 export {
   makeGradientFill,
   makeNoFill,
   makePatternFill,
   makeSolidFill,
   PRESET_PATTERN_NAMES,
-} from './dml/fill';
+} from './dml/fill.js';
 
 // ---- DML text body (used by chart axis / title / legend `txPr`) ------------
 export type {
@@ -91,7 +91,7 @@ export type {
   TextUnderline,
   TextVertical,
   TextWrap,
-} from './dml/text';
+} from './dml/text.js';
 export {
   makeBreak,
   makeParagraph,
@@ -99,4 +99,4 @@ export {
   makeRunProperties,
   makeSimpleTextBody,
   makeTextBody,
-} from './dml/text';
+} from './dml/text.js';

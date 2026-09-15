@@ -4,10 +4,10 @@ import {
   makeAbsoluteAnchor,
   makeOneCellAnchor,
   makeTwoCellAnchor,
-} from '../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing';
-import { drawingToBytes, parseDrawingXml } from '../../src/drawing/drawing-xml';
-import { EMU_PER_PIXEL } from '../../src/utils/units';
+} from '../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing.js';
+import { drawingToBytes, parseDrawingXml } from '../../src/drawing/drawing-xml.js';
+import { EMU_PER_PIXEL } from '../../src/utils/units.js';
 
 describe('anchor markers + factory functions', () => {
   it('anchorMarkerFromCellRef converts to 0-based col/row with zero offsets', () => {

@@ -2,17 +2,17 @@
 // the HEADER_FOOTER_CODES catalogue.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
+import { fromBuffer } from '../../src/io/node.js';
 import {
   buildHeaderFooterText,
   HEADER_FOOTER_CODES,
   setFooterText,
   setHeaderText,
-} from '../../src/worksheet/page-setup';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import type { Worksheet } from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/page-setup.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import type { Worksheet } from '../../src/worksheet/worksheet.js';
 
 describe('buildHeaderFooterText', () => {
   it('all three sections', () => {

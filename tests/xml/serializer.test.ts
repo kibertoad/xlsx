@@ -2,12 +2,12 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { CHART_NS, PKG_REL_NS, REL_NS, SHEET_MAIN_NS, XML_NS } from '../../src/xml/namespaces';
-import { parseXml } from '../../src/xml/parser';
-import { serializeXml } from '../../src/xml/serializer';
-import { el } from '../../src/xml/tree';
-import { openZip } from '../../src/zip/reader';
+import { fromBuffer } from '../../src/io/node.js';
+import { CHART_NS, PKG_REL_NS, REL_NS, SHEET_MAIN_NS, XML_NS } from '../../src/xml/namespaces.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { serializeXml } from '../../src/xml/serializer.js';
+import { el } from '../../src/xml/tree.js';
+import { openZip } from '../../src/zip/reader.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURES = resolve(here, '../../reference/openpyxl/openpyxl/tests/data/genuine');

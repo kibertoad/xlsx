@@ -1,9 +1,9 @@
 // Tests for getNonEmptyCellCount — null/empty exclusion and formula/rich-text opts.
 
 import { describe, expect, it } from 'vitest';
-import { setFormula } from '../../src/cell/cell';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { getNonEmptyCellCount, setCell } from '../../src/worksheet/worksheet';
+import { setFormula } from '../../src/cell/cell.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { getNonEmptyCellCount, setCell } from '../../src/worksheet/worksheet.js';
 
 describe('getNonEmptyCellCount', () => {
   it('counts every cell whose value is non-null', () => {

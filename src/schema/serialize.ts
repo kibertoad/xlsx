@@ -5,10 +5,10 @@
 // on the schema layer's own types and on user types in the styles / chart /
 // drawing modules.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { qname } from '../xml/namespaces';
-import { el, type XmlNode } from '../xml/tree';
-import type { AttrDef, ElementDef, Primitive, Schema } from './core';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { qname } from '../xml/namespaces.js';
+import { el, type XmlNode } from '../xml/tree.js';
+import type { AttrDef, ElementDef, Primitive, Schema } from './core.js';
 
 // ---- coercion helpers -------------------------------------------------------
 

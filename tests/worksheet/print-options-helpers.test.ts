@@ -2,16 +2,16 @@
 // setPrintHeadings / setPrintCentered).
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
+import { fromBuffer } from '../../src/io/node.js';
 import {
   setPrintCentered,
   setPrintGridLines,
   setPrintHeadings,
-} from '../../src/worksheet/page-setup';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import type { Worksheet } from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/page-setup.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import type { Worksheet } from '../../src/worksheet/worksheet.js';
 
 describe('setPrintGridLines', () => {
   it('lazily creates printOptions and pairs gridLines + gridLinesSet', () => {

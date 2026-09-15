@@ -8,7 +8,7 @@ export type {
   CellsByKindCounts,
   IterRowsOptions,
   Worksheet,
-} from './worksheet';
+} from './worksheet.js';
 export {
   addCellWatch,
   addConditionalFormatting,
@@ -106,8 +106,8 @@ export {
   unmergeCells,
   unmergeCellsAt,
   writeRange,
-} from './worksheet';
-export type { MultiCellRange } from './cell-range';
+} from './worksheet.js';
+export type { MultiCellRange } from './cell-range.js';
 export {
   expandRangeStr,
   intersectionRange,
@@ -119,9 +119,9 @@ export {
   rangesOverlap,
   shiftRange,
   unionRange,
-} from './cell-range';
-export type { ColumnDimension, RowDimension } from './dimensions';
-export { makeColumnDimension, makeRowDimension } from './dimensions';
+} from './cell-range.js';
+export type { ColumnDimension, RowDimension } from './dimensions.js';
+export { makeColumnDimension, makeRowDimension } from './dimensions.js';
 export type {
   Pane,
   PaneState,
@@ -129,18 +129,18 @@ export type {
   Selection,
   SheetView,
   SheetViewMode,
-} from './views';
-export { freezePaneRef, makeFreezePane, makeSheetView } from './views';
-export type { LegacyComment } from './comments';
-export { makeLegacyComment } from './comments';
+} from './views.js';
+export { freezePaneRef, makeFreezePane, makeSheetView } from './views.js';
+export type { LegacyComment } from './comments.js';
+export { makeLegacyComment } from './comments.js';
 export type {
   DataValidation,
   DataValidationErrorStyle,
   DataValidationOperator,
   DataValidationType,
   ValidationCommon,
-} from './data-validations';
-export { makeDataValidation } from './data-validations';
+} from './data-validations.js';
+export { makeDataValidation } from './data-validations.js';
 export type {
   CellIsOperator,
   Cfvo,
@@ -151,49 +151,49 @@ export type {
   IconSetStyle,
   TextOperator,
   TimePeriod,
-} from './conditional-formatting';
-export { makeCfRule, makeConditionalFormatting } from './conditional-formatting';
-export type { Hyperlink } from './hyperlinks';
-export { makeHyperlink } from './hyperlinks';
-export type { AutoFilter, FilterColumn } from './auto-filter';
-export { makeAutoFilter, makeFilterColumn } from './auto-filter';
-export type { TableColumn, TableDefinition, TableStyleInfo } from './table';
-export { addExcelTable, makeTableColumn, makeTableDefinition } from './table';
-export type { CellWatch, IgnoredError } from './errors';
-export { makeCellWatch, makeIgnoredError } from './errors';
-export type { OutlineProperties, PageSetupProperties, SheetProperties } from './properties';
-export { makeSheetProperties } from './properties';
-export type { SheetProtection } from './protection';
-export { makeSheetProtection } from './protection';
-export type { ProtectedRange } from './protected-ranges';
-export { makeProtectedRange } from './protected-ranges';
+} from './conditional-formatting.js';
+export { makeCfRule, makeConditionalFormatting } from './conditional-formatting.js';
+export type { Hyperlink } from './hyperlinks.js';
+export { makeHyperlink } from './hyperlinks.js';
+export type { AutoFilter, FilterColumn } from './auto-filter.js';
+export { makeAutoFilter, makeFilterColumn } from './auto-filter.js';
+export type { TableColumn, TableDefinition, TableStyleInfo } from './table.js';
+export { addExcelTable, makeTableColumn, makeTableDefinition } from './table.js';
+export type { CellWatch, IgnoredError } from './errors.js';
+export { makeCellWatch, makeIgnoredError } from './errors.js';
+export type { OutlineProperties, PageSetupProperties, SheetProperties } from './properties.js';
+export { makeSheetProperties } from './properties.js';
+export type { SheetProtection } from './protection.js';
+export { makeSheetProtection } from './protection.js';
+export type { ProtectedRange } from './protected-ranges.js';
+export { makeProtectedRange } from './protected-ranges.js';
 export type {
   SortBy,
   SortCondition,
   SortIconSet,
   SortMethod,
   SortState,
-} from './sort-state';
-export { makeSortCondition, makeSortState } from './sort-state';
+} from './sort-state.js';
+export { makeSortCondition, makeSortState } from './sort-state.js';
 export type {
   CellSmartTag,
   CellSmartTagProperty,
   CellSmartTags,
-} from './smart-tags';
+} from './smart-tags.js';
 export {
   makeCellSmartTag,
   makeCellSmartTagProperty,
   makeCellSmartTags,
-} from './smart-tags';
+} from './smart-tags.js';
 export type {
   FormControl,
   OleDvAspect,
   OleObject,
   OleUpdateMode,
-} from './ole-objects';
-export { makeFormControl, makeOleObject } from './ole-objects';
-export type { CustomSheetView, CustomSheetViewState } from './custom-sheet-views';
-export { makeCustomSheetView } from './custom-sheet-views';
+} from './ole-objects.js';
+export { makeFormControl, makeOleObject } from './ole-objects.js';
+export type { CustomSheetView, CustomSheetViewState } from './custom-sheet-views.js';
+export { makeCustomSheetView } from './custom-sheet-views.js';
 export type {
   CellCommentMode,
   HeaderFooter,
@@ -205,7 +205,7 @@ export type {
   PageSetup,
   PrintErrorMode,
   PrintOptions,
-} from './page-setup';
+} from './page-setup.js';
 export {
   buildHeaderFooterText,
   HEADER_FOOTER_CODES,
@@ -214,20 +214,20 @@ export {
   makePageMargins,
   makePageSetup,
   makePrintOptions,
-} from './page-setup';
-export type { WebPublishItem, WorksheetCustomProperty } from './web-publish';
-export { makeWebPublishItem, makeWorksheetCustomProperty } from './web-publish';
+} from './page-setup.js';
+export type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
+export { makeWebPublishItem, makeWorksheetCustomProperty } from './web-publish.js';
 export type {
   PhoneticAlignment,
   PhoneticType,
   WorksheetPhoneticProperties,
-} from './phonetic';
-export { makeWorksheetPhoneticProperties } from './phonetic';
+} from './phonetic.js';
+export { makeWorksheetPhoneticProperties } from './phonetic.js';
 export type {
   DataConsolidate,
   DataConsolidateFunction,
   DataReference,
-} from './data-consolidate';
-export { makeDataConsolidate } from './data-consolidate';
-export type { Scenario, ScenarioInputCell, ScenarioList } from './scenarios';
-export { makeScenario, makeScenarioInputCell, makeScenarioList } from './scenarios';
+} from './data-consolidate.js';
+export { makeDataConsolidate } from './data-consolidate.js';
+export type { Scenario, ScenarioInputCell, ScenarioList } from './scenarios.js';
+export { makeScenario, makeScenarioInputCell, makeScenarioList } from './scenarios.js';

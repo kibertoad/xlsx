@@ -14,11 +14,11 @@
 // - Cells outside the merge are normal.
 
 import { describe, expect, it } from 'vitest';
-import { addBorder, addCellXf, addFill, addFont, defaultCellXf, makeAlignment, makeBorder, makeColor, makeFont, makePatternFill, makeSide } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { addDataValidation, mergeCells, setCell, setColumnWidth, setComment, setHyperlink, setRowHeight } from '../../../src/worksheet/index';
-import { parseMultiCellRange } from '../../../src/worksheet/cell-range';
-import { writeWorkbook } from '../_helpers';
+import { addBorder, addCellXf, addFill, addFont, defaultCellXf, makeAlignment, makeBorder, makeColor, makeFont, makePatternFill, makeSide } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { addDataValidation, mergeCells, setCell, setColumnWidth, setComment, setHyperlink, setRowHeight } from '../../../src/worksheet/index.js';
+import { parseMultiCellRange } from '../../../src/worksheet/cell-range.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 31 — single cell, every decoration at once', () => {
   it('writes 31-cell-combo.xlsx', async () => {

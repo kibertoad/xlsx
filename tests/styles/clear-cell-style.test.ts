@@ -6,9 +6,9 @@ import {
   clearRangeStyle,
   setBold,
   setCellBackgroundColor,
-} from '../../src/styles/cell-style';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/styles/cell-style.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 const cellAt = (ws: ReturnType<typeof addWorksheet>, row: number, col: number) => {
   const c = ws.rows.get(row)?.get(col);

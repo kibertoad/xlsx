@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
+import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
 import {
   parseEffects,
   parseShapeProperties,
   serializeEffects,
   serializeShapeProperties,
-} from '../../src/drawing/dml/dml-xml';
+} from '../../src/drawing/dml/dml-xml.js';
 import {
   type Effect,
   type EffectContainer,
@@ -13,11 +13,11 @@ import {
   makeEffectContainer,
   makeEffectList,
   PRESET_SHADOW_NAMES,
-} from '../../src/drawing/dml/effect';
-import { makeNoFill, makeSolidFill } from '../../src/drawing/dml/fill';
-import { makeShapeProperties, type ShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { parseXml } from '../../src/xml/parser';
-import { findChild } from '../../src/xml/tree';
+} from '../../src/drawing/dml/effect.js';
+import { makeNoFill, makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makeShapeProperties, type ShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { findChild } from '../../src/xml/tree.js';
 
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';

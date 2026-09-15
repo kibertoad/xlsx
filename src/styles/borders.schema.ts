@@ -1,11 +1,11 @@
 // XML mapping for Border + Side. Sibling file so non-serialising
 // callers can avoid pulling in the schema layer.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import type { Border, Side } from './borders';
-import { SIDE_STYLES } from './borders';
-import { ColorSchema } from './colors.schema';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import type { Border, Side } from './borders.js';
+import { SIDE_STYLES } from './borders.js';
+import { ColorSchema } from './colors.schema.js';
 
 // Schema enums require `readonly string[]`; SideStyle is a string-literal
 // subset, so a single widening cast gets us through TS' invariance check

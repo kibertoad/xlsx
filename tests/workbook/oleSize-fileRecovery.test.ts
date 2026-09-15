@@ -1,12 +1,12 @@
 // Tests for the typed workbook-level <oleSize> and <fileRecoveryPr>.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeFileRecoveryProperties } from '../../src/workbook/file-recovery';
-import { setCell } from '../../src/worksheet/worksheet';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeFileRecoveryProperties } from '../../src/workbook/file-recovery.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('oleSize round-trip', () => {
   it('preserves the bounding ref', async () => {

@@ -6,11 +6,11 @@
 // child is stored as a raw XmlNode and the `make*Value` / `read*Value` helpers
 // below cover the most common conversions.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { CPROPS_FMTID, CUSTPROPS_NS, parseQName, VTYPES_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
-import { el, type XmlNode } from '../xml/tree';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { CPROPS_FMTID, CUSTPROPS_NS, parseQName, VTYPES_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
+import { el, type XmlNode } from '../xml/tree.js';
 
 export interface CustomProperty {
   /** User-visible property name (must be unique within the workbook). */
@@ -184,7 +184,7 @@ export function customPropsFromBytes(bytes: Uint8Array | string): CustomProperti
 
 // ---- Workbook ergonomic helpers ----------------------------------------
 
-import type { Workbook } from '../workbook/workbook';
+import type { Workbook } from '../workbook/workbook.js';
 
 const ensureCustomProperties = (wb: Workbook): CustomProperties => {
   if (!wb.customProperties) wb.customProperties = makeCustomProperties();

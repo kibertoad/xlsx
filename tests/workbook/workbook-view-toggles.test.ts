@@ -1,16 +1,16 @@
 // Tests for workbook-view scroll-bar / minimised / visibility toggles.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
 import {
   setShowHorizontalScroll,
   setShowVerticalScroll,
   setWorkbookMinimized,
   setWorkbookVisibility,
-} from '../../src/workbook/views';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/workbook/views.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('setShowHorizontalScroll / setShowVerticalScroll', () => {
   it('toggle independently on the primary workbookView', () => {

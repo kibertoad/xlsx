@@ -6,7 +6,7 @@ import {
   addWorksheet,
   createWorkbook,
   hasChartsheet,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 describe('hasChartsheet', () => {
   it('returns true when a chartsheet with the title exists', () => {

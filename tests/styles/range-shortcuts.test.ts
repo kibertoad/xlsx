@@ -8,10 +8,10 @@ import {
   setRangeBackgroundColor,
   setRangeFont,
   setRangeNumberFormat,
-} from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('setRangeBackgroundColor', () => {
   it('every cell in the range gets the same solid fill', () => {

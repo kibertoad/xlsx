@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import {
   intersectionRange,
   iterRangeCoordinates,
@@ -17,7 +17,7 @@ import {
   rangeToString,
   shiftRange,
   unionRange,
-} from '../../src/worksheet/cell-range';
+} from '../../src/worksheet/cell-range.js';
 
 describe('makeCellRange / parseRange / rangeToString', () => {
   it('makeCellRange normalises reversed bounds', () => {

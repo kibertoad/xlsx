@@ -11,12 +11,12 @@
 
 import fc from 'fast-check';
 import { describe, it } from 'vitest';
-import { workbookToBytes } from '../../src/io/save';
-import { setCellBackgroundColor, setCellFont } from '../../src/styles/cell-style';
-import { makeColor } from '../../src/styles/colors';
-import { makeFont } from '../../src/styles/fonts';
-import { addDefinedName } from '../../src/workbook/defined-names';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { workbookToBytes } from '../../src/io/save.js';
+import { setCellBackgroundColor, setCellFont } from '../../src/styles/cell-style.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addDefinedName } from '../../src/workbook/defined-names.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   freezePanes,
   hideColumn,
@@ -26,8 +26,8 @@ import {
   setColumnWidth,
   setRowHeight,
   type Worksheet,
-} from '../../src/worksheet/worksheet';
-import { validateXlsx } from './validate';
+} from '../../src/worksheet/worksheet.js';
+import { validateXlsx } from './validate.js';
 
 // ---------------------------------------------------------------------------
 // Generators

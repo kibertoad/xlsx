@@ -12,9 +12,9 @@
 //   blank cell to verify both structured-reference autocompletes work.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { addTable, setCell, setColumnWidth } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { addTable, setCell, setColumnWidth } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 26 — multi-table sheet', () => {
   it('writes 26-multi-table.xlsx', async () => {

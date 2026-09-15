@@ -5,11 +5,11 @@
 // connector, group). Charts and pictures are modeled; everything else is kept
 // as the verbatim source XML so it survives a round-trip untouched.
 
-import type { ChartSpace } from '../chart/chart';
-import type { CxChartSpace } from '../chart/cx/chartex';
-import type { DrawingAnchor } from './anchor';
-import type { ShapeProperties } from './dml/shape-properties';
-import type { XlsxImage } from './image';
+import type { ChartSpace } from '../chart/chart.js';
+import type { CxChartSpace } from '../chart/cx/chartex.js';
+import type { DrawingAnchor } from './anchor.js';
+import type { ShapeProperties } from './dml/shape-properties.js';
+import type { XlsxImage } from './image.js';
 
 /** Reference to a chart part — the chart's drawing-rels rId resolves to xl/charts/chartN.xml. */
 export interface ChartReference {
@@ -65,7 +65,7 @@ export interface DrawingItem {
    * When present the writer emits it as-is instead of rebuilding the anchor
    * from {@link anchor} + {@link content}.
    */
-  raw?: import('../xml/tree').XmlNode;
+  raw?: import('../xml/tree.js').XmlNode;
 }
 
 export interface Drawing {
@@ -76,14 +76,14 @@ export interface Drawing {
    * feature. Kept verbatim together with the `items` index they sat before, so
    * document order (which is z-order) survives a round-trip.
    */
-  rawChildren?: Array<{ beforeItem: number; node: import('../xml/tree').XmlNode }>;
+  rawChildren?: Array<{ beforeItem: number; node: import('../xml/tree.js').XmlNode }>;
   /**
    * Drawing-rels entries the verbatim nodes above reference (`r:embed` on a
    * picture inside a group, `r:id` on a shape's hyperlink, …). Carried over
    * from the source part under their original ids so those references still
    * resolve after a re-save; the writer allocates its own ids around them.
    */
-  rawRels?: import('../packaging/relationships').Relationships;
+  rawRels?: import('../packaging/relationships.js').Relationships;
 }
 
 export function makeDrawing(items: DrawingItem[] = []): Drawing {
@@ -103,9 +103,9 @@ export function makePictureDrawingItem(anchor: DrawingAnchor, picture: PictureRe
 
 // ---- Worksheet ergonomic helpers ----------------------------------------
 
-import { loadImage } from './image';
-import { makeOneCellAnchor } from './anchor';
-import type { Worksheet } from '../worksheet/worksheet';
+import { loadImage } from './image.js';
+import { makeOneCellAnchor } from './anchor.js';
+import type { Worksheet } from '../worksheet/worksheet.js';
 
 /**
  * Drop an image onto a worksheet at a single-cell anchor. Lazy-allocates

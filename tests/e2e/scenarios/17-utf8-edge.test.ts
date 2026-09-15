@@ -11,10 +11,10 @@
 //   the literal "corner" — Excel will jump there if you press Ctrl+End.
 
 import { describe, expect, it } from 'vitest';
-import { MAX_COL, MAX_ROW } from '../../../src/utils/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { MAX_COL, MAX_ROW } from '../../../src/utils/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 17 — UTF-8 + edge coordinates', () => {
   it('writes 17-utf8-edge.xlsx', async () => {

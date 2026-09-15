@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { OpenXmlIoError } from '../../src/utils/exceptions';
-import { CHART_NS, REL_NS, SHEET_MAIN_NS, XML_NS } from '../../src/xml/namespaces';
-import { parseXml } from '../../src/xml/parser';
-import { createXmlStreamWriter } from '../../src/xml/stream-writer';
-import { el } from '../../src/xml/tree';
+import { OpenXmlIoError } from '../../src/utils/exceptions.js';
+import { CHART_NS, REL_NS, SHEET_MAIN_NS, XML_NS } from '../../src/xml/namespaces.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { createXmlStreamWriter } from '../../src/xml/stream-writer.js';
+import { el } from '../../src/xml/tree.js';
 
 const decode = (b: Uint8Array): string => new TextDecoder().decode(b);
 

@@ -1,11 +1,11 @@
 // Tests for chartsheet-level <webPublishItems>.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addChartsheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeWebPublishItem } from '../../src/worksheet/web-publish';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addChartsheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeWebPublishItem } from '../../src/worksheet/web-publish.js';
 
 describe('chartsheet webPublishItems round-trip', () => {
   it('preserves a chartsheet entry', async () => {

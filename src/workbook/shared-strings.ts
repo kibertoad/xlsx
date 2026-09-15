@@ -11,14 +11,14 @@
 // its runs, so a string that is bold in one cell and plain in another still
 // gets two slots.
 
-import type { RichText } from '../cell/rich-text';
-import { type Color, colorToHex } from '../styles/colors';
-import { escapeCellString, escapeXmlAttr, escapeXmlText, unescapeCellString } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { stableStringify } from '../utils/stable-stringify';
-import { qname, SHEET_MAIN_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
+import type { RichText } from '../cell/rich-text.js';
+import { type Color, colorToHex } from '../styles/colors.js';
+import { escapeCellString, escapeXmlAttr, escapeXmlText, unescapeCellString } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { stableStringify } from '../utils/stable-stringify.js';
+import { qname, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 
 const SST_TAG = `{${SHEET_MAIN_NS}}sst`;
 const SI_TAG = `{${SHEET_MAIN_NS}}si`;
@@ -158,7 +158,7 @@ export const parseRichString = (si: XmlNode): SharedStringEntry => {
   // Rich-text si has one or more <r> children. Plain si has a single <t>.
   const runEls = findChildren(si, R_TAG);
   if (runEls.length > 0) {
-    const runs: Array<{ text: string; font?: import('../cell/rich-text').InlineFont }> = [];
+    const runs: Array<{ text: string; font?: import('../cell/rich-text.js').InlineFont }> = [];
     for (const rEl of runEls) {
       const tEl = findChild(rEl, T_TAG);
       const text = unescapeCellString(tEl?.text ?? '');
@@ -171,9 +171,9 @@ export const parseRichString = (si: XmlNode): SharedStringEntry => {
   return collectText(si);
 };
 
-const parseRunPr = (rPr: XmlNode): import('../cell/rich-text').InlineFont | undefined => {
+const parseRunPr = (rPr: XmlNode): import('../cell/rich-text.js').InlineFont | undefined => {
   type InlineFontMutable = {
-    -readonly [K in keyof import('../cell/rich-text').InlineFont]: import('../cell/rich-text').InlineFont[K];
+    -readonly [K in keyof import('../cell/rich-text.js').InlineFont]: import('../cell/rich-text.js').InlineFont[K];
   };
   const f: InlineFontMutable = {};
   for (const child of rPr.children) {
@@ -194,7 +194,7 @@ const parseRunPr = (rPr: XmlNode): import('../cell/rich-text').InlineFont | unde
         f.i = valAttr === undefined ? true : valAttr !== '0' && valAttr !== 'false';
         break;
       case 'u': {
-        const v = (valAttr ?? 'single') as import('../cell/rich-text').InlineUnderline;
+        const v = (valAttr ?? 'single') as import('../cell/rich-text.js').InlineUnderline;
         f.u = v;
         break;
       }
@@ -202,7 +202,7 @@ const parseRunPr = (rPr: XmlNode): import('../cell/rich-text').InlineFont | unde
         f.strike = valAttr === undefined ? true : valAttr !== '0' && valAttr !== 'false';
         break;
       case 'vertAlign':
-        if (valAttr !== undefined) f.vertAlign = valAttr as import('../cell/rich-text').InlineVertAlign;
+        if (valAttr !== undefined) f.vertAlign = valAttr as import('../cell/rich-text.js').InlineVertAlign;
         break;
       case 'family':
         if (valAttr !== undefined) f.family = Number.parseInt(valAttr, 10);
@@ -225,7 +225,7 @@ const parseRunPr = (rPr: XmlNode): import('../cell/rich-text').InlineFont | unde
       }
     }
   }
-  return Object.keys(f).length === 0 ? undefined : Object.freeze(f as import('../cell/rich-text').InlineFont);
+  return Object.keys(f).length === 0 ? undefined : Object.freeze(f as import('../cell/rich-text.js').InlineFont);
 };
 
 // ---- write -----------------------------------------------------------------
@@ -264,7 +264,7 @@ const serializeSi = (value: SharedStringEntry): string => {
 };
 
 /** Serialise a sequence of `<r>…</r>` runs into an `<si>` / `<is>` body. */
-function serializeRichTextRuns(runs: import('../cell/rich-text').RichText): string {
+function serializeRichTextRuns(runs: import('../cell/rich-text.js').RichText): string {
   const parts: string[] = [];
   for (const run of runs) {
     parts.push('<r>');
@@ -278,7 +278,7 @@ function serializeRichTextRuns(runs: import('../cell/rich-text').RichText): stri
   return parts.join('');
 }
 
-const serializeInlineFont = (f: import('../cell/rich-text').InlineFont): string => {
+const serializeInlineFont = (f: import('../cell/rich-text.js').InlineFont): string => {
   // Element order per ECMA-376 §17.4.4.10 (CT_RPrElt). Excel's parser is
   // sensitive to ordering — out-of-order children make the run silently fall
   // back to the cell's font.

@@ -15,10 +15,10 @@
 // `sheetProperties.tabColor` (B7) and `sheetProtection` (B5).
 
 import { describe, expect, it } from 'vitest';
-import { makeColor } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { makeSheetProperties, makeSheetProtection, setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { makeColor } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { makeSheetProperties, makeSheetProtection, setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 27 — tab color + sheet protection', () => {
   it('writes 27-tab-color-protect.xlsx', async () => {

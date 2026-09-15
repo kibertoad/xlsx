@@ -9,10 +9,10 @@ import {
   makeLineChart,
   makeScatterChart,
   makeScatterSeries,
-} from '../../src/chart/chart';
-import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml';
-import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
-import { makeSolidFill } from '../../src/drawing/dml/fill';
+} from '../../src/chart/chart.js';
+import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml.js';
+import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
+import { makeSolidFill } from '../../src/drawing/dml/fill.js';
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 

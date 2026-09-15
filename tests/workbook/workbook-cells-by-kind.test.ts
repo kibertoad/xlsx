@@ -1,14 +1,14 @@
 // Tests for getWorkbookCellsByKind — workbook-wide kind histogram.
 
 import { describe, expect, it } from 'vitest';
-import { setFormula } from '../../src/cell/cell';
+import { setFormula } from '../../src/cell/cell.js';
 import {
   addChartsheet,
   addWorksheet,
   createWorkbook,
   getWorkbookCellsByKind,
-} from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 const zeros = {
   null: 0,

@@ -11,7 +11,7 @@ import {
   translateRange,
   translateRow,
   translatorRender,
-} from '../../src/formula/translate';
+} from '../../src/formula/translate.js';
 
 // --- regex tests (mirrors openpyxl test_translate.test_*_re) ---------------
 

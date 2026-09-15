@@ -7,10 +7,10 @@
 // shortcut did. The fallback path through fflate's `unzipSync` is preserved for
 // ZIP64 / non-standard archives.
 
-import type { XlsxSource } from '../io/source';
-import { OpenXmlIoError, OpenXmlNotImplementedError } from '../utils/exceptions';
-import type { DecompressionLimits } from './decompression-guard';
-import { openRandomAccessArchive } from './random-access-reader';
+import type { XlsxSource } from '../io/source.js';
+import { OpenXmlIoError, OpenXmlNotImplementedError } from '../utils/exceptions.js';
+import type { DecompressionLimits } from './decompression-guard.js';
+import { openRandomAccessArchive } from './random-access-reader.js';
 
 const CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
 

@@ -7,9 +7,9 @@
 // survives a save / load cycle without our needing to model cfvo / colors /
 // iconSets fully.
 
-import { escapeXmlAttr } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { type MultiCellRange, parseMultiCellRange } from './cell-range';
+import { escapeXmlAttr } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { type MultiCellRange, parseMultiCellRange } from './cell-range.js';
 
 export type ConditionalFormattingRuleType =
   | 'expression'
@@ -137,7 +137,7 @@ export function makeCfRule(
 
 // ---- Worksheet ergonomic builders ---------------------------------------
 
-import type { Worksheet } from './worksheet';
+import type { Worksheet } from './worksheet.js';
 
 const resolveCfSqref = (sqref: MultiCellRange | string): MultiCellRange =>
   typeof sqref === 'string' ? parseMultiCellRange(sqref) : sqref;

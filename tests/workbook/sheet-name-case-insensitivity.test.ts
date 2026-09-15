@@ -10,7 +10,7 @@ import {
   createWorkbook,
   duplicateSheet,
   pickUniqueSheetTitle,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 describe('sheet name uniqueness — case-insensitive', () => {
   it('addWorksheet rejects a title that differs only in case', () => {

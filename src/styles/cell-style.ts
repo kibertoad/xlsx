@@ -17,25 +17,25 @@
 // functions; the workbook is passed in so callers don't need to thread the
 // stylesheet manually.
 
-import type { Cell } from '../cell/cell';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import type { Workbook } from '../workbook/workbook';
-import { parseRange } from '../worksheet/cell-range';
-import { setCell, type Worksheet } from '../worksheet/worksheet';
-import type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignment';
-import { alignmentToCss, makeAlignment } from './alignment';
-import type { Border, SideStyle } from './borders';
-import { borderToCss, DEFAULT_BORDER, makeBorder, makeSide } from './borders';
-import type { Color } from './colors';
-import { makeColor } from './colors';
-import type { Fill } from './fills';
-import { DEFAULT_EMPTY_FILL, fillToCss, makePatternFill } from './fills';
-import type { Font, UnderlineStyle } from './fonts';
-import { DEFAULT_FONT, fontToCss, makeFont } from './fonts';
-import { ensureBuiltinStyle } from './named-styles';
-import { builtinFormatCode } from './numbers';
-import type { Protection } from './protection';
-import { DEFAULT_PROTECTION } from './protection';
+import type { Cell } from '../cell/cell.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import type { Workbook } from '../workbook/workbook.js';
+import { parseRange } from '../worksheet/cell-range.js';
+import { setCell, type Worksheet } from '../worksheet/worksheet.js';
+import type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignment.js';
+import { alignmentToCss, makeAlignment } from './alignment.js';
+import type { Border, SideStyle } from './borders.js';
+import { borderToCss, DEFAULT_BORDER, makeBorder, makeSide } from './borders.js';
+import type { Color } from './colors.js';
+import { makeColor } from './colors.js';
+import type { Fill } from './fills.js';
+import { DEFAULT_EMPTY_FILL, fillToCss, makePatternFill } from './fills.js';
+import type { Font, UnderlineStyle } from './fonts.js';
+import { DEFAULT_FONT, fontToCss, makeFont } from './fonts.js';
+import { ensureBuiltinStyle } from './named-styles.js';
+import { builtinFormatCode } from './numbers.js';
+import type { Protection } from './protection.js';
+import { DEFAULT_PROTECTION } from './protection.js';
 import {
   addBorder,
   addCellXf,
@@ -45,7 +45,7 @@ import {
   type CellXf,
   defaultCellXf,
   type Stylesheet,
-} from './stylesheet';
+} from './stylesheet.js';
 
 /** Default General number format code (numFmtId 0). */
 const GENERAL_FORMAT_CODE = 'General';

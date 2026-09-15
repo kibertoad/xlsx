@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { makeRichText, makeTextRun, richTextToString } from '../../src/cell/rich-text';
-import { makeColor } from '../../src/styles/colors';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
+import { makeRichText, makeTextRun, richTextToString } from '../../src/cell/rich-text.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 
 describe('makeTextRun', () => {
   it('builds a frozen run with text-only', () => {

@@ -10,7 +10,7 @@
 // colBreaks and the drawing block per ECMA-376 §18.3.1.94 cellWatches /
 // §18.3.1.51 ignoredErrors).
 
-import type { MultiCellRange } from './cell-range';
+import type { MultiCellRange } from './cell-range.js';
 
 /**
  * One Cell-Watch entry. The Watch Window in Excel (Formulas → Watch Window)

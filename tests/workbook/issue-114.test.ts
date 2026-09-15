@@ -6,12 +6,12 @@
 
 import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { loadWorkbook } from '../../src/io/load';
-import { fromBuffer } from '../../src/io/node';
-import { workbookToBytes } from '../../src/io/save';
-import { getCell } from '../../src/worksheet/worksheet';
-import { openZip } from '../../src/zip/reader';
-import { validateXlsx } from '../conformance/validate';
+import { loadWorkbook } from '../../src/io/load.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { getCell } from '../../src/worksheet/worksheet.js';
+import { openZip } from '../../src/zip/reader.js';
+import { validateXlsx } from '../conformance/validate.js';
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();

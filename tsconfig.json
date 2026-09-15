@@ -2,8 +2,8 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -19,5 +19,5 @@
     "types": ["node"]
   },
   "include": ["src", "tests", "scripts"],
-  "exclude": ["dist", "node_modules", "reference"]
+  "exclude": ["dist", "node_modules", "reference", "tests/consumer"]
 }

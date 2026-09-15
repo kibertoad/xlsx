@@ -1,17 +1,17 @@
 // Tests for docProps/app.xml extended-property ergonomic helpers.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
+import { fromBuffer } from '../../src/io/node.js';
 import {
   setWorkbookAppVersion,
   setWorkbookApplication,
   setWorkbookCompany,
   setWorkbookHyperlinkBase,
   setWorkbookManager,
-} from '../../src/packaging/extended';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/packaging/extended.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('extended-properties helpers', () => {
   it('lazily allocate wb.appProperties and write each field', () => {

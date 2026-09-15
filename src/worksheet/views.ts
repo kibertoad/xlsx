@@ -7,8 +7,8 @@
 // an "A1"-style top-left ref. Per-pane multi-selection blocks aren't widespread
 // in real-world fixtures, so stage-1 stores a single Selection.
 
-import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate';
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 export type PaneType = 'bottomRight' | 'topRight' | 'bottomLeft' | 'topLeft';
 export type PaneState = 'split' | 'frozen' | 'frozenSplit';

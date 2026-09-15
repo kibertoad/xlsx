@@ -5,8 +5,8 @@ import {
   addDefinedName,
   getDefinedName,
   renameDefinedName,
-} from '../../src/workbook/defined-names';
-import { createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/workbook/defined-names.js';
+import { createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('renameDefinedName', () => {
   it('renames a workbook-scope name', () => {

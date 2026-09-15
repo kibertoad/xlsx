@@ -4,11 +4,11 @@
 // bound: per-entry size, per-archive total, and compression ratio.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer, toBuffer } from '../../src/io/node';
-import { OpenXmlDecompressionBombError } from '../../src/utils/exceptions';
-import { DEFAULT_DECOMPRESSION_LIMITS } from '../../src/zip/decompression-guard';
-import { openZip } from '../../src/zip/reader';
-import { createZipWriter } from '../../src/zip/writer';
+import { fromBuffer, toBuffer } from '../../src/io/node.js';
+import { OpenXmlDecompressionBombError } from '../../src/utils/exceptions.js';
+import { DEFAULT_DECOMPRESSION_LIMITS } from '../../src/zip/decompression-guard.js';
+import { openZip } from '../../src/zip/reader.js';
+import { createZipWriter } from '../../src/zip/writer.js';
 
 const buildArchive = async (
   entries: ReadonlyArray<{ path: string; bytes: Uint8Array; compress?: boolean }>,

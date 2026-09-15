@@ -17,9 +17,9 @@
 // `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` on its own
 // line, attribute values quoted with `"`.
 
-import { escapeXmlAttr, escapeXmlText } from '../utils/escape';
-import { DEFAULT_PREFIXES, parseQName, XML_NS } from './namespaces';
-import type { XmlNode } from './tree';
+import { escapeXmlAttr, escapeXmlText } from '../utils/escape.js';
+import { DEFAULT_PREFIXES, parseQName, XML_NS } from './namespaces.js';
+import type { XmlNode } from './tree.js';
 
 export interface SerializeOptions {
   /** Emit `<?xml … ?>` declaration. Defaults to true. */

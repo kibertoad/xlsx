@@ -6,8 +6,8 @@ import {
   addWorksheet,
   createWorkbook,
   iterAllCells,
-} from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('iterAllCells', () => {
   it('yields cells from every worksheet in tab-strip order', () => {

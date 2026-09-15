@@ -8,12 +8,12 @@ import {
   setCellFill,
   setCellFont,
   setRangeStyle,
-} from '../../src/styles/cell-style';
-import { makeColor } from '../../src/styles/colors';
-import { makeFill, makePatternFill } from '../../src/styles/fills';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/styles/cell-style.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { makeFill, makePatternFill } from '../../src/styles/fills.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('cellXfs[0] default-slot reservation', () => {
   it('setCellFont reserves the default at index 0 on first call', () => {

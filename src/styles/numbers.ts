@@ -7,7 +7,7 @@
 //   * IDs ≥ 164 are user-defined / locale-specific. The Stylesheet
 //     pool allocates these on demand (phase 2 §3.4).
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 /** Canonical OOXML built-in number formats — verbatim from openpyxl. */
 export const BUILTIN_FORMATS: Readonly<Record<number, string>> = Object.freeze({

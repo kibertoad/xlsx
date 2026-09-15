@@ -1,8 +1,8 @@
 // XML mapping for Protection.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import type { Protection } from './protection';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import type { Protection } from './protection.js';
 
 export const ProtectionSchema: Schema<Protection> = defineSchema<Protection>({
   tagname: 'protection',

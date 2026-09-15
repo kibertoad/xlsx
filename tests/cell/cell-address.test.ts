@@ -1,9 +1,9 @@
 // Tests for getCellAddress / formatSheetQualifiedRef — sheet-qualified A1.
 
 import { describe, expect, it } from 'vitest';
-import { formatSheetQualifiedRef, parseSheetRange } from '../../src/utils/coordinate';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { getCellAddress, setCell } from '../../src/worksheet/worksheet';
+import { formatSheetQualifiedRef, parseSheetRange } from '../../src/utils/coordinate.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { getCellAddress, setCell } from '../../src/worksheet/worksheet.js';
 
 const cellAt = (ws: ReturnType<typeof addWorksheet>, row: number, col: number) => {
   const c = ws.rows.get(row)?.get(col);

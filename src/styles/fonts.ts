@@ -6,8 +6,8 @@
 // `<color>` is a fully nested object element. The schema layer carries
 // each pattern as its own ElementDef kind.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { type Color, colorToHex, makeColor } from './colors';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { type Color, colorToHex, makeColor } from './colors.js';
 
 /** Underline styles per openpyxl's NestedNoneSet. */
 export type UnderlineStyle = 'single' | 'double' | 'singleAccounting' | 'doubleAccounting';

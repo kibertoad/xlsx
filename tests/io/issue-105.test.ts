@@ -10,15 +10,15 @@
 
 import { describe, expect, it } from 'vitest';
 import { unzipSync } from 'fflate';
-import { fromBuffer, toBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { manifestFromBytes } from '../../src/packaging/manifest';
-import { relsFromBytes } from '../../src/packaging/relationships';
-import { REL_NS } from '../../src/xml/namespaces';
-import { createZipWriter } from '../../src/zip/writer';
-import type { Worksheet } from '../../src/worksheet/worksheet';
-import { validateXlsx } from '../conformance/validate';
+import { fromBuffer, toBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { manifestFromBytes } from '../../src/packaging/manifest.js';
+import { relsFromBytes } from '../../src/packaging/relationships.js';
+import { REL_NS } from '../../src/xml/namespaces.js';
+import { createZipWriter } from '../../src/zip/writer.js';
+import type { Worksheet } from '../../src/worksheet/worksheet.js';
+import { validateXlsx } from '../conformance/validate.js';
 
 const td = new TextDecoder();
 const te = new TextEncoder();

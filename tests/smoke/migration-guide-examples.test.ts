@@ -7,8 +7,8 @@ import { describe, expect, it } from 'vitest';
 
 describe('migrate-from-openpyxl — public API smoke', () => {
   it('Loading and saving — fromFile / toFile from @office-kit/xlsx/node, load/save from @office-kit/xlsx/io', async () => {
-    const node = await import('../../src/node');
-    const io = await import('../../src/io/index');
+    const node = await import('../../src/node.js');
+    const io = await import('../../src/io/index.js');
     expect(typeof node.fromFile).toBe('function');
     expect(typeof node.toFile).toBe('function');
     expect(typeof io.loadWorkbook).toBe('function');
@@ -16,8 +16,8 @@ describe('migrate-from-openpyxl — public API smoke', () => {
   });
 
   it('Cells — setCell / setCellByCoord / iterRows / setFormula / makeErrorValue / makeRichText / makeTextRun / makeDurationValue', async () => {
-    const worksheet = await import('../../src/worksheet/index');
-    const cell = await import('../../src/cell/index');
+    const worksheet = await import('../../src/worksheet/index.js');
+    const cell = await import('../../src/cell/index.js');
     expect(typeof worksheet.setCell).toBe('function');
     expect(typeof worksheet.setCellByCoord).toBe('function');
     expect(typeof worksheet.iterRows).toBe('function');
@@ -29,9 +29,9 @@ describe('migrate-from-openpyxl — public API smoke', () => {
   });
 
   it('Styles — setCellFont / setCellFill / setCellNumberFormat with (wb, cell, …) signature', async () => {
-    const styles = await import('../../src/styles/index');
-    const workbook = await import('../../src/workbook/index');
-    const worksheet = await import('../../src/worksheet/index');
+    const styles = await import('../../src/styles/index.js');
+    const workbook = await import('../../src/workbook/index.js');
+    const worksheet = await import('../../src/worksheet/index.js');
     expect(typeof styles.setCellFont).toBe('function');
     expect(typeof styles.setCellFill).toBe('function');
     expect(typeof styles.setCellNumberFormat).toBe('function');
@@ -53,8 +53,8 @@ describe('migrate-from-openpyxl — public API smoke', () => {
   });
 
   it('Worksheets — addWorksheet / sheetNames / getActiveSheet / getSheet / removeSheet / mergeCells / setFreezePanes / getMergedCells', async () => {
-    const workbook = await import('../../src/workbook/index');
-    const worksheet = await import('../../src/worksheet/index');
+    const workbook = await import('../../src/workbook/index.js');
+    const worksheet = await import('../../src/worksheet/index.js');
     expect(typeof workbook.addWorksheet).toBe('function');
     expect(typeof workbook.sheetNames).toBe('function');
     expect(typeof workbook.getActiveSheet).toBe('function');
@@ -66,7 +66,7 @@ describe('migrate-from-openpyxl — public API smoke', () => {
   });
 
   it('Streaming write / read — createWriteOnlyWorkbook / loadWorkbookStream', async () => {
-    const streaming = await import('../../src/streaming/index');
+    const streaming = await import('../../src/streaming/index.js');
     expect(typeof streaming.createWriteOnlyWorkbook).toBe('function');
     expect(typeof streaming.loadWorkbookStream).toBe('function');
   });

@@ -1,14 +1,14 @@
 // Phase 4 read-only streaming acceptance.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { workbookToBytes } from '../../src/io/save';
-import { loadWorkbookStream } from '../../src/streaming/read-only';
-import { setCellAsDate } from '../../src/styles/cell-style';
-import { builtinFormatCode, isDateFormat } from '../../src/styles/numbers';
-import { dateToExcel } from '../../src/utils/datetime';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+import { fromBuffer } from '../../src/io/node.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { loadWorkbookStream } from '../../src/streaming/read-only.js';
+import { setCellAsDate } from '../../src/styles/cell-style.js';
+import { builtinFormatCode, isDateFormat } from '../../src/styles/numbers.js';
+import { dateToExcel } from '../../src/utils/datetime.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 const buildSampleWorkbook = async (rowCount: number): Promise<Uint8Array> => {
   const wb = createWorkbook();

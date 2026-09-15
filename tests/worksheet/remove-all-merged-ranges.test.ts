@@ -1,13 +1,13 @@
 // Tests for removeAllMergedRanges.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   getMergedCells,
   mergeCells,
   removeAllMergedRanges,
   setCell,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('removeAllMergedRanges', () => {
   it('drops every merge and returns the count', () => {

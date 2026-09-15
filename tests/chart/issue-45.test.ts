@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { type BarChart, makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml';
+import { type BarChart, makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml.js';
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { defineSchema, type Schema } from '../../src/schema/core';
-import { fromTree, toTree } from '../../src/schema/serialize';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
-import { SHEET_MAIN_NS } from '../../src/xml/namespaces';
-import { parseXml } from '../../src/xml/parser';
-import { serializeXml } from '../../src/xml/serializer';
+import { defineSchema, type Schema } from '../../src/schema/core.js';
+import { fromTree, toTree } from '../../src/schema/serialize.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { SHEET_MAIN_NS } from '../../src/xml/namespaces.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { serializeXml } from '../../src/xml/serializer.js';
 
 // Minimal Border + Side test types — Phase 2 styles will define the
 // canonical versions; this fixture proves the schema layer works.

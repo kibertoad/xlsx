@@ -2,16 +2,16 @@
 // is "openpyxl が壊さない xlsx は @office-kit/xlsx も壊さない" — these tests pin that contract.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
 import {
   addWorksheet,
   createWorkbook,
   listCustomXmlParts,
-} from '../../src/workbook/workbook';
-import { OpenXmlNotImplementedError } from '../../src/utils/exceptions';
-import { openZip } from '../../src/zip/reader';
+} from '../../src/workbook/workbook.js';
+import { OpenXmlNotImplementedError } from '../../src/utils/exceptions.js';
+import { openZip } from '../../src/zip/reader.js';
 
 const td = new TextDecoder();
 

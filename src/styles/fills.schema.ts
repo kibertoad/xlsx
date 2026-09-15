@@ -3,13 +3,13 @@
 // discriminated-union read/write since the schema layer doesn't yet
 // have a tagname-discriminated union element kind.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { fromTree, toTree } from '../schema/serialize';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { qname, SHEET_MAIN_NS } from '../xml/namespaces';
-import { el, type XmlNode } from '../xml/tree';
-import { ColorSchema } from './colors.schema';
-import { type Fill, type GradientFill, type GradientStop, PATTERN_TYPES, type PatternFill } from './fills';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { fromTree, toTree } from '../schema/serialize.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { qname, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { el, type XmlNode } from '../xml/tree.js';
+import { ColorSchema } from './colors.schema.js';
+import { type Fill, type GradientFill, type GradientStop, PATTERN_TYPES, type PatternFill } from './fills.js';
 
 const PATTERN_TYPE_VALUES: readonly string[] = PATTERN_TYPES;
 

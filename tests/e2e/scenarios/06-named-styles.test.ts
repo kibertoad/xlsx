@@ -8,10 +8,10 @@
 //   (blue underline), Comma / Currency / Percent number formats.
 
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_NAMED_STYLES, applyBuiltinStyle } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { BUILTIN_NAMED_STYLES, applyBuiltinStyle } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 06 — built-in named styles', () => {
   it('writes 06-named-styles.xlsx', async () => {

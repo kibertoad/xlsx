@@ -2,8 +2,8 @@
 // in subsequent /loop turns; this turn ships the namespace catalog and
 // the lightweight XmlNode representation.
 
-export type { SaxEvent, SaxInput } from './iterparse';
-export { iterParse } from './iterparse';
+export type { SaxEvent, SaxInput } from './iterparse.js';
+export { iterParse } from './iterparse.js';
 export {
   ACTIVEX_TYPE,
   // namespace constants — re-exported for ergonomics
@@ -85,11 +85,11 @@ export {
   XML_NS,
   XPROPS_NS,
   XSI_NS,
-} from './namespaces';
-export { parseXml } from './parser';
-export type { SerializeOptions } from './serializer';
-export { serializeXml } from './serializer';
-export type { XmlStreamWriter, XmlStreamWriterOptions } from './stream-writer';
-export { createXmlStreamWriter } from './stream-writer';
-export type { XmlNode } from './tree';
-export { appendChild, el, elNs, findChild, findChildren } from './tree';
+} from './namespaces.js';
+export { parseXml } from './parser.js';
+export type { SerializeOptions } from './serializer.js';
+export { serializeXml } from './serializer.js';
+export type { XmlStreamWriter, XmlStreamWriterOptions } from './stream-writer.js';
+export { createXmlStreamWriter } from './stream-writer.js';
+export type { XmlNode } from './tree.js';
+export { appendChild, el, elNs, findChild, findChildren } from './tree.js';

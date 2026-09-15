@@ -15,38 +15,38 @@ import {
   setDataTableFormula,
   setFormula,
   setSharedFormula,
-} from '../cell/cell';
-import type { Drawing } from '../drawing/drawing';
-import { translateFormula } from '../formula/translate';
-import type { Relationships } from '../packaging/relationships';
-import { findById } from '../packaging/relationships';
-import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { ERROR_CODES } from '../utils/inference';
-import { MARKUP_COMPAT_NS, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
-import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings';
-import type { AutoFilter, FilterColumn } from './auto-filter';
-import { parseMultiCellRange, parseRange } from './cell-range';
-import type { LegacyComment } from './comments';
+} from '../cell/cell.js';
+import type { Drawing } from '../drawing/drawing.js';
+import { translateFormula } from '../formula/translate.js';
+import type { Relationships } from '../packaging/relationships.js';
+import { findById } from '../packaging/relationships.js';
+import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { ERROR_CODES } from '../utils/inference.js';
+import { MARKUP_COMPAT_NS, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
+import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings.js';
+import type { AutoFilter, FilterColumn } from './auto-filter.js';
+import { parseMultiCellRange, parseRange } from './cell-range.js';
+import type { LegacyComment } from './comments.js';
 import type {
   ConditionalFormatting,
   ConditionalFormattingRule,
   ConditionalFormattingRuleType,
   TimePeriod,
-} from './conditional-formatting';
-import { makeCfRule, makeConditionalFormatting } from './conditional-formatting';
+} from './conditional-formatting.js';
+import { makeCfRule, makeConditionalFormatting } from './conditional-formatting.js';
 import type {
   DataValidation,
   DataValidationErrorStyle,
   DataValidationOperator,
   DataValidationType,
-} from './data-validations';
-import { makeDataValidation } from './data-validations';
-import type { ColumnDimension, RowDimension } from './dimensions';
-import type { IgnoredError } from './errors';
+} from './data-validations.js';
+import { makeDataValidation } from './data-validations.js';
+import type { ColumnDimension, RowDimension } from './dimensions.js';
+import type { IgnoredError } from './errors.js';
 import type {
   CellCommentMode,
   HeaderFooter,
@@ -57,32 +57,32 @@ import type {
   PageSetup,
   PrintErrorMode,
   PrintOptions,
-} from './page-setup';
+} from './page-setup.js';
 import type {
   PhoneticAlignment,
   PhoneticType,
   WorksheetPhoneticProperties,
-} from './phonetic';
+} from './phonetic.js';
 import type {
   DataConsolidate,
   DataConsolidateFunction,
   DataReference,
-} from './data-consolidate';
-import type { Scenario, ScenarioInputCell, ScenarioList } from './scenarios';
-import type { OutlineProperties, PageSetupProperties, SheetProperties } from './properties';
-import type { SheetProtection } from './protection';
-import type { ProtectedRange } from './protected-ranges';
-import type { SortBy, SortCondition, SortIconSet, SortMethod, SortState } from './sort-state';
-import type { FormControl, OleDvAspect, OleObject, OleUpdateMode } from './ole-objects';
-import type { CustomSheetView, CustomSheetViewState } from './custom-sheet-views';
-import type { WebPublishItem, WorksheetCustomProperty } from './web-publish';
-import { makeColor } from '../styles/colors';
-import { makeColumnDimension, makeRowDimension } from './dimensions';
-import type { Hyperlink } from './hyperlinks';
-import type { TableDefinition } from './table';
-import type { Pane, PaneState, PaneType, Selection, SheetView, SheetViewMode } from './views';
-import { makeSheetView } from './views';
-import { makeWorksheet, setCell, type Worksheet } from './worksheet';
+} from './data-consolidate.js';
+import type { Scenario, ScenarioInputCell, ScenarioList } from './scenarios.js';
+import type { OutlineProperties, PageSetupProperties, SheetProperties } from './properties.js';
+import type { SheetProtection } from './protection.js';
+import type { ProtectedRange } from './protected-ranges.js';
+import type { SortBy, SortCondition, SortIconSet, SortMethod, SortState } from './sort-state.js';
+import type { FormControl, OleDvAspect, OleObject, OleUpdateMode } from './ole-objects.js';
+import type { CustomSheetView, CustomSheetViewState } from './custom-sheet-views.js';
+import type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
+import { makeColor } from '../styles/colors.js';
+import { makeColumnDimension, makeRowDimension } from './dimensions.js';
+import type { Hyperlink } from './hyperlinks.js';
+import type { TableDefinition } from './table.js';
+import type { Pane, PaneState, PaneType, Selection, SheetView, SheetViewMode } from './views.js';
+import { makeSheetView } from './views.js';
+import { makeWorksheet, setCell, type Worksheet } from './worksheet.js';
 
 const WORKSHEET_TAG = `{${SHEET_MAIN_NS}}worksheet`;
 const SHEETDATA_TAG = `{${SHEET_MAIN_NS}}sheetData`;
@@ -444,13 +444,13 @@ export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx
     for (const cstNode of findChildren(stEl, CELL_SMART_TAGS_TAG)) {
       const ref = cstNode.attrs['r'];
       if (!ref) continue;
-      const tags: import('./smart-tags').CellSmartTag[] = [];
+      const tags: import('./smart-tags.js').CellSmartTag[] = [];
       for (const tagNode of findChildren(cstNode, CELL_SMART_TAG_TAG)) {
         const typeRaw = tagNode.attrs['type'];
         if (typeRaw === undefined) continue;
         const type = Number.parseInt(typeRaw, 10);
         if (!Number.isInteger(type)) continue;
-        const tag: import('./smart-tags').CellSmartTag = { type, properties: [] };
+        const tag: import('./smart-tags.js').CellSmartTag = { type, properties: [] };
         const deleted = parseBoolXmlAttr(tagNode.attrs['deleted']);
         if (deleted !== undefined) tag.deleted = deleted;
         const xmlBased = parseBoolXmlAttr(tagNode.attrs['xmlBased']);
@@ -1576,7 +1576,7 @@ const handleFormula = (
       if (!ref) {
         throw new OpenXmlSchemaError('worksheet: <f t="dataTable"> missing @ref');
       }
-      const dtOpts: import('../cell/cell').DataTableFormulaOpts = {
+      const dtOpts: import('../cell/cell.js').DataTableFormulaOpts = {
         ref,
         ...(cached !== undefined ? { cachedValue: cached } : {}),
         ...(fNode.attrs['r1'] !== undefined ? { r1: fNode.attrs['r1'] } : {}),

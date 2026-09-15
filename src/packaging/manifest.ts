@@ -1,11 +1,11 @@
 // [Content_Types].xml — the package manifest. Tracks default content types per
 // file extension and per-part Override entries.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { fromTree, toTree } from '../schema/serialize';
-import { CONTYPES_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { fromTree, toTree } from '../schema/serialize.js';
+import { CONTYPES_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
 
 export interface DefaultEntry {
   /** File extension without leading dot (e.g. "rels", "xml", "png"). */

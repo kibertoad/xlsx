@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { serializeFill } from '../../src/drawing/dml/dml-xml';
-import type { Fill } from '../../src/drawing/dml/fill';
+import { serializeFill } from '../../src/drawing/dml/dml-xml.js';
+import type { Fill } from '../../src/drawing/dml/fill.js';
 
 describe('issue #53 — DmlColorWithMods.mods omitted does not crash the serializer', () => {
   it('emits a valid solidFill when the caller forgets to supply `mods: []`', () => {

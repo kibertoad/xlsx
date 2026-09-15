@@ -3,15 +3,15 @@
 // around an anchor — are kept as the verbatim source XML and written back
 // untouched, because the model has no slot for their geometry or text.
 
-import { escapeXmlAttr } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { DRAWING_NS, REL_NS, SHEET_DRAWING_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
-import { findChild, type XmlNode } from '../xml/tree';
-import type { AnchorMarker, DrawingAnchor, Point2D, PositiveSize2D } from './anchor';
-import { parseShapeProperties, serializeShapeProperties } from './dml/dml-xml';
-import { type ChartReference, type Drawing, type DrawingItem, makeDrawing, type PictureReference } from './drawing';
+import { escapeXmlAttr } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { DRAWING_NS, REL_NS, SHEET_DRAWING_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
+import { findChild, type XmlNode } from '../xml/tree.js';
+import type { AnchorMarker, DrawingAnchor, Point2D, PositiveSize2D } from './anchor.js';
+import { parseShapeProperties, serializeShapeProperties } from './dml/dml-xml.js';
+import { type ChartReference, type Drawing, type DrawingItem, makeDrawing, type PictureReference } from './drawing.js';
 
 const WS_DRAWING_TAG = `{${SHEET_DRAWING_NS}}wsDr`;
 const ABSOLUTE_ANCHOR_TAG = `{${SHEET_DRAWING_NS}}absoluteAnchor`;

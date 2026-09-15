@@ -11,9 +11,9 @@
 // loudly.
 
 import { XMLParser } from 'fast-xml-parser';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { qname } from './namespaces';
-import { el, type XmlNode } from './tree';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { qname } from './namespaces.js';
+import { el, type XmlNode } from './tree.js';
 
 // ---- DOCTYPE / DTD prescan --------------------------------------------------
 

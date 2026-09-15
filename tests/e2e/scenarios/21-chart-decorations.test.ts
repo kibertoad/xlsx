@@ -10,19 +10,19 @@
 //   point, with a separate exponential trendline.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
 import {
   makeBarChart,
   makeBarSeries,
   makeChartSpace,
   makeScatterChart,
   makeScatterSeries,
-} from '../../../src/chart/chart';
-import type { ChartSpace } from '../../../src/chart/chart';
-import { makeOneCellAnchor } from '../../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing';
-import { writeWorkbook } from '../_helpers';
+} from '../../../src/chart/chart.js';
+import type { ChartSpace } from '../../../src/chart/chart.js';
+import { makeOneCellAnchor } from '../../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 21 — chart decorations (dLbls / trendline / errBars)', () => {
   it('writes 21-chart-decorations.xlsx', async () => {

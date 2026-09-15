@@ -7,7 +7,7 @@ import {
   getSharedStringIndex,
   makeSharedStrings,
   sharedStringCount,
-} from '../../src/workbook/shared-strings';
+} from '../../src/workbook/shared-strings.js';
 
 describe('SST helpers', () => {
   it('count grows with each unique add', () => {

@@ -5,7 +5,7 @@
 // only at the entry points, with bounded Map caches for the bidirectional
 // column letter <-> index mapping.
 
-import { OpenXmlSchemaError } from './exceptions';
+import { OpenXmlSchemaError } from './exceptions.js';
 
 /** Maximum column index Excel accepts (XFD). */
 export const MAX_COL = 16384;

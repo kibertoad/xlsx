@@ -6,23 +6,23 @@
 // `iterParse`. The iterator streams rows without materialising the full sheet
 // in memory.
 
-import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings';
-import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, ARC_SHARED_STRINGS, ARC_STYLE, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces';
-import { findById, relsFromBytes } from '../packaging/relationships';
-import { manifestFromBytes } from '../packaging/manifest';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import type { DecompressionLimits } from '../zip/decompression-guard';
-import { type ZipArchive, openZip } from '../zip/reader';
-import type { CellValue, ExcelErrorCode } from '../cell/cell';
-import { ERROR_CODES } from '../utils/inference';
-import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
-import type { XlsxSource } from '../io/source';
-import { coordinateToTuple } from '../utils/coordinate';
-import { type Stylesheet, makeStylesheet } from '../styles/stylesheet';
-import { parseStylesheetXml } from '../styles/stylesheet-reader';
-import { parseDate1904, resolveRelTarget } from '../io/load';
+import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
+import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, ARC_SHARED_STRINGS, ARC_STYLE, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { findById, relsFromBytes } from '../packaging/relationships.js';
+import { manifestFromBytes } from '../packaging/manifest.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import type { DecompressionLimits } from '../zip/decompression-guard.js';
+import { type ZipArchive, openZip } from '../zip/reader.js';
+import type { CellValue, ExcelErrorCode } from '../cell/cell.js';
+import { ERROR_CODES } from '../utils/inference.js';
+import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
+import type { XlsxSource } from '../io/source.js';
+import { coordinateToTuple } from '../utils/coordinate.js';
+import { type Stylesheet, makeStylesheet } from '../styles/stylesheet.js';
+import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
+import { parseDate1904, resolveRelTarget } from '../io/load.js';
 
 const SHEET_TAG = `{${SHEET_MAIN_NS}}sheet`;
 const SHEETS_TAG = `{${SHEET_MAIN_NS}}sheets`;

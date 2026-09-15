@@ -1,0 +1,7 @@
+{
+  "name": "xlsx-consumer-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Not published. Stands in for a downstream app so CI can typecheck and run against the packed tarball. See README.md."
+}

@@ -1,16 +1,16 @@
 // Tests for removeAllTables / removeAllDataValidations.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { addListValidation } from '../../src/worksheet/data-validations';
-import { addExcelTable } from '../../src/worksheet/table';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { addListValidation } from '../../src/worksheet/data-validations.js';
+import { addExcelTable } from '../../src/worksheet/table.js';
 import {
   listDataValidations,
   listTables,
   removeAllDataValidations,
   removeAllTables,
   setCell,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('removeAllTables', () => {
   it('drops every table and returns the count', () => {

@@ -122,6 +122,13 @@ pnpm add @office-kit/xlsx   # or npm / yarn / bun
 Requires Node `>=22` for the built-in `Web Streams`, `Blob`, and `fetch`
 globals.
 
+The package is ESM-only and its shipped types resolve under every current
+TypeScript setting: `moduleResolution: node16`, `nodenext` and `bundler` all
+work, with no need for `skipLibCheck`. `moduleResolution: node10` (the legacy
+`node` algorithm) cannot see the subpaths, because they are declared only
+through `exports`. CI checks each of these against the packed tarball on every
+commit.
+
 ## Subpath entries
 
 The package has no root barrel — every export lives behind a section

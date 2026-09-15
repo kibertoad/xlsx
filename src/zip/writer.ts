@@ -20,9 +20,9 @@
 // constraint is real — surface it in your own size estimates.
 
 import { Zip, ZipDeflate, ZipPassThrough } from 'fflate';
-import type { XlsxSink } from '../io/sink';
-import { OpenXmlIoError } from '../utils/exceptions';
-import { applyZip64EntryCountPatch } from './zip64-patch';
+import type { XlsxSink } from '../io/sink.js';
+import { OpenXmlIoError } from '../utils/exceptions.js';
+import { applyZip64EntryCountPatch } from './zip64-patch.js';
 
 const ZIP32_MAX_ENTRIES = 0xffff;
 

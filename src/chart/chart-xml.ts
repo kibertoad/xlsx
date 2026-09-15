@@ -10,14 +10,14 @@ import {
   parseTextBody,
   serializeShapeProperties,
   serializeTextBody,
-} from '../drawing/dml/dml-xml';
-import type { ShapeProperties } from '../drawing/dml/shape-properties';
-import type { TextBody } from '../drawing/dml/text';
-import { escapeXmlText } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { CHART_NS, REL_NS, SHEET_DRAWING_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
+} from '../drawing/dml/dml-xml.js';
+import type { ShapeProperties } from '../drawing/dml/shape-properties.js';
+import type { TextBody } from '../drawing/dml/text.js';
+import { escapeXmlText } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { CHART_NS, REL_NS, SHEET_DRAWING_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import {
   type Area3DChart,
   type AreaChart,
@@ -108,7 +108,7 @@ import {
   type TrendlineType,
   type ValueAxis,
   type View3D,
-} from './chart';
+} from './chart.js';
 
 const CHART_SPACE_TAG = `{${CHART_NS}}chartSpace`;
 const CHART_TAG = `{${CHART_NS}}chart`;

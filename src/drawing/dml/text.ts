@@ -6,10 +6,10 @@
 // (List Style), §21.1.2.4 (Text Paragraph), §21.1.2.5 (Run / Break / Field),
 // and the Run / Paragraph property element groups.
 
-import type { DmlColorWithMods } from './colors';
-import type { EffectsRef } from './effect';
-import type { Fill } from './fill';
-import type { LineProperties } from './line';
+import type { DmlColorWithMods } from './colors.js';
+import type { EffectsRef } from './effect.js';
+import type { Fill } from './fill.js';
+import type { LineProperties } from './line.js';
 
 // ---- Common building blocks ------------------------------------------------
 

@@ -7,10 +7,10 @@
 // guards stay in effect on ZIP64 archives.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer, toBuffer } from '../../src/io/node';
-import { OpenXmlIoError } from '../../src/utils/exceptions';
-import { openZip } from '../../src/zip/reader';
-import { createZipWriter } from '../../src/zip/writer';
+import { fromBuffer, toBuffer } from '../../src/io/node.js';
+import { OpenXmlIoError } from '../../src/utils/exceptions.js';
+import { openZip } from '../../src/zip/reader.js';
+import { createZipWriter } from '../../src/zip/writer.js';
 
 describe('ZIP32 / ZIP64 entry-count limit', () => {
   it('round-trips 60_000 entries (well under the 65535 cap)', async () => {

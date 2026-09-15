@@ -6,10 +6,10 @@
 // references a drawing via `<drawing r:id="..."/>` carrying an absoluteAnchor
 // with the chart.
 
-import type { Drawing } from '../drawing/drawing';
-import type { Color } from '../styles/colors';
-import type { HeaderFooter, PageMargins, PageSetup } from '../worksheet/page-setup';
-import type { WebPublishItem } from '../worksheet/web-publish';
+import type { Drawing } from '../drawing/drawing.js';
+import type { Color } from '../styles/colors.js';
+import type { HeaderFooter, PageMargins, PageSetup } from '../worksheet/page-setup.js';
+import type { WebPublishItem } from '../worksheet/web-publish.js';
 
 /** `<sheetView>` inside `<sheetViews>`. */
 export interface ChartsheetView {

@@ -11,11 +11,11 @@
 // - Column C has the 5-arrows icon set (5 = ↑↑, 1 = ↓↓).
 
 import { describe, expect, it } from 'vitest';
-import { addCellXf, addDxf, addFill, addFont, defaultCellXf, makeColor, makeFont, makePatternFill } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { parseMultiCellRange } from '../../../src/worksheet/cell-range';
-import { writeWorkbook } from '../_helpers';
+import { addCellXf, addDxf, addFill, addFont, defaultCellXf, makeColor, makeFont, makePatternFill } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { parseMultiCellRange } from '../../../src/worksheet/cell-range.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 12 — conditional formatting', () => {
   it('writes 12-conditional-format.xlsx', async () => {

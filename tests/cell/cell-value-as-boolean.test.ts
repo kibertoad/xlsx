@@ -5,8 +5,8 @@ import {
   cellValueAsBoolean,
   makeDurationValue,
   makeErrorValue,
-} from '../../src/cell/cell';
-import { makeRichText } from '../../src/cell/rich-text';
+} from '../../src/cell/cell.js';
+import { makeRichText } from '../../src/cell/rich-text.js';
 
 describe('cellValueAsBoolean', () => {
   it('booleans pass through', () => {

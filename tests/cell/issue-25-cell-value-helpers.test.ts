@@ -7,8 +7,8 @@ import {
   cellValueAsString,
   makeDurationValue,
   makeErrorValue,
-} from '../../src/cell/cell';
-import { makeRichText } from '../../src/cell/rich-text';
+} from '../../src/cell/cell.js';
+import { makeRichText } from '../../src/cell/rich-text.js';
 
 describe('cellValueAsString — options (#25)', () => {
   it('emptyText overrides the null placeholder', () => {

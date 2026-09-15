@@ -2,9 +2,9 @@
 // reads / mutates colour values without serialising them can drop the schema
 // entirely.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import type { Color } from './colors';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import type { Color } from './colors.js';
 
 export const ColorSchema: Schema<Color> = defineSchema<Color>({
   tagname: 'color',

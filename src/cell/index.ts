@@ -10,7 +10,7 @@ export type {
   FormulaKind,
   FormulaValue,
   MergedCell,
-} from './cell';
+} from './cell.js';
 export {
   bindValue,
   cellValueAsBoolean,
@@ -38,12 +38,12 @@ export {
   setDataTableFormula,
   setFormula,
   setSharedFormula,
-} from './cell';
+} from './cell.js';
 export type {
   InlineFont,
   InlineUnderline,
   InlineVertAlign,
   RichText,
   TextRun,
-} from './rich-text';
-export { makeRichText, makeTextRun, richTextToString } from './rich-text';
+} from './rich-text.js';
+export { makeRichText, makeTextRun, richTextToString } from './rich-text.js';

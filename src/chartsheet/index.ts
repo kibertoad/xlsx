@@ -7,5 +7,5 @@ export type {
   ChartsheetProperties,
   ChartsheetProtection,
   ChartsheetView,
-} from './chartsheet';
-export { makeChartsheet, makeChartsheetCustomSheetView } from './chartsheet';
+} from './chartsheet.js';
+export { makeChartsheet, makeChartsheetCustomSheetView } from './chartsheet.js';

@@ -5,8 +5,8 @@
 // objects; the `make*` constructors freeze their results so the Stylesheet pool
 // can dedupe by reference identity once we wire it up.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { type Color, colorToHex, makeColor } from './colors';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { type Color, colorToHex, makeColor } from './colors.js';
 
 export type SideStyle =
   // ECMA-376 §18.18.3 ST_BorderStyle lists `none` (no stroke) as a first-class

@@ -1,14 +1,14 @@
 // Tests for copyRange.
 
 import { describe, expect, it } from 'vitest';
-import { setCellFont } from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { setCellFont } from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   copyRange,
   getRangeValues,
   setCell,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('copyRange', () => {
   it('copies cell values to a new top-left within the same sheet', () => {

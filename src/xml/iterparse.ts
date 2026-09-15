@@ -14,8 +14,8 @@
 // parser.
 
 import { SaxesParser } from 'saxes';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { qname } from './namespaces';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { qname } from './namespaces.js';
 
 export type SaxEvent =
   | { kind: 'start'; name: string; attrs: Record<string, string> }

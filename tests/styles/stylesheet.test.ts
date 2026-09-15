@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_BORDER, makeBorder, makeSide } from '../../src/styles/borders';
-import { makeColor } from '../../src/styles/colors';
-import { DEFAULT_EMPTY_FILL, DEFAULT_GRAY_FILL, makePatternFill } from '../../src/styles/fills';
-import { DEFAULT_FONT, makeFont } from '../../src/styles/fonts';
-import { BUILTIN_FORMATS_MAX_SIZE } from '../../src/styles/numbers';
+import { DEFAULT_BORDER, makeBorder, makeSide } from '../../src/styles/borders.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { DEFAULT_EMPTY_FILL, DEFAULT_GRAY_FILL, makePatternFill } from '../../src/styles/fills.js';
+import { DEFAULT_FONT, makeFont } from '../../src/styles/fonts.js';
+import { BUILTIN_FORMATS_MAX_SIZE } from '../../src/styles/numbers.js';
 import {
   addBorder,
   addCellStyleXf,
@@ -15,8 +15,8 @@ import {
   defaultCellXf,
   getCustomNumFmts,
   makeStylesheet,
-} from '../../src/styles/stylesheet';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
+} from '../../src/styles/stylesheet.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 
 describe('makeStylesheet — defaults', () => {
   it('starts with the Excel-required entries', () => {

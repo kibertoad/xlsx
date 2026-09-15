@@ -2,8 +2,8 @@
 // rows over the populated bounding box, not just the populated cells.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { iterCells, iterRows, iterValues, setCell } from '../../src/worksheet/worksheet';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { iterCells, iterRows, iterValues, setCell } from '../../src/worksheet/worksheet.js';
 
 describe('iterRows — rectangular default (#24)', () => {
   it('default extent is the populated bounding box', () => {

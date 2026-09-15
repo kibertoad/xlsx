@@ -1,8 +1,8 @@
 // Tests for iterCells — flat per-worksheet cell iterator.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { iterCells, setCell } from '../../src/worksheet/worksheet';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { iterCells, setCell } from '../../src/worksheet/worksheet.js';
 
 describe('iterCells', () => {
   it('yields every populated cell in row-major order', () => {

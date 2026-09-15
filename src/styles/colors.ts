@@ -10,7 +10,7 @@
 // These are plain readonly objects; `makeColor` freezes its result so the
 // Stylesheet pool can dedupe by reference equality.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 /**
  * Colour reference. All fields are optional but Excel expects exactly one of

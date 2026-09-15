@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isFiniteNumber, isInteger, isTypedArray } from '../../src/compat/numbers';
+import { isFiniteNumber, isInteger, isTypedArray } from '../../src/compat/numbers.js';
 
 describe('isFiniteNumber', () => {
   it('returns true for ordinary finite numbers', () => {

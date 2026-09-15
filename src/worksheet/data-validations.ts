@@ -5,7 +5,7 @@
 // Stage-1 maps every OOXML attribute we have a use for; imeMode + numeric/value
 // clamps land later when phase 7's Asian-locale support catches up.
 
-import { type MultiCellRange, parseMultiCellRange } from './cell-range';
+import { type MultiCellRange, parseMultiCellRange } from './cell-range.js';
 
 export type DataValidationType = 'whole' | 'decimal' | 'list' | 'date' | 'time' | 'textLength' | 'custom';
 export type DataValidationOperator =
@@ -71,7 +71,7 @@ export function makeDataValidation(
 
 // ---- Worksheet ergonomic builders ---------------------------------------
 
-import type { Worksheet } from './worksheet';
+import type { Worksheet } from './worksheet.js';
 
 const resolveSqref = (sqref: MultiCellRange | string): MultiCellRange =>
   typeof sqref === 'string' ? parseMultiCellRange(sqref) : sqref;

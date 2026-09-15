@@ -5,8 +5,8 @@ import {
   addDefinedName,
   listDefinedNames,
   removeDefinedNames,
-} from '../../src/workbook/defined-names';
-import { createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/workbook/defined-names.js';
+import { createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('removeDefinedNames', () => {
   it('removes only entries matching the predicate and returns the count', () => {

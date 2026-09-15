@@ -72,7 +72,7 @@ export type {
   UpDownBars,
   ValueAxis,
   View3D,
-} from './chart';
+} from './chart.js';
 export {
   makeArea3DChart,
   makeAreaChart,
@@ -94,7 +94,7 @@ export {
   makeStockChart,
   makeSurface3DChart,
   makeSurfaceChart,
-} from './chart';
+} from './chart.js';
 export type {
   CxAxis,
   CxChart,
@@ -114,7 +114,7 @@ export type {
   CxSeries,
   CxStrDim,
   CxTitle,
-} from './cx/chartex';
+} from './cx/chartex.js';
 export {
   makeBoxWhiskerChart,
   makeCxAxis,
@@ -130,7 +130,7 @@ export {
   makeSunburstChart,
   makeTreemapChart,
   makeWaterfallChart,
-} from './cx/chartex';
+} from './cx/chartex.js';
 export type {
   ChartDrawing,
   ChartDrawingPicture,
@@ -138,10 +138,10 @@ export type {
   ChartRelativeMarker,
   UserShapeAnchor,
   UserShapeContent,
-} from './user-shapes';
+} from './user-shapes.js';
 export {
   makeAbsSizeAnchor,
   makeChartDrawing,
   makeChartShape,
   makeRelSizeAnchor,
-} from './user-shapes';
+} from './user-shapes.js';

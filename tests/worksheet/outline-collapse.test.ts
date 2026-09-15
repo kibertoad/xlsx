@@ -2,10 +2,10 @@
 // expandColumnGroup outline collapse helpers.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   collapseColumnGroup,
   collapseRowGroup,
@@ -17,7 +17,7 @@ import {
   groupRows,
   setRowHeight,
   type Worksheet,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('collapseRowGroup / expandRowGroup', () => {
   it('collapse hides + flags collapsed; expand reverses', () => {

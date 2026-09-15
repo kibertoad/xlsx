@@ -5,9 +5,9 @@
 // refuses to open.
 
 import { describe, expect, it } from 'vitest';
-import { workbookToBytes } from '../../src/io/save';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { workbookToBytes } from '../../src/io/save.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('saveWorkbook — sheet title gate', () => {
   it('rejects a title that exceeds 31 characters', async () => {

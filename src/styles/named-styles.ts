@@ -15,15 +15,15 @@
 // deferred — they balloon the bundle without earning their keep on
 // the read/write hot path.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import type { Alignment } from './alignment';
-import type { Border } from './borders';
-import { makeColor } from './colors';
-import type { Fill } from './fills';
-import { makePatternFill } from './fills';
-import type { Font } from './fonts';
-import { makeFont } from './fonts';
-import { addBorder, addCellStyleXf, addFill, addFont, addNumFmt, type CellXf, type Stylesheet } from './stylesheet';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import type { Alignment } from './alignment.js';
+import type { Border } from './borders.js';
+import { makeColor } from './colors.js';
+import type { Fill } from './fills.js';
+import { makePatternFill } from './fills.js';
+import type { Font } from './fonts.js';
+import { makeFont } from './fonts.js';
+import { addBorder, addCellStyleXf, addFill, addFont, addNumFmt, type CellXf, type Stylesheet } from './stylesheet.js';
 
 export interface NamedStyle {
   readonly name: string;
@@ -40,7 +40,7 @@ export interface NamedStyle {
   readonly numberFormat?: string;
 }
 
-import type { Protection } from './protection';
+import type { Protection } from './protection.js';
 
 /**
  * NamedStyle as it sits inside the Stylesheet (an `<cellStyles>` entry).

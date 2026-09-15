@@ -10,10 +10,10 @@
 //   tab; verify nothing about saving from this build prevents that.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell, setColumnWidth } from '../../../src/worksheet/index';
-import { setFormula } from '../../../src/cell/cell';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell, setColumnWidth } from '../../../src/worksheet/index.js';
+import { setFormula } from '../../../src/cell/cell.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 29 — many sheets + cross-sheet references', () => {
   it('writes 29-many-sheets.xlsx', async () => {

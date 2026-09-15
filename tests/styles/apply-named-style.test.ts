@@ -7,13 +7,13 @@ import {
   getCellFill,
   getCellFont,
   setCellFont,
-} from '../../src/styles/cell-style';
-import { addNamedStyle } from '../../src/styles/named-styles';
-import { makeFont } from '../../src/styles/fonts';
-import { makeColor } from '../../src/styles/colors';
-import { makeFill, makePatternFill } from '../../src/styles/fills';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/styles/cell-style.js';
+import { addNamedStyle } from '../../src/styles/named-styles.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { makeFill, makePatternFill } from '../../src/styles/fills.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('applyBuiltinStyle', () => {
   it('"Good" applies the green palette + sets xfId', () => {

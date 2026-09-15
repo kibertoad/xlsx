@@ -2,10 +2,10 @@
 // legacyDrawing, legacyDrawingHF, drawingHF, picture.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addChartsheet, createWorkbook } from '../../src/workbook/workbook';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addChartsheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('chartsheet rId-link siblings round-trip', () => {
   it('preserves legacyDrawing / legacyDrawingHF / picture rIds', async () => {

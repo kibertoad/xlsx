@@ -6,9 +6,9 @@
 // `./node-fs.ts` (re-exported via `@office-kit/xlsx/node`) where the `node:fs` /
 // `node:stream` imports stay out of the browser-safe surface.
 
-import { OpenXmlIoError } from '../utils/exceptions';
-import type { BufferedSinkWriter, XlsxSink } from './sink';
-import type { XlsxSource } from './source';
+import { OpenXmlIoError } from '../utils/exceptions.js';
+import type { BufferedSinkWriter, XlsxSink } from './sink.js';
+import type { XlsxSource } from './source.js';
 
 /**
  * Wrap a Buffer or Uint8Array as an XlsxSource. The underlying bytes are

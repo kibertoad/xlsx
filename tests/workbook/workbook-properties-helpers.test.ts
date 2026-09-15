@@ -1,16 +1,16 @@
 // Tests for workbookProperties ergonomic helpers.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
 import {
   setDate1904,
   setFilterPrivacy,
   setUpdateLinksMode,
   setWorkbookCodeName,
-} from '../../src/workbook/workbook-properties';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook-properties.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('setWorkbookCodeName', () => {
   it('lazily creates workbookProperties and sets codeName', () => {

@@ -15,7 +15,7 @@
 // (e.g. a backend that only ever loads xlsx it generated itself) can pass
 // `false` to disable the guard.
 
-import { OpenXmlDecompressionBombError, OpenXmlError } from '../utils/exceptions';
+import { OpenXmlDecompressionBombError, OpenXmlError } from '../utils/exceptions.js';
 
 /** Per-archive limits enforced during {@link openZip}. */
 export interface DecompressionLimits {

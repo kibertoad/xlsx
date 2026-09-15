@@ -11,11 +11,11 @@
 // this writer's start / end / writeNode methods. Use `writeRaw` to splice those
 // in.
 
-import { escapeXmlAttr, escapeXmlText } from '../utils/escape';
-import { OpenXmlIoError } from '../utils/exceptions';
-import { utf8ByteLength } from '../utils/utf8';
-import { DEFAULT_PREFIXES, parseQName, XML_NS } from './namespaces';
-import type { XmlNode } from './tree';
+import { escapeXmlAttr, escapeXmlText } from '../utils/escape.js';
+import { OpenXmlIoError } from '../utils/exceptions.js';
+import { utf8ByteLength } from '../utils/utf8.js';
+import { DEFAULT_PREFIXES, parseQName, XML_NS } from './namespaces.js';
+import type { XmlNode } from './tree.js';
 
 export interface XmlStreamWriterOptions {
   /** Map of namespace URI → prefix. Merged on top of DEFAULT_PREFIXES. */

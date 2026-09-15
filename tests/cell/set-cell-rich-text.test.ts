@@ -1,10 +1,10 @@
 // Tests for setCellRichText.
 
 import { describe, expect, it } from 'vitest';
-import { isRichTextValue } from '../../src/cell/cell';
-import { makeRichText } from '../../src/cell/rich-text';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCellRichText } from '../../src/worksheet/worksheet';
+import { isRichTextValue } from '../../src/cell/cell.js';
+import { makeRichText } from '../../src/cell/rich-text.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCellRichText } from '../../src/worksheet/worksheet.js';
 
 describe('setCellRichText', () => {
   it('writes a rich-text value built from inline run objects', () => {

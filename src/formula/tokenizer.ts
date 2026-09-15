@@ -9,7 +9,7 @@
 // `renderTokens(items)` for the `Tokenizer.render()` equivalent (used by tests
 // + array-formula round-trip).
 
-import { OpenXmlError } from '../utils/exceptions';
+import { OpenXmlError } from '../utils/exceptions.js';
 
 export class TokenizerError extends OpenXmlError {
   override readonly name = 'TokenizerError';

@@ -2,7 +2,7 @@
 // two structural files every OOXML zip carries; doc properties (core,
 // app, custom) follow in the next bootstrap-style turn.
 
-export type { CoreProperties } from './core';
+export type { CoreProperties } from './core.js';
 export {
   corePropsFromBytes,
   corePropsToBytes,
@@ -14,8 +14,8 @@ export {
   setWorkbookLastModifiedBy,
   setWorkbookSubject,
   setWorkbookTitle,
-} from './core';
-export type { CustomProperties, CustomProperty } from './custom';
+} from './core.js';
+export type { CustomProperties, CustomProperty } from './custom.js';
 export {
   appendCustomProperty,
   customPropsFromBytes,
@@ -41,8 +41,8 @@ export {
   setCustomDateProperty,
   setCustomNumberProperty,
   setCustomStringProperty,
-} from './custom';
-export type { ExtendedProperties } from './extended';
+} from './custom.js';
+export type { ExtendedProperties } from './extended.js';
 export {
   extendedPropsFromBytes,
   extendedPropsToBytes,
@@ -52,8 +52,8 @@ export {
   setWorkbookCompany,
   setWorkbookHyperlinkBase,
   setWorkbookManager,
-} from './extended';
-export type { DefaultEntry, Manifest, OverrideEntry } from './manifest';
+} from './extended.js';
+export type { DefaultEntry, Manifest, OverrideEntry } from './manifest.js';
 export {
   addDefault,
   addOverride,
@@ -62,8 +62,8 @@ export {
   makeManifest,
   manifestFromBytes,
   manifestToBytes,
-} from './manifest';
-export type { Relationship, Relationships } from './relationships';
+} from './manifest.js';
+export type { Relationship, Relationships } from './relationships.js';
 export {
   appendRel,
   findAllByType,
@@ -72,4 +72,4 @@ export {
   makeRelationships,
   relsFromBytes,
   relsToBytes,
-} from './relationships';
+} from './relationships.js';

@@ -23,13 +23,18 @@ day-to-day contributor workflow.
 
 - TypeScript with strict mode + `exactOptionalPropertyTypes` +
   `noUncheckedIndexedAccess`. No `as any`, no `@ts-ignore`.
+- `moduleResolution: nodenext`, so **every relative import specifier carries
+  its `.js` extension** (`from './load.js'`, not `from './load'`). This is not
+  cosmetic: the extension is copied verbatim into the emitted `.d.ts`, and a
+  consumer on `node16` / `nodenext` resolution silently loses all types from a
+  declaration that lacks it. See `tests/consumer/README.md`.
 - Runtime: Node `>=22` (relies on built-in `Web Streams`, `Blob`, `fetch`).
   Modern browsers via the same APIs.
 - Runtime dependencies: `fflate` (deflate / inflate), `saxes` (SAX XML),
   `fast-xml-parser`. Anything else is a build-time dependency.
 - Tooling: pnpm, vitest, oxlint, knip, tsdown (bundler), size-limit, typedoc,
   changesets (release management), libxml2-utils (`xmllint`) for ECMA-376 XSD
-  validation in CI.
+  validation in CI, `@arethetypeswrong/cli` for published-types validation.
 
 ## Repository layout
 
@@ -54,6 +59,8 @@ src/
 tests/
   Mirrors src/ layout. Includes roundtrip tests against reference/openpyxl/
   fixtures (git submodule) and ECMA-376 conformance tests under conformance/.
+  consumer/ is not a vitest suite: it is a stand-in downstream project that
+  `pnpm check:consumer` compiles and runs against the packed tarball.
 
 reference/openpyxl/   git submodule — fixture corpus, do not edit
 docs/                 documentation site source
@@ -339,7 +346,11 @@ pnpm knip        # unused exports / files / deps
 pnpm test        # unit + property + roundtrip (~2000 cases, <30s)
 pnpm build       # produce dist/
 pnpm size        # size-limit budgets
+pnpm check:attw  # are-the-types-wrong over the packed tarball
+pnpm check:consumer  # compile + run a real consumer against the tarball
 ```
+
+The last two need `dist/`, so they run after `pnpm build`.
 
 `pnpm prepublishOnly` chains the gate the way CI does. See `CONTRIBUTING.md` for
 the full script reference.

@@ -8,9 +8,9 @@
 // - The "Target" sheet has the destination cell at A1.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 08 — hyperlinks', () => {
   it('writes 08-hyperlinks.xlsx', async () => {

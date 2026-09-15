@@ -6,17 +6,17 @@
 // `stableStringify`-keyed maps so the same logical Font / Fill / etc. added
 // 1000× lands in a single pool slot.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { stableStringify } from '../utils/stable-stringify';
-import type { Alignment } from './alignment';
-import type { Border } from './borders';
-import { DEFAULT_BORDER } from './borders';
-import type { Fill } from './fills';
-import { DEFAULT_EMPTY_FILL, DEFAULT_GRAY_FILL } from './fills';
-import type { Font } from './fonts';
-import { DEFAULT_FONT } from './fonts';
-import { BUILTIN_FORMATS_MAX_SIZE, builtinFormatId } from './numbers';
-import type { Protection } from './protection';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { stableStringify } from '../utils/stable-stringify.js';
+import type { Alignment } from './alignment.js';
+import type { Border } from './borders.js';
+import { DEFAULT_BORDER } from './borders.js';
+import type { Fill } from './fills.js';
+import { DEFAULT_EMPTY_FILL, DEFAULT_GRAY_FILL } from './fills.js';
+import type { Font } from './fonts.js';
+import { DEFAULT_FONT } from './fonts.js';
+import { BUILTIN_FORMATS_MAX_SIZE, builtinFormatId } from './numbers.js';
+import type { Protection } from './protection.js';
 
 /**
  * One entry in the cellXfs / cellStyleXfs pool. Represents the union of
@@ -54,7 +54,7 @@ export interface Stylesheet {
   cellXfs: CellXf[];
   cellStyleXfs: CellXf[];
   /** Named styles (Excel's "Cell Styles" gallery; populated by addNamedStyle). */
-  namedStyles?: Array<import('./named-styles').StylesheetNamedStyle>;
+  namedStyles?: Array<import('./named-styles.js').StylesheetNamedStyle>;
   /**
    * The tail of `<styleSheet>` this model doesn't cover — `<tableStyles>`,
    * `<colors>` and `<extLst>` (which is where Excel keeps its x14/x15 slicer
@@ -62,7 +62,7 @@ export interface Stylesheet {
    * loaded workbook keeps them; CT_Stylesheet puts all three after `<dxfs>`,
    * so the writer appends them there.
    */
-  stylesXmlTail?: Array<import('../xml/tree').XmlNode>;
+  stylesXmlTail?: Array<import('../xml/tree.js').XmlNode>;
 
   // Internal dedup maps. Underscore-prefixed so JSON / structuredClone
   // serialisation can choose to skip them; never part of the public API.
@@ -72,7 +72,7 @@ export interface Stylesheet {
   _xfIdByKey: Map<string, number>;
   _styleXfIdByKey: Map<string, number>;
   _numFmtIdByCode: Map<string, number>;
-  _namedStyleByName?: Map<string, import('./named-styles').StylesheetNamedStyle>;
+  _namedStyleByName?: Map<string, import('./named-styles.js').StylesheetNamedStyle>;
 }
 
 /**

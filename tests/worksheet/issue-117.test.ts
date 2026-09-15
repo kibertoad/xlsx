@@ -9,11 +9,11 @@
 // an export of thousands.
 
 import { describe, expect, it } from 'vitest';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { addUrlHyperlink, makeHyperlink } from '../../src/worksheet/hyperlinks';
-import { parseWorksheetXml } from '../../src/worksheet/reader';
-import { setCellByCoord, setHyperlink } from '../../src/worksheet/index';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { addUrlHyperlink, makeHyperlink } from '../../src/worksheet/hyperlinks.js';
+import { parseWorksheetXml } from '../../src/worksheet/reader.js';
+import { setCellByCoord, setHyperlink } from '../../src/worksheet/index.js';
 
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

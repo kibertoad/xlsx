@@ -75,7 +75,7 @@ export const makeCustomWorkbookView = (
     Partial<CustomWorkbookView>,
 ): CustomWorkbookView => ({ ...opts });
 
-import type { Workbook } from './workbook';
+import type { Workbook } from './workbook.js';
 
 /**
  * Get-or-create the primary `<workbookView>` entry. Most workbooks have

@@ -6,8 +6,8 @@ import {
   fromStream,
   toArrayBuffer,
   toBlob,
-} from '../../src/io/browser';
-import { OpenXmlIoError } from '../../src/utils/exceptions';
+} from '../../src/io/browser.js';
+import { OpenXmlIoError } from '../../src/utils/exceptions.js';
 
 describe('fromBlob', () => {
   it('reads bytes via toBytes()', async () => {
@@ -193,9 +193,9 @@ describe('toArrayBuffer', () => {
 
 describe('workbookToBytes (browser-safe)', () => {
   it('produces a Uint8Array without touching Buffer (works under bundlers with no Buffer polyfill)', async () => {
-    const { addWorksheet, createWorkbook } = await import('../../src/workbook/workbook');
-    const { setCell } = await import('../../src/worksheet/worksheet');
-    const { workbookToBytes } = await import('../../src/io/save');
+    const { addWorksheet, createWorkbook } = await import('../../src/workbook/workbook.js');
+    const { setCell } = await import('../../src/worksheet/worksheet.js');
+    const { workbookToBytes } = await import('../../src/io/save.js');
 
     // Browsers do not expose the Node `Buffer` global. Simulate that by
     // shadowing the global for the duration of the save path; if any code

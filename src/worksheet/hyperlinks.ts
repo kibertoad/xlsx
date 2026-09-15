@@ -5,7 +5,7 @@
 // Internal jumps (`#'Sheet 2'!A1`) live entirely in the `<hyperlink
 // location="..."/>` attribute and don't need a rel.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 export interface Hyperlink {
   /** Cell or range the hyperlink covers — "A1" or "A1:B5". */
@@ -85,7 +85,7 @@ export function makeHyperlink(opts: Partial<Hyperlink> & { ref: string }): Hyper
 
 // ---- Worksheet ergonomic helpers ----------------------------------------
 
-import type { Worksheet } from './worksheet';
+import type { Worksheet } from './worksheet.js';
 
 const replaceHyperlink = (ws: Worksheet, hl: Hyperlink): Hyperlink => {
   const idx = ws.hyperlinks.findIndex((h) => h.ref === hl.ref);

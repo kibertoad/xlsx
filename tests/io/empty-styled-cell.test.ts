@@ -6,12 +6,12 @@
 // is null, styled or not (issue #111).
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addCellXf, defaultCellXf } from '../../src/styles/stylesheet';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { deleteCell, setCell } from '../../src/worksheet/worksheet';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addCellXf, defaultCellXf } from '../../src/styles/stylesheet.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { deleteCell, setCell } from '../../src/worksheet/worksheet.js';
 
 describe('phase-3 — empty-styled cells round-trip', () => {
   it('keeps `<c r="A1" s="N"/>` cells across save → load', async () => {

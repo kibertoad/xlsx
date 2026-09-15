@@ -10,27 +10,27 @@
 // fixture (3 empty sheets) and to give the rest of phase 3 a stable scaffolding
 // to layer onto.
 
-import { findUserShapesRId, parseChartXml } from '../chart/chart-xml';
-import { isChartExBytes, parseChartExXml } from '../chart/cx/chartex-xml';
-import { parseUserShapesXml } from '../chart/user-shapes-xml';
-import { parseChartsheetXml } from '../chartsheet/chartsheet-xml';
-import { collectRawRelIds, parseDrawingXml } from '../drawing/drawing-xml';
-import { loadImage } from '../drawing/image';
-import type { XlsxSource } from '../io/source';
-import { corePropsFromBytes } from '../packaging/core';
-import { customPropsFromBytes } from '../packaging/custom';
-import { extendedPropsFromBytes } from '../packaging/extended';
-import { manifestFromBytes } from '../packaging/manifest';
-import { findById, indexRelsById, makeRelationships, type Relationship, relsFromBytes } from '../packaging/relationships';
-import { parseStylesheetXml } from '../styles/stylesheet-reader';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import type { DefinedName } from '../workbook/defined-names';
-import { makeDefinedName } from '../workbook/defined-names';
-import { parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings';
-import { createWorkbook, type SheetRef, type SheetState, type Workbook } from '../workbook/workbook';
-import { parseCommentsXml } from '../worksheet/comments-xml';
-import { parseWorksheetXml } from '../worksheet/reader';
-import { parseTableXml } from '../worksheet/table-xml';
+import { findUserShapesRId, parseChartXml } from '../chart/chart-xml.js';
+import { isChartExBytes, parseChartExXml } from '../chart/cx/chartex-xml.js';
+import { parseUserShapesXml } from '../chart/user-shapes-xml.js';
+import { parseChartsheetXml } from '../chartsheet/chartsheet-xml.js';
+import { collectRawRelIds, parseDrawingXml } from '../drawing/drawing-xml.js';
+import { loadImage } from '../drawing/image.js';
+import type { XlsxSource } from '../io/source.js';
+import { corePropsFromBytes } from '../packaging/core.js';
+import { customPropsFromBytes } from '../packaging/custom.js';
+import { extendedPropsFromBytes } from '../packaging/extended.js';
+import { manifestFromBytes } from '../packaging/manifest.js';
+import { findById, indexRelsById, makeRelationships, type Relationship, relsFromBytes } from '../packaging/relationships.js';
+import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import type { DefinedName } from '../workbook/defined-names.js';
+import { makeDefinedName } from '../workbook/defined-names.js';
+import { parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
+import { createWorkbook, type SheetRef, type SheetState, type Workbook } from '../workbook/workbook.js';
+import { parseCommentsXml } from '../worksheet/comments-xml.js';
+import { parseWorksheetXml } from '../worksheet/reader.js';
+import { parseTableXml } from '../worksheet/table-xml.js';
 import {
   ARC_APP,
   ARC_CONTENT_TYPES,
@@ -45,11 +45,11 @@ import {
   parseQName,
   REL_NS,
   SHEET_MAIN_NS,
-} from '../xml/namespaces';
-import { type ParsedDocument, parseXmlDocument } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
-import type { DecompressionLimits } from '../zip/decompression-guard';
-import { openZip, type ZipArchive } from '../zip/reader';
+} from '../xml/namespaces.js';
+import { type ParsedDocument, parseXmlDocument } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
+import type { DecompressionLimits } from '../zip/decompression-guard.js';
+import { openZip, type ZipArchive } from '../zip/reader.js';
 
 /**
  * Options for {@link loadWorkbook}. Earlier drafts exposed `readOnly` /
@@ -556,7 +556,7 @@ const VML_DRAWING_REL = `${REL_NS}/vmlDrawing`;
  * r:id and rides along as an extra.
  */
 function captureSheetRelsExtras(
-  sheetRels: import('../packaging/relationships').Relationships,
+  sheetRels: import('../packaging/relationships.js').Relationships,
   sheetPath: string,
   vml: VmlPartCache,
 ): Relationship[] {
@@ -619,7 +619,7 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     }
     // Lift <fileSharing> into the typed workbook field.
     if (child.name === FILE_SHARING_TAG) {
-      const fs: import('../workbook/file-sharing').FileSharing = {};
+      const fs: import('../workbook/file-sharing.js').FileSharing = {};
       const a = child.attrs;
       const flag = (raw: string | undefined): boolean | undefined => {
         if (raw === '1' || raw === 'true') return true;
@@ -642,7 +642,7 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     }
     // Lift <fileVersion> into the typed workbook field.
     if (child.name === FILE_VERSION_TAG) {
-      const fv: import('../workbook/file-version').FileVersion = {};
+      const fv: import('../workbook/file-version.js').FileVersion = {};
       if (child.attrs['appName'] !== undefined) fv.appName = child.attrs['appName'];
       if (child.attrs['lastEdited'] !== undefined) fv.lastEdited = child.attrs['lastEdited'];
       if (child.attrs['lowestEdited'] !== undefined) fv.lowestEdited = child.attrs['lowestEdited'];
@@ -653,14 +653,14 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     }
     // Lift <bookViews> into the typed workbook field.
     if (child.name === BOOK_VIEWS_TAG) {
-      const views: import('../workbook/views').WorkbookView[] = [];
+      const views: import('../workbook/views.js').WorkbookView[] = [];
       for (const v of findChildren(child, WORKBOOK_VIEW_TAG)) views.push(parseWorkbookView(v));
       if (views.length > 0) wb.bookViews = views;
       continue;
     }
     // Lift <customWorkbookViews> into the typed workbook field.
     if (child.name === CUSTOM_WORKBOOK_VIEWS_TAG) {
-      const cws: import('../workbook/views').CustomWorkbookView[] = [];
+      const cws: import('../workbook/views.js').CustomWorkbookView[] = [];
       for (const v of findChildren(child, CUSTOM_WORKBOOK_VIEW_TAG)) {
         const parsed = parseCustomWorkbookView(v);
         if (parsed) cws.push(parsed);
@@ -682,7 +682,7 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     }
     // Lift <smartTagPr embed="1" show="all"/>.
     if (child.name === SMART_TAG_PR_TAG) {
-      const out: import('../workbook/smart-tags').SmartTagProperties = {};
+      const out: import('../workbook/smart-tags.js').SmartTagProperties = {};
       const a = child.attrs;
       if (a['embed'] === '1' || a['embed'] === 'true') out.embed = true;
       else if (a['embed'] === '0' || a['embed'] === 'false') out.embed = false;
@@ -692,9 +692,9 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     }
     // Lift <smartTagTypes><smartTagType .../></smartTagTypes>.
     if (child.name === SMART_TAG_TYPES_TAG) {
-      const tags: import('../workbook/smart-tags').SmartTagType[] = [];
+      const tags: import('../workbook/smart-tags.js').SmartTagType[] = [];
       for (const t of findChildren(child, SMART_TAG_TYPE_TAG)) {
-        const entry: import('../workbook/smart-tags').SmartTagType = {};
+        const entry: import('../workbook/smart-tags.js').SmartTagType = {};
         if (t.attrs['namespaceUri'] !== undefined) entry.namespaceUri = t.attrs['namespaceUri'];
         if (t.attrs['name'] !== undefined) entry.name = t.attrs['name'];
         if (t.attrs['url'] !== undefined) entry.url = t.attrs['url'];
@@ -706,7 +706,7 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     // Lift <functionGroups builtInGroupCount=…><functionGroup
     // name=…/></functionGroups>.
     if (child.name === FUNCTION_GROUPS_TAG) {
-      const fg: import('../workbook/function-groups').FunctionGroups = { groups: [] };
+      const fg: import('../workbook/function-groups.js').FunctionGroups = { groups: [] };
       const bicgRaw = child.attrs['builtInGroupCount'];
       if (bicgRaw !== undefined) {
         const n = Number.parseInt(bicgRaw, 10);
@@ -746,7 +746,7 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
     }
     // Lift <fileRecoveryPr> into the typed workbook field.
     if (child.name === FILE_RECOVERY_PR_TAG) {
-      const fp: import('../workbook/file-recovery').FileRecoveryProperties = {};
+      const fp: import('../workbook/file-recovery.js').FileRecoveryProperties = {};
       const a = child.attrs;
       const flag = (raw: string | undefined): boolean | undefined => {
         if (raw === '1' || raw === 'true') return true;
@@ -772,12 +772,12 @@ function captureWorkbookXmlExtras(wbRoot: XmlNode, wb: Workbook): void {
   }
 }
 
-const SHOW_OBJECTS_MODES: ReadonlyArray<import('../workbook/workbook-properties').ShowObjectsMode> = [
+const SHOW_OBJECTS_MODES: ReadonlyArray<import('../workbook/workbook-properties.js').ShowObjectsMode> = [
   'all',
   'placeholders',
   'none',
 ];
-const UPDATE_LINKS_MODES: ReadonlyArray<import('../workbook/workbook-properties').UpdateLinksMode> = [
+const UPDATE_LINKS_MODES: ReadonlyArray<import('../workbook/workbook-properties.js').UpdateLinksMode> = [
   'userSet',
   'never',
   'always',
@@ -785,8 +785,8 @@ const UPDATE_LINKS_MODES: ReadonlyArray<import('../workbook/workbook-properties'
 
 const parseWorkbookProperties = (
   node: XmlNode,
-): import('../workbook/workbook-properties').WorkbookProperties | undefined => {
-  const out: import('../workbook/workbook-properties').WorkbookProperties = {};
+): import('../workbook/workbook-properties.js').WorkbookProperties | undefined => {
+  const out: import('../workbook/workbook-properties.js').WorkbookProperties = {};
   const a = node.attrs;
   const flag = (raw: string | undefined): boolean | undefined => {
     if (raw === '1' || raw === 'true') return true;
@@ -815,19 +815,19 @@ const parseWorkbookProperties = (
     'checkCompatibility',
     'autoCompressPictures',
     'refreshAllConnections',
-  ] as const satisfies ReadonlyArray<keyof import('../workbook/workbook-properties').WorkbookProperties>;
+  ] as const satisfies ReadonlyArray<keyof import('../workbook/workbook-properties.js').WorkbookProperties>;
   for (const k of bools) {
     const v = flag(a[k]);
     if (v !== undefined) out[k] = v;
   }
 
   const showObjects = a['showObjects'];
-  if (showObjects && SHOW_OBJECTS_MODES.includes(showObjects as import('../workbook/workbook-properties').ShowObjectsMode)) {
-    out.showObjects = showObjects as import('../workbook/workbook-properties').ShowObjectsMode;
+  if (showObjects && SHOW_OBJECTS_MODES.includes(showObjects as import('../workbook/workbook-properties.js').ShowObjectsMode)) {
+    out.showObjects = showObjects as import('../workbook/workbook-properties.js').ShowObjectsMode;
   }
   const updateLinks = a['updateLinks'];
-  if (updateLinks && UPDATE_LINKS_MODES.includes(updateLinks as import('../workbook/workbook-properties').UpdateLinksMode)) {
-    out.updateLinks = updateLinks as import('../workbook/workbook-properties').UpdateLinksMode;
+  if (updateLinks && UPDATE_LINKS_MODES.includes(updateLinks as import('../workbook/workbook-properties.js').UpdateLinksMode)) {
+    out.updateLinks = updateLinks as import('../workbook/workbook-properties.js').UpdateLinksMode;
   }
   if (a['codeName'] !== undefined) out.codeName = a['codeName'];
   const dtv = intAttr('defaultThemeVersion');
@@ -836,17 +836,17 @@ const parseWorkbookProperties = (
   return Object.keys(out).length > 0 ? out : undefined;
 };
 
-const CALC_MODES: ReadonlyArray<import('../workbook/calc-properties').CalcMode> = [
+const CALC_MODES: ReadonlyArray<import('../workbook/calc-properties.js').CalcMode> = [
   'manual',
   'auto',
   'autoNoTable',
 ];
-const REF_MODES: ReadonlyArray<import('../workbook/calc-properties').RefMode> = ['A1', 'R1C1'];
+const REF_MODES: ReadonlyArray<import('../workbook/calc-properties.js').RefMode> = ['A1', 'R1C1'];
 
 const parseCalcProperties = (
   node: XmlNode,
-): import('../workbook/calc-properties').CalcProperties | undefined => {
-  const out: import('../workbook/calc-properties').CalcProperties = {};
+): import('../workbook/calc-properties.js').CalcProperties | undefined => {
+  const out: import('../workbook/calc-properties.js').CalcProperties = {};
   const a = node.attrs;
   const flag = (raw: string | undefined): boolean | undefined => {
     if (raw === '1' || raw === 'true') return true;
@@ -867,14 +867,14 @@ const parseCalcProperties = (
   const calcId = intAttr('calcId');
   if (calcId !== undefined) out.calcId = calcId;
   const calcMode = a['calcMode'];
-  if (calcMode && CALC_MODES.includes(calcMode as import('../workbook/calc-properties').CalcMode)) {
-    out.calcMode = calcMode as import('../workbook/calc-properties').CalcMode;
+  if (calcMode && CALC_MODES.includes(calcMode as import('../workbook/calc-properties.js').CalcMode)) {
+    out.calcMode = calcMode as import('../workbook/calc-properties.js').CalcMode;
   }
   const fcol = flag(a['fullCalcOnLoad']);
   if (fcol !== undefined) out.fullCalcOnLoad = fcol;
   const refMode = a['refMode'];
-  if (refMode && REF_MODES.includes(refMode as import('../workbook/calc-properties').RefMode)) {
-    out.refMode = refMode as import('../workbook/calc-properties').RefMode;
+  if (refMode && REF_MODES.includes(refMode as import('../workbook/calc-properties.js').RefMode)) {
+    out.refMode = refMode as import('../workbook/calc-properties.js').RefMode;
   }
   const iterate = flag(a['iterate']);
   if (iterate !== undefined) out.iterate = iterate;
@@ -898,12 +898,12 @@ const parseCalcProperties = (
   return Object.keys(out).length > 0 ? out : undefined;
 };
 
-const SHOW_COMMENTS_MODES: ReadonlyArray<import('../workbook/views').CustomViewShowComments> = [
+const SHOW_COMMENTS_MODES: ReadonlyArray<import('../workbook/views.js').CustomViewShowComments> = [
   'commNone',
   'commIndicator',
   'commIndAndComment',
 ];
-const SHOW_OBJECTS_CV_MODES: ReadonlyArray<import('../workbook/views').CustomViewShowObjects> = [
+const SHOW_OBJECTS_CV_MODES: ReadonlyArray<import('../workbook/views.js').CustomViewShowObjects> = [
   'all',
   'placeholders',
   'none',
@@ -911,7 +911,7 @@ const SHOW_OBJECTS_CV_MODES: ReadonlyArray<import('../workbook/views').CustomVie
 
 const parseCustomWorkbookView = (
   node: XmlNode,
-): import('../workbook/views').CustomWorkbookView | undefined => {
+): import('../workbook/views.js').CustomWorkbookView | undefined => {
   const a = node.attrs;
   const name = a['name'];
   const guid = a['guid'];
@@ -929,7 +929,7 @@ const parseCustomWorkbookView = (
   const ww = intAttr('windowWidth') ?? 0;
   const wh = intAttr('windowHeight') ?? 0;
   const asid = intAttr('activeSheetId') ?? 0;
-  const out: import('../workbook/views').CustomWorkbookView = {
+  const out: import('../workbook/views.js').CustomWorkbookView = {
     name,
     guid,
     windowWidth: ww,
@@ -951,7 +951,7 @@ const parseCustomWorkbookView = (
     'showSheetTabs',
     'showFormulaBar',
     'showStatusbar',
-  ] as const satisfies ReadonlyArray<keyof import('../workbook/views').CustomWorkbookView>;
+  ] as const satisfies ReadonlyArray<keyof import('../workbook/views.js').CustomWorkbookView>;
   for (const k of boolKeys) {
     const v = flag(a[k]);
     if (v !== undefined) out[k] = v;
@@ -961,31 +961,31 @@ const parseCustomWorkbookView = (
     'xWindow',
     'yWindow',
     'tabRatio',
-  ] as const satisfies ReadonlyArray<keyof import('../workbook/views').CustomWorkbookView>;
+  ] as const satisfies ReadonlyArray<keyof import('../workbook/views.js').CustomWorkbookView>;
   for (const k of intKeys) {
     const v = intAttr(k);
     if (v !== undefined) out[k] = v;
   }
 
   const sc = a['showComments'];
-  if (sc && SHOW_COMMENTS_MODES.includes(sc as import('../workbook/views').CustomViewShowComments)) {
-    out.showComments = sc as import('../workbook/views').CustomViewShowComments;
+  if (sc && SHOW_COMMENTS_MODES.includes(sc as import('../workbook/views.js').CustomViewShowComments)) {
+    out.showComments = sc as import('../workbook/views.js').CustomViewShowComments;
   }
   const so = a['showObjects'];
-  if (so && SHOW_OBJECTS_CV_MODES.includes(so as import('../workbook/views').CustomViewShowObjects)) {
-    out.showObjects = so as import('../workbook/views').CustomViewShowObjects;
+  if (so && SHOW_OBJECTS_CV_MODES.includes(so as import('../workbook/views.js').CustomViewShowObjects)) {
+    out.showObjects = so as import('../workbook/views.js').CustomViewShowObjects;
   }
   return out;
 };
 
-const VISIBILITIES: ReadonlyArray<import('../workbook/views').WorkbookViewVisibility> = [
+const VISIBILITIES: ReadonlyArray<import('../workbook/views.js').WorkbookViewVisibility> = [
   'visible',
   'hidden',
   'veryHidden',
 ];
 
-const parseWorkbookView = (node: XmlNode): import('../workbook/views').WorkbookView => {
-  const out: import('../workbook/views').WorkbookView = {};
+const parseWorkbookView = (node: XmlNode): import('../workbook/views.js').WorkbookView => {
+  const out: import('../workbook/views.js').WorkbookView = {};
   const a = node.attrs;
   const flag = (raw: string | undefined): boolean | undefined => {
     if (raw === '1' || raw === 'true') return true;
@@ -999,8 +999,8 @@ const parseWorkbookView = (node: XmlNode): import('../workbook/views').WorkbookV
   };
 
   const visibility = a['visibility'];
-  if (visibility && VISIBILITIES.includes(visibility as import('../workbook/views').WorkbookViewVisibility)) {
-    out.visibility = visibility as import('../workbook/views').WorkbookViewVisibility;
+  if (visibility && VISIBILITIES.includes(visibility as import('../workbook/views.js').WorkbookViewVisibility)) {
+    out.visibility = visibility as import('../workbook/views.js').WorkbookViewVisibility;
   }
   const minimized = flag(a['minimized']);
   if (minimized !== undefined) out.minimized = minimized;
@@ -1036,8 +1036,8 @@ const parseWorkbookView = (node: XmlNode): import('../workbook/views').WorkbookV
   return out;
 };
 
-const parseWorkbookProtection = (node: XmlNode): import('../workbook/protection').WorkbookProtection => {
-  const out: import('../workbook/protection').WorkbookProtection = {};
+const parseWorkbookProtection = (node: XmlNode): import('../workbook/protection.js').WorkbookProtection => {
+  const out: import('../workbook/protection.js').WorkbookProtection = {};
   const a = node.attrs;
   const flag = (raw: string | undefined): boolean | undefined => {
     if (raw === '1' || raw === 'true') return true;
@@ -1082,7 +1082,7 @@ const parseWorkbookProtection = (node: XmlNode): import('../workbook/protection'
  * allocated ones.
  */
 function captureWorkbookRelsExtras(
-  wbRels: import('../packaging/relationships').Relationships,
+  wbRels: import('../packaging/relationships.js').Relationships,
   wb: Workbook,
 ): void {
   const SHEET_RELS = new Set([`${REL_NS}/worksheet`, `${REL_NS}/chartsheet`]);
@@ -1239,7 +1239,7 @@ const isPassthroughPath = (path: string, vml: VmlPartCache): boolean => {
  */
 function capturePassthrough(
   archive: ZipArchive,
-  manifest: import('../packaging/manifest').Manifest,
+  manifest: import('../packaging/manifest.js').Manifest,
   wb: Workbook,
   roots: ReadonlyArray<string>,
   vml: VmlPartCache,

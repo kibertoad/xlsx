@@ -7,7 +7,7 @@
 // set is modeled so a load → save round-trip preserves the element verbatim —
 // niche sync* / transition* attrs included.
 
-import type { Color } from '../styles/colors';
+import type { Color } from '../styles/colors.js';
 
 export interface OutlineProperties {
   applyStyles?: boolean;

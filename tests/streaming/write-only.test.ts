@@ -1,10 +1,10 @@
 // Phase 4 §3 write-only streaming acceptance.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer, toBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { createWriteOnlyWorkbook } from '../../src/streaming/write-only';
-import { iterRows } from '../../src/worksheet/worksheet';
+import { fromBuffer, toBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { createWriteOnlyWorkbook } from '../../src/streaming/write-only.js';
+import { iterRows } from '../../src/worksheet/worksheet.js';
 
 const collect = async (
   fn: (cb: (sink: ReturnType<typeof toBuffer>) => Promise<void>) => Promise<void>,

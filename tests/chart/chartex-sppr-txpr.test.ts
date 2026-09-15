@@ -7,13 +7,13 @@ import {
   makeCxSeries,
   makeCxStrDim,
   makeWaterfallChart,
-} from '../../src/chart/cx/chartex';
-import { chartExToBytes, parseChartExXml, serializeChartExSpace } from '../../src/chart/cx/chartex-xml';
-import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
-import { makeSolidFill } from '../../src/drawing/dml/fill';
-import { makeLine } from '../../src/drawing/dml/line';
-import { makeShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { makeParagraph, makeRun, makeTextBody } from '../../src/drawing/dml/text';
+} from '../../src/chart/cx/chartex.js';
+import { chartExToBytes, parseChartExXml, serializeChartExSpace } from '../../src/chart/cx/chartex-xml.js';
+import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
+import { makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makeLine } from '../../src/drawing/dml/line.js';
+import { makeShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { makeParagraph, makeRun, makeTextBody } from '../../src/drawing/dml/text.js';
 
 const roundTrip = (s: CxChartSpace): CxChartSpace => parseChartExXml(chartExToBytes(s));
 

@@ -1,7 +1,7 @@
 // Tests for validateSheetTitle / isValidSheetTitle.
 
 import { describe, expect, it } from 'vitest';
-import { isValidSheetTitle, validateSheetTitle } from '../../src/workbook/workbook';
+import { isValidSheetTitle, validateSheetTitle } from '../../src/workbook/workbook.js';
 
 describe('validateSheetTitle', () => {
   it('accepts a normal title', () => {

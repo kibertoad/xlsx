@@ -1,13 +1,13 @@
 // Tests for setColumnWidths / setRowHeights bulk helpers.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   getColumnDimension,
   getRowDimension,
   setColumnWidths,
   setRowHeights,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('setColumnWidths', () => {
   it('positional array starting at column 1 by default', () => {

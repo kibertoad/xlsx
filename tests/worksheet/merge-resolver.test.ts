@@ -1,14 +1,14 @@
 // Tests for getMergedRangeAt / unmergeCellsAt.
 
 import { describe, expect, it } from 'vitest';
-import { rangeToString } from '../../src/worksheet/cell-range';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { rangeToString } from '../../src/worksheet/cell-range.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   getMergedCells,
   getMergedRangeAt,
   mergeCells,
   unmergeCellsAt,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('getMergedRangeAt', () => {
   it('returns the range for any cell inside it (top-left, middle, bottom-right)', () => {

@@ -12,9 +12,9 @@
 //     verifiable by scrolling right or down.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { mergeCells, setCell, setCellByCoord, setFreezePanes } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { mergeCells, setCell, setCellByCoord, setFreezePanes } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 07 — merged cells + freeze panes', () => {
   it('writes 07-merged-freeze.xlsx', async () => {

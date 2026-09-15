@@ -3,10 +3,10 @@
 // plain objects with `make*` factories, and Stylesheet pools dedup equal values
 // via stable keys.
 
-export type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignment';
-export { alignmentToCss, makeAlignment } from './alignment';
-export type { Border, Side, SideStyle } from './borders';
-export { borderToCss, makeBorder, makeSide } from './borders';
+export type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignment.js';
+export { alignmentToCss, makeAlignment } from './alignment.js';
+export type { Border, Side, SideStyle } from './borders.js';
+export { borderToCss, makeBorder, makeSide } from './borders.js';
 export {
   alignCellHorizontal,
   alignCellVertical,
@@ -57,12 +57,12 @@ export {
   setRangeProtection,
   setRangeStyle,
   setRangeWrapText,
-} from './cell-style';
-export type { DifferentialStyle } from './differential';
-export { addDxf, makeDifferentialStyle } from './differential';
-export type { NamedStyle, StylesheetNamedStyle } from './named-styles';
-export { addNamedStyle, BUILTIN_NAMED_STYLES, ensureBuiltinStyle } from './named-styles';
-export type { Color } from './colors';
+} from './cell-style.js';
+export type { DifferentialStyle } from './differential.js';
+export { addDxf, makeDifferentialStyle } from './differential.js';
+export type { NamedStyle, StylesheetNamedStyle } from './named-styles.js';
+export { addNamedStyle, BUILTIN_NAMED_STYLES, ensureBuiltinStyle } from './named-styles.js';
+export type { Color } from './colors.js';
 export {
   adjustLightness,
   adjustSaturation,
@@ -80,14 +80,14 @@ export {
   resolveIndexedColor,
   rgbColor,
   rotateHue,
-} from './colors';
-export type { Fill, GradientFill, GradientFillType, GradientStop, PatternFill, PatternType } from './fills';
-export { fillToCss, makeFill, makeGradientFill, makeGradientStop, makePatternFill } from './fills';
-export type { Font, FontScheme, UnderlineStyle, VertAlign } from './fonts';
-export { DEFAULT_FONT, fontToCss, makeFont } from './fonts';
-export type { Protection } from './protection';
-export { makeProtection } from './protection';
-export type { CellXf, Stylesheet } from './stylesheet';
+} from './colors.js';
+export type { Fill, GradientFill, GradientFillType, GradientStop, PatternFill, PatternType } from './fills.js';
+export { fillToCss, makeFill, makeGradientFill, makeGradientStop, makePatternFill } from './fills.js';
+export type { Font, FontScheme, UnderlineStyle, VertAlign } from './fonts.js';
+export { DEFAULT_FONT, fontToCss, makeFont } from './fonts.js';
+export type { Protection } from './protection.js';
+export { makeProtection } from './protection.js';
+export type { CellXf, Stylesheet } from './stylesheet.js';
 export {
   addBorder,
   addCellStyleXf,
@@ -102,8 +102,8 @@ export {
   listFills,
   listFonts,
   makeStylesheet,
-} from './stylesheet';
-export type { NumberFormat } from './numbers';
+} from './stylesheet.js';
+export type { NumberFormat } from './numbers.js';
 export {
   BUILTIN_FORMATS,
   BUILTIN_FORMATS_MAX_SIZE,
@@ -123,4 +123,4 @@ export {
   isDateFormat,
   isTimedeltaFormat,
   makeNumberFormat,
-} from './numbers';
+} from './numbers.js';

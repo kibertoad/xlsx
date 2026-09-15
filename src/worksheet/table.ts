@@ -7,9 +7,9 @@
 // autoFilter; sortState / totals row formulas / calculated column formulas /
 // xml extlst are reserved for later.
 
-import type { Workbook } from '../workbook/workbook';
-import type { AutoFilter } from './auto-filter';
-import type { Worksheet } from './worksheet';
+import type { Workbook } from '../workbook/workbook.js';
+import type { AutoFilter } from './auto-filter.js';
+import type { Worksheet } from './worksheet.js';
 
 export interface TableColumn {
   /** 1-based column id (per-table). */

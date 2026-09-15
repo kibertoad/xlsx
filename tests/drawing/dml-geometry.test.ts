@@ -4,7 +4,7 @@ import {
   parseShapeProperties,
   serializeGeometry,
   serializeShapeProperties,
-} from '../../src/drawing/dml/dml-xml';
+} from '../../src/drawing/dml/dml-xml.js';
 import {
   type CustomGeometry,
   type Geometry,
@@ -12,10 +12,10 @@ import {
   makeCustomGeometry,
   makePresetGeometry,
   PRESET_SHAPE_NAMES,
-} from '../../src/drawing/dml/geometry';
-import { makeShapeProperties, type ShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { parseXml } from '../../src/xml/parser';
-import { findChild } from '../../src/xml/tree';
+} from '../../src/drawing/dml/geometry.js';
+import { makeShapeProperties, type ShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { findChild } from '../../src/xml/tree.js';
 
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';

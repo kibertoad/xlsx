@@ -1,28 +1,28 @@
 import { describe, expect, it } from 'vitest';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
 import {
   parseUserShapesXml,
   serializeUserShapes,
   userShapesToBytes,
-} from '../../src/chart/user-shapes-xml';
+} from '../../src/chart/user-shapes-xml.js';
 import {
   type ChartDrawing,
   makeAbsSizeAnchor,
   makeChartDrawing,
   makeChartShape,
   makeRelSizeAnchor,
-} from '../../src/chart/user-shapes';
-import { makeTwoCellAnchor } from '../../src/drawing/anchor';
-import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
-import { makeSolidFill } from '../../src/drawing/dml/fill';
-import { makePresetGeometry } from '../../src/drawing/dml/geometry';
-import { makeShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { makeSimpleTextBody } from '../../src/drawing/dml/text';
-import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/chart/user-shapes.js';
+import { makeTwoCellAnchor } from '../../src/drawing/anchor.js';
+import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
+import { makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makePresetGeometry } from '../../src/drawing/dml/geometry.js';
+import { makeShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { makeSimpleTextBody } from '../../src/drawing/dml/text.js';
+import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 const roundTrip = (d: ChartDrawing): ChartDrawing => parseUserShapesXml(userShapesToBytes(d));
 

@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { fromTree, toTree } from '../../src/schema/serialize';
+import { fromTree, toTree } from '../../src/schema/serialize.js';
 import {
   type Alignment,
   DEFAULT_ALIGNMENT,
   HORIZONTAL_ALIGNMENTS,
   makeAlignment,
   VERTICAL_ALIGNMENTS,
-} from '../../src/styles/alignment';
-import { AlignmentSchema } from '../../src/styles/alignment.schema';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
-import { parseXml } from '../../src/xml/parser';
-import { serializeXml } from '../../src/xml/serializer';
+} from '../../src/styles/alignment.js';
+import { AlignmentSchema } from '../../src/styles/alignment.schema.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { serializeXml } from '../../src/xml/serializer.js';
 
 describe('Alignment', () => {
   it('makeAlignment returns a frozen object', () => {
