@@ -43,9 +43,12 @@ reference checkout into `reference/`; many tests load fixture files from it.
 | `pnpm build`      | Produce the publishable bundle in `dist/`.                          |
 | `pnpm size`       | Run `size-limit` against `dist/` (gates against bundle bloat).      |
 | `pnpm doc:api`    | Regenerate the TypeDoc JSON used by the docs site.                  |
+| `pnpm check:attw` | `are-the-types-wrong` over the packed tarball (ESM-only profile).   |
+| `pnpm check:consumer` | Install the tarball into `tests/consumer` and compile + run against it under node16 / nodenext / bundler resolution. |
 
 The `prepublishOnly` script (`pnpm typecheck && pnpm lint && pnpm test &&
-pnpm build && pnpm size`) is what CI mirrors. Run it locally before opening
+pnpm build && pnpm size && pnpm check:attw && pnpm check:consumer`) is what CI
+mirrors. Run it locally before opening
 a PR to catch most failures up front.
 
 ## Workflow
