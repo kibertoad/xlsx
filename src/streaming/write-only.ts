@@ -9,10 +9,10 @@
 // costs, so the heap budget at 3M cells drops roughly an order of magnitude vs.
 // the previous setCell-based path.
 
-import type { Cell, CellValue } from '../cell/cell';
-import type { XlsxSink } from '../io/sink';
-import { addDefault, addOverride, makeManifest, manifestToBytes } from '../packaging/manifest';
-import { makeRelationships, relsToBytes } from '../packaging/relationships';
+import type { Cell, CellValue } from '../cell/cell.js';
+import type { XlsxSink } from '../io/sink.js';
+import { addDefault, addOverride, makeManifest, manifestToBytes } from '../packaging/manifest.js';
+import { makeRelationships, relsToBytes } from '../packaging/relationships.js';
 import {
   addBorder,
   addCellXf,
@@ -23,19 +23,19 @@ import {
   defaultCellXf,
   makeStylesheet,
   type Stylesheet,
-} from '../styles/stylesheet';
-import { stylesheetToBytes } from '../styles/stylesheet-writer';
-import type { Alignment } from '../styles/alignment';
-import type { Border } from '../styles/borders';
-import type { Fill } from '../styles/fills';
-import type { Font } from '../styles/fonts';
-import type { Protection } from '../styles/protection';
-import { escapeXmlAttr } from '../utils/escape';
-import { OpenXmlIoError } from '../utils/exceptions';
-import { utf8ByteLength } from '../utils/utf8';
-import { makeSharedStrings, sharedStringsToBytes } from '../workbook/shared-strings';
-import { validateSheetTitle } from '../workbook/workbook';
-import { serializeCell } from '../worksheet/writer';
+} from '../styles/stylesheet.js';
+import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
+import type { Alignment } from '../styles/alignment.js';
+import type { Border } from '../styles/borders.js';
+import type { Fill } from '../styles/fills.js';
+import type { Font } from '../styles/fonts.js';
+import type { Protection } from '../styles/protection.js';
+import { escapeXmlAttr } from '../utils/escape.js';
+import { OpenXmlIoError } from '../utils/exceptions.js';
+import { utf8ByteLength } from '../utils/utf8.js';
+import { makeSharedStrings, sharedStringsToBytes } from '../workbook/shared-strings.js';
+import { validateSheetTitle } from '../workbook/workbook.js';
+import { serializeCell } from '../worksheet/writer.js';
 import {
   ARC_CONTENT_TYPES,
   ARC_ROOT_RELS,
@@ -50,8 +50,8 @@ import {
   STYLES_TYPE,
   WORKSHEET_TYPE,
   XLSX_TYPE,
-} from '../xml/namespaces';
-import { createZipWriter } from '../zip/writer';
+} from '../xml/namespaces.js';
+import { createZipWriter } from '../zip/writer.js';
 
 const escapeAttr = escapeXmlAttr;
 
@@ -145,7 +145,7 @@ interface WorkbookState {
   /** True while a worksheet is open (the next addWorksheet must wait). */
   hasOpenWorksheet: boolean;
   /** ZIP writer the workbook + each open worksheet stream chunks through. */
-  writer: import('../zip/writer').ZipWriter;
+  writer: import('../zip/writer.js').ZipWriter;
 }
 
 /**

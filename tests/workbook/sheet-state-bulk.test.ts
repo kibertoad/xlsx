@@ -9,7 +9,7 @@ import {
   setSheetStates,
   showAllSheets,
   veryHideSheet,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 describe('setSheetStates', () => {
   it('updates many sheets at once', () => {

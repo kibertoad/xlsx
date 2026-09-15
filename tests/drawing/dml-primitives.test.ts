@@ -5,7 +5,7 @@ import {
   makeColor,
   makeSchemeColor,
   makeSrgbColor,
-} from '../../src/drawing/dml/colors';
+} from '../../src/drawing/dml/colors.js';
 import {
   parseDmlColor,
   parseFill,
@@ -15,7 +15,7 @@ import {
   serializeFill,
   serializeLine,
   serializeShapeProperties,
-} from '../../src/drawing/dml/dml-xml';
+} from '../../src/drawing/dml/dml-xml.js';
 import {
   type Fill,
   makeGradientFill,
@@ -23,11 +23,11 @@ import {
   makePatternFill,
   makeSolidFill,
   PRESET_PATTERN_NAMES,
-} from '../../src/drawing/dml/fill';
-import { type LineProperties, makeLine } from '../../src/drawing/dml/line';
-import { makeShapeProperties, type ShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { parseXml } from '../../src/xml/parser';
-import { findChild } from '../../src/xml/tree';
+} from '../../src/drawing/dml/fill.js';
+import { type LineProperties, makeLine } from '../../src/drawing/dml/line.js';
+import { makeShapeProperties, type ShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { findChild } from '../../src/xml/tree.js';
 
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';

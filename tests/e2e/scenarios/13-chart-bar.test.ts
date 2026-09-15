@@ -10,12 +10,12 @@
 //   bars with category labels Q1/Q2/Q3.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../../src/chart/chart';
-import { makeAbsoluteAnchor, makeOneCellAnchor } from '../../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../../src/chart/chart.js';
+import { makeAbsoluteAnchor, makeOneCellAnchor } from '../../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 13 — bar chart', () => {
   it('writes 13-chart-bar.xlsx', async () => {

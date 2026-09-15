@@ -1,13 +1,13 @@
 // xl/commentsN.xml read/write.
 
-import { escapeXmlAttr, escapeXmlText } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
-import { coordinateToTuple } from '../utils/coordinate';
-import type { LegacyComment } from './comments';
-import { makeLegacyComment } from './comments';
+import { escapeXmlAttr, escapeXmlText } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
+import { coordinateToTuple } from '../utils/coordinate.js';
+import type { LegacyComment } from './comments.js';
+import { makeLegacyComment } from './comments.js';
 
 const COMMENTS_TAG = `{${SHEET_MAIN_NS}}comments`;
 const AUTHORS_TAG = `{${SHEET_MAIN_NS}}authors`;

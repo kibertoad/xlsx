@@ -12,9 +12,9 @@
 // Coordinates are EMU (English Metric Units). 1 inch = 914400 EMU, 1 cm =
 // 360000 EMU, 1 px = 9525 EMU at 96 dpi.
 
-import { columnIndexFromLetter } from '../utils/coordinate';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { emuFromPx } from '../utils/units';
+import { columnIndexFromLetter } from '../utils/coordinate.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { emuFromPx } from '../utils/units.js';
 
 /** EMU = English Metric Units. Drawing coordinates are stored in EMU on the wire. */
 export interface Point2D {

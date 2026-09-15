@@ -142,7 +142,7 @@ export interface Schema<T> {
   /** Child elements in declaration / emission order. */
   elements: ReadonlyArray<ElementDef>;
   /** Hook to normalise the parsed object (e.g., infer derived fields). */
-  postParse?: (value: T, node: import('../xml/tree').XmlNode) => T;
+  postParse?: (value: T, node: import('../xml/tree.js').XmlNode) => T;
   /** Hook to normalise the value before serialisation. */
   preSerialize?: (value: T) => T;
 }

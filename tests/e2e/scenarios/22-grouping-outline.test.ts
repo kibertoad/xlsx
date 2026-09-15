@@ -14,9 +14,9 @@
 //   reveal it; it requires Format → Hide & Unhide → Unhide Columns.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { hideColumn, setCell, setColumnDimension, setColumnWidth, setRowDimension, setRowHeight } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { hideColumn, setCell, setColumnDimension, setColumnWidth, setRowDimension, setRowHeight } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 22 — grouping / outline / hide', () => {
   it('writes 22-grouping-outline.xlsx', async () => {

@@ -7,8 +7,8 @@
 // `u`) so the writer can splice them into `<rPr>` directly without
 // renaming.
 
-import type { Color } from '../styles/colors';
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import type { Color } from '../styles/colors.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 /** Underline styles per openpyxl's cell-level NestedNoneSet. */
 export type InlineUnderline = 'single' | 'double' | 'singleAccounting' | 'doubleAccounting';

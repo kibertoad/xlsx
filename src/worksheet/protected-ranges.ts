@@ -5,7 +5,7 @@
 // sheet is otherwise protected. Round-tripped verbatim — no password
 // hashing helper yet.
 
-import type { MultiCellRange } from './cell-range';
+import type { MultiCellRange } from './cell-range.js';
 
 export interface ProtectedRange {
   /** Range to expose for editing while the sheet is protected. */

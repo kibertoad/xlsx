@@ -1,10 +1,10 @@
 // XML mapping for Font.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import { ColorSchema } from './colors.schema';
-import type { Font } from './fonts';
-import { FONT_SCHEMES, UNDERLINE_STYLES, VERT_ALIGNS } from './fonts';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { ColorSchema } from './colors.schema.js';
+import type { Font } from './fonts.js';
+import { FONT_SCHEMES, UNDERLINE_STYLES, VERT_ALIGNS } from './fonts.js';
 
 const UNDERLINE_VALUES: readonly string[] = UNDERLINE_STYLES;
 const VERT_VALUES: readonly string[] = VERT_ALIGNS;

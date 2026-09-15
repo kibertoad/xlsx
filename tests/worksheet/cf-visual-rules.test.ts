@@ -2,19 +2,19 @@
 // (colorScale / dataBar / iconSet).
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   addColorScaleRule,
   addDataBarRule,
   addIconSetRule,
-} from '../../src/worksheet/conditional-formatting';
-import type { Worksheet } from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/conditional-formatting.js';
+import type { Worksheet } from '../../src/worksheet/worksheet.js';
 
 const expectWorksheet = (
-  s: Worksheet | import('../../src/chartsheet/chartsheet').Chartsheet | undefined,
+  s: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined,
 ): Worksheet => {
   if (!s || !('rows' in s)) throw new Error('expected worksheet');
   return s as Worksheet;

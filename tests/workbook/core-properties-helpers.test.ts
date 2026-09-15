@@ -1,7 +1,7 @@
 // Tests for Office core-property ergonomic helpers.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
+import { fromBuffer } from '../../src/io/node.js';
 import {
   setWorkbookCategory,
   setWorkbookCreator,
@@ -10,10 +10,10 @@ import {
   setWorkbookLastModifiedBy,
   setWorkbookSubject,
   setWorkbookTitle,
-} from '../../src/packaging/core';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/packaging/core.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('coreProperties ergonomic helpers', () => {
   it('lazily allocate wb.properties and write each field', () => {

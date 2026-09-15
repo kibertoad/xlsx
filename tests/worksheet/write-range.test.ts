@@ -1,9 +1,9 @@
 // Tests for writeRange — write a 2D values block at an arbitrary anchor.
 
 import { describe, expect, it } from 'vitest';
-import { setBold } from '../../src/styles/cell-style';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell, writeRange } from '../../src/worksheet/worksheet';
+import { setBold } from '../../src/styles/cell-style.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell, writeRange } from '../../src/worksheet/worksheet.js';
 
 const cellAt = (ws: ReturnType<typeof addWorksheet>, row: number, col: number) => {
   const c = ws.rows.get(row)?.get(col);

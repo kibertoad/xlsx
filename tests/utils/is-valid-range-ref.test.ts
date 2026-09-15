@@ -1,7 +1,7 @@
 // Tests for isValidRangeRef predicate.
 
 import { describe, expect, it } from 'vitest';
-import { isValidRangeRef } from '../../src/utils/coordinate';
+import { isValidRangeRef } from '../../src/utils/coordinate.js';
 
 describe('isValidRangeRef', () => {
   it('accepts single cells', () => {

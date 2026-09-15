@@ -28,7 +28,7 @@ import {
   makeStockChart,
   makeSurface3DChart,
   makeSurfaceChart,
-} from '../../src/chart/chart';
+} from '../../src/chart/chart.js';
 import {
   type CxChartSpace,
   makeBoxWhiskerChart,
@@ -39,13 +39,13 @@ import {
   makeSunburstChart,
   makeTreemapChart,
   makeWaterfallChart,
-} from '../../src/chart/cx/chartex';
-import { makeTwoCellAnchor } from '../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+} from '../../src/chart/cx/chartex.js';
+import { makeTwoCellAnchor } from '../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 const VAL: { ref: string } = { ref: 'A1:A4' };
 const VAL2: { ref: string } = { ref: 'B1:B4' };

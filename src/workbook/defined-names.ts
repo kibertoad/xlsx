@@ -7,7 +7,7 @@
 // Sheet_Title, etc) — those round-trip here as plain DefinedName entries since
 // the value semantics are the same.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 export interface DefinedName {
   /** Identifier — `_xlnm.Print_Area` for built-ins, otherwise user-chosen. */
@@ -34,10 +34,10 @@ export function makeDefinedName(opts: Partial<DefinedName> & { name: string; val
 
 // ---- Workbook ergonomic helpers -----------------------------------------
 
-import { type CellRangeBoundaries, parseSheetRange } from '../utils/coordinate';
-import type { Worksheet } from '../worksheet/worksheet';
-import { getRangeAddress } from '../worksheet/worksheet';
-import type { Workbook } from './workbook';
+import { type CellRangeBoundaries, parseSheetRange } from '../utils/coordinate.js';
+import type { Worksheet } from '../worksheet/worksheet.js';
+import { getRangeAddress } from '../worksheet/worksheet.js';
+import type { Workbook } from './workbook.js';
 
 /**
  * One parsed leg of a defined name's value. Defined-name values can be

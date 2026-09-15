@@ -6,7 +6,7 @@
 // command list on read; the model below preserves it so the "custGeom
 // round-trip" acceptance criterion can pass.
 
-import type { Point2D } from './shape-properties';
+import type { Point2D } from './shape-properties.js';
 
 /**
  * ECMA-376 §20.1.10.55 preset shape catalogue (`ST_PresetShapeType`, 187

@@ -6,11 +6,11 @@
 // the leaves (colors / fill / line / geometry / effect / text) so the slot
 // grows by attribute as new primitive modules land.
 
-import type { Point2D, PositiveSize2D } from '../anchor';
-import type { EffectsRef } from './effect';
-import type { Fill } from './fill';
-import type { Geometry } from './geometry';
-import type { LineProperties } from './line';
+import type { Point2D, PositiveSize2D } from '../anchor.js';
+import type { EffectsRef } from './effect.js';
+import type { Fill } from './fill.js';
+import type { Geometry } from './geometry.js';
+import type { LineProperties } from './line.js';
 
 export type { Point2D, PositiveSize2D };
 

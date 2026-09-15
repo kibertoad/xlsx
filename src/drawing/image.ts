@@ -5,7 +5,7 @@
 // re-saving never re-encodes; format / width / height are detected from the
 // file header so callers don't have to specify them.
 
-import { OpenXmlIoError } from '../utils/exceptions';
+import { OpenXmlIoError } from '../utils/exceptions.js';
 
 export type XlsxImageFormat = 'png' | 'jpeg' | 'gif' | 'bmp' | 'webp' | 'tiff' | 'svg' | 'emf' | 'wmf';
 

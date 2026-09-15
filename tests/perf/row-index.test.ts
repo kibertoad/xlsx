@@ -7,9 +7,9 @@
 // Run with: pnpm test:perf
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer, toBuffer } from '../../src/io/node';
-import { createWriteOnlyWorkbook } from '../../src/streaming/write-only';
-import { loadWorkbookStream } from '../../src/streaming/read-only';
+import { fromBuffer, toBuffer } from '../../src/io/node.js';
+import { createWriteOnlyWorkbook } from '../../src/streaming/write-only.js';
+import { loadWorkbookStream } from '../../src/streaming/read-only.js';
 
 const PERF_ROW_INDEX_GATE = process.env['PERF_ROW_INDEX_GATE'] === '1';
 // Row-index path should beat the no-min walk by a substantial margin

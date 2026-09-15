@@ -6,8 +6,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseXml } from '../../src/xml/parser';
-import { serializeXml } from '../../src/xml/serializer';
+import { parseXml } from '../../src/xml/parser.js';
+import { serializeXml } from '../../src/xml/serializer.js';
 
 describe('phase-1 §3 — UTF-8 round-trip via parseXml + serializeXml', () => {
   it('preserves a Cyrillic workbookPr@codeName ("ЭтаКнига") through DOM', () => {

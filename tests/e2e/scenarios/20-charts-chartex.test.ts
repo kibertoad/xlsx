@@ -12,13 +12,13 @@
 // public API for callers that supply their own cache data.
 
 import { describe, expect, it } from 'vitest';
-import { makeBarChart, makeBarSeries, makeChartSpace, makeLineChart } from '../../../src/chart/chart';
-import type { ChartSpace } from '../../../src/chart/chart';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { makeOneCellAnchor } from '../../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing';
-import { writeWorkbook } from '../_helpers';
+import { makeBarChart, makeBarSeries, makeChartSpace, makeLineChart } from '../../../src/chart/chart.js';
+import type { ChartSpace } from '../../../src/chart/chart.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { makeOneCellAnchor } from '../../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 20 — chartex modern chart kinds', () => {
   it('writes 20-charts-chartex.xlsx', async () => {

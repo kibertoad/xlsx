@@ -1,9 +1,9 @@
 // XML mapping for Alignment.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import type { Alignment } from './alignment';
-import { HORIZONTAL_ALIGNMENTS, VERTICAL_ALIGNMENTS } from './alignment';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import type { Alignment } from './alignment.js';
+import { HORIZONTAL_ALIGNMENTS, VERTICAL_ALIGNMENTS } from './alignment.js';
 
 const HORIZONTAL_VALUES: readonly string[] = HORIZONTAL_ALIGNMENTS;
 const VERTICAL_VALUES: readonly string[] = VERTICAL_ALIGNMENTS;

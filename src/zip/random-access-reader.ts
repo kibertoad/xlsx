@@ -16,7 +16,7 @@
 // throws OpenXmlIoError.
 
 import { Inflate, unzipSync } from 'fflate';
-import { OpenXmlDecompressionBombError, OpenXmlIoError } from '../utils/exceptions';
+import { OpenXmlDecompressionBombError, OpenXmlIoError } from '../utils/exceptions.js';
 import {
   checkDeclaredTotals,
   createBudget,
@@ -26,8 +26,8 @@ import {
   entryOverflowError,
   recordInflated,
   resolveDecompressionLimits,
-} from './decompression-guard';
-import type { ZipArchive } from './reader';
+} from './decompression-guard.js';
+import type { ZipArchive } from './reader.js';
 
 /**
  * Chunk size used when feeding compressed bytes into fflate's `Inflate` for

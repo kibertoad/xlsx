@@ -23,24 +23,24 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 
-import { fromBuffer } from '../../src/io/node';
+import { fromBuffer } from '../../src/io/node.js';
 import {
   findOverride,
   manifestFromBytes,
   type Manifest,
-} from '../../src/packaging/manifest';
+} from '../../src/packaging/manifest.js';
 import {
   relsFromBytes,
   type Relationships,
-} from '../../src/packaging/relationships';
-import { openZip, type ZipArchive } from '../../src/zip/reader';
-import { stripIgnorableMarkup } from './mc-strip';
+} from '../../src/packaging/relationships.js';
+import { openZip, type ZipArchive } from '../../src/zip/reader.js';
+import { stripIgnorableMarkup } from './mc-strip.js';
 import {
   CONTENT_TYPES_SCHEMA,
   RELATIONSHIPS_SCHEMA,
   hasSchemaFor,
   schemaFor,
-} from './schema-map';
+} from './schema-map.js';
 
 type Tier = 'opc' | 'xsd' | 'semantic';
 

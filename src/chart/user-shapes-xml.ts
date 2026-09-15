@@ -5,13 +5,13 @@ import {
   parseTextBody,
   serializeShapeProperties,
   serializeTextBody,
-} from '../drawing/dml/dml-xml';
-import type { PositiveSize2D } from '../drawing/dml/shape-properties';
-import { escapeXmlAttr } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { CHART_DRAWING_NS, DRAWING_NS, REL_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, type XmlNode } from '../xml/tree';
+} from '../drawing/dml/dml-xml.js';
+import type { PositiveSize2D } from '../drawing/dml/shape-properties.js';
+import { escapeXmlAttr } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { CHART_DRAWING_NS, DRAWING_NS, REL_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, type XmlNode } from '../xml/tree.js';
 import {
   type ChartDrawing,
   type ChartDrawingPicture,
@@ -20,7 +20,7 @@ import {
   makeChartDrawing,
   type UserShapeAnchor,
   type UserShapeContent,
-} from './user-shapes';
+} from './user-shapes.js';
 
 const C = (local: string): string => `{${CHART_DRAWING_NS}}${local}`;
 const A = (local: string): string => `{${DRAWING_NS}}${local}`;

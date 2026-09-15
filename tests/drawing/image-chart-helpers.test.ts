@@ -1,11 +1,11 @@
 // Tests for the addImageAt + addChartAt drawing helpers.
 
 import { describe, expect, it } from 'vitest';
-import { addChartAt, addImageAt } from '../../src/drawing/drawing';
-import { loadImage } from '../../src/drawing/image';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+import { addChartAt, addImageAt } from '../../src/drawing/drawing.js';
+import { loadImage } from '../../src/drawing/image.js';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 const TINY_BLUE_PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFklEQVR4nGP8z8DAwMDAxMDA8J+BAQAOAQHv6sTncgAAAABJRU5ErkJggg==';

@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import type { FormulaValue } from '../../src/cell/cell';
-import { setFormula } from '../../src/cell/cell';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { saveWorkbook, workbookToBytes } from '../../src/io/save';
-import { setCellFont } from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { getCell, setCell, type Worksheet } from '../../src/worksheet/worksheet';
+import type { FormulaValue } from '../../src/cell/cell.js';
+import { setFormula } from '../../src/cell/cell.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { saveWorkbook, workbookToBytes } from '../../src/io/save.js';
+import { setCellFont } from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { getCell, setCell, type Worksheet } from '../../src/worksheet/worksheet.js';
 
-const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet').Chartsheet | undefined): Worksheet => {
+const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined): Worksheet => {
   if (!ws) throw new Error('expected worksheet');
   if (!('rows' in ws)) throw new Error('expected worksheet, got chartsheet');
   return ws;
@@ -88,7 +88,7 @@ describe('saveWorkbook → loadWorkbook round-trip', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'S');
     setCell(wb.sheets[0]?.sheet as Worksheet, 1, 1, 7);
-    const { toBuffer } = await import('../../src/io/node');
+    const { toBuffer } = await import('../../src/io/node.js');
     const sink = toBuffer();
     await saveWorkbook(wb, sink);
     const wb2 = await loadWorkbook(fromBuffer(sink.result()));

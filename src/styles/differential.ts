@@ -7,14 +7,14 @@
 // The Stylesheet keeps DXFs in their own pool (`dxfs`) and conditional-
 // formatting rules / table-style elements reference them by index.
 
-import { stableStringify } from '../utils/stable-stringify';
-import type { Alignment } from './alignment';
-import type { Border } from './borders';
-import type { Fill } from './fills';
-import type { Font } from './fonts';
-import type { NumberFormat } from './numbers';
-import type { Protection } from './protection';
-import type { Stylesheet } from './stylesheet';
+import { stableStringify } from '../utils/stable-stringify.js';
+import type { Alignment } from './alignment.js';
+import type { Border } from './borders.js';
+import type { Fill } from './fills.js';
+import type { Font } from './fonts.js';
+import type { NumberFormat } from './numbers.js';
+import type { Protection } from './protection.js';
+import type { Stylesheet } from './stylesheet.js';
 
 /**
  * Differential ("partial") style. Every component is optional; only

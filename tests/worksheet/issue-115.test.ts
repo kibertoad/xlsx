@@ -8,11 +8,11 @@
 // to display.
 
 import { describe, expect, it } from 'vitest';
-import { setFormula } from '../../src/cell/cell';
-import { makeSharedStrings } from '../../src/workbook/shared-strings';
-import { parseWorksheetXml } from '../../src/worksheet/reader';
-import { worksheetToBytes } from '../../src/worksheet/writer';
-import { getCell, makeWorksheet, setCell } from '../../src/worksheet/worksheet';
+import { setFormula } from '../../src/cell/cell.js';
+import { makeSharedStrings } from '../../src/workbook/shared-strings.js';
+import { parseWorksheetXml } from '../../src/worksheet/reader.js';
+import { worksheetToBytes } from '../../src/worksheet/writer.js';
+import { getCell, makeWorksheet, setCell } from '../../src/worksheet/worksheet.js';
 
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';

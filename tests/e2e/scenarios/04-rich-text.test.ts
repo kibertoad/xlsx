@@ -8,10 +8,10 @@
 //   comparison.
 
 import { describe, expect, it } from 'vitest';
-import { makeRichText, makeTextRun } from '../../../src/cell/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { makeRichText, makeTextRun } from '../../../src/cell/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 04 — rich text', () => {
   it('writes 04-rich-text.xlsx', async () => {

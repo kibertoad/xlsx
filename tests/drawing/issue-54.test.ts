@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { serializeFill } from '../../src/drawing/dml/dml-xml';
-import type { Fill } from '../../src/drawing/dml/fill';
+import { serializeFill } from '../../src/drawing/dml/dml-xml.js';
+import type { Fill } from '../../src/drawing/dml/fill.js';
 
 describe('issue #54 — malformed Fill kind is not silently dropped', () => {
   it('throws when serializing a Fill with an unknown kind', () => {

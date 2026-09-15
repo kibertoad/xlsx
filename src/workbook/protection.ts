@@ -60,7 +60,7 @@ export const makeWorkbookProtection = (opts: WorkbookProtection = {}): WorkbookP
 
 // ---- Workbook ergonomic helpers -----------------------------------------
 
-import type { Workbook } from './workbook';
+import type { Workbook } from './workbook.js';
 
 /**
  * Lock the workbook with Excel's "Protect Workbook → Structure" default

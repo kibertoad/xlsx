@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
+import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
 import {
   parseTextBody,
   parseTextBodyProperties,
   serializeTextBody,
   serializeTextBodyProperties,
-} from '../../src/drawing/dml/dml-xml';
-import { makeEffectList } from '../../src/drawing/dml/effect';
-import { makeNoFill, makeSolidFill } from '../../src/drawing/dml/fill';
-import { makeLine } from '../../src/drawing/dml/line';
+} from '../../src/drawing/dml/dml-xml.js';
+import { makeEffectList } from '../../src/drawing/dml/effect.js';
+import { makeNoFill, makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makeLine } from '../../src/drawing/dml/line.js';
 import {
   makeBreak,
   makeParagraph,
@@ -20,9 +20,9 @@ import {
   type RunProperties,
   type TextBody,
   type TextBodyProperties,
-} from '../../src/drawing/dml/text';
-import { parseXml } from '../../src/xml/parser';
-import { findChild } from '../../src/xml/tree';
+} from '../../src/drawing/dml/text.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { findChild } from '../../src/xml/tree.js';
 
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const C_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chart';

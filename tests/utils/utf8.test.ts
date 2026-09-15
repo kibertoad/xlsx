@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { utf8ByteLength } from '../../src/utils/utf8';
+import { utf8ByteLength } from '../../src/utils/utf8.js';
 
 const encoder = new TextEncoder();
 const oracle = (s: string): number => encoder.encode(s).byteLength;

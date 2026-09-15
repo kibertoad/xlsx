@@ -6,8 +6,8 @@ import {
   addWorksheet,
   createWorkbook,
   getAllConditionalFormatting,
-} from '../../src/workbook/workbook';
-import { addCellIsRule, addColorScaleRule } from '../../src/worksheet/conditional-formatting';
+} from '../../src/workbook/workbook.js';
+import { addCellIsRule, addColorScaleRule } from '../../src/worksheet/conditional-formatting.js';
 
 describe('getAllConditionalFormatting', () => {
   it('aggregates CF blocks across every worksheet in tab-strip order', () => {

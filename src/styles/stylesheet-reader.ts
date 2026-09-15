@@ -7,25 +7,25 @@
 // instead we push raw entries and rebuild the `_*IdByKey` maps at the end so
 // subsequent edits go back through dedup.
 
-import { fromTree } from '../schema/serialize';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { stableStringify } from '../utils/stable-stringify';
-import { qname, SHEET_MAIN_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
-import { AlignmentSchema } from './alignment.schema';
-import type { Border } from './borders';
-import { BorderSchema } from './borders.schema';
-import type { DifferentialStyle, StylesheetWithDxfs } from './differential';
-import type { Fill } from './fills';
-import { fillFromTree } from './fills.schema';
-import type { Font } from './fonts';
-import { FontSchema } from './fonts.schema';
-import type { StylesheetNamedStyle } from './named-styles';
-import type { NumberFormat } from './numbers';
-import { NumberFormatSchema } from './numbers.schema';
-import { ProtectionSchema } from './protection.schema';
-import { type CellXf, makeStylesheet, type Stylesheet } from './stylesheet';
+import { fromTree } from '../schema/serialize.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { stableStringify } from '../utils/stable-stringify.js';
+import { qname, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
+import { AlignmentSchema } from './alignment.schema.js';
+import type { Border } from './borders.js';
+import { BorderSchema } from './borders.schema.js';
+import type { DifferentialStyle, StylesheetWithDxfs } from './differential.js';
+import type { Fill } from './fills.js';
+import { fillFromTree } from './fills.schema.js';
+import type { Font } from './fonts.js';
+import { FontSchema } from './fonts.schema.js';
+import type { StylesheetNamedStyle } from './named-styles.js';
+import type { NumberFormat } from './numbers.js';
+import { NumberFormatSchema } from './numbers.schema.js';
+import { ProtectionSchema } from './protection.schema.js';
+import { type CellXf, makeStylesheet, type Stylesheet } from './stylesheet.js';
 
 const STYLESHEET_TAG = qname(SHEET_MAIN_NS, 'styleSheet');
 const FONTS_TAG = qname(SHEET_MAIN_NS, 'fonts');

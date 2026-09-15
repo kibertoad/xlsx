@@ -1,9 +1,9 @@
 // DrawingML primitive parse / serialize.
 
-import { escapeXmlAttr, escapeXmlText } from '../../utils/escape';
-import { OpenXmlSchemaError } from '../../utils/exceptions';
-import { DRAWING_NS, REL_NS } from '../../xml/namespaces';
-import { findChild, findChildren, type XmlNode } from '../../xml/tree';
+import { escapeXmlAttr, escapeXmlText } from '../../utils/escape.js';
+import { OpenXmlSchemaError } from '../../utils/exceptions.js';
+import { DRAWING_NS, REL_NS } from '../../xml/namespaces.js';
+import { findChild, findChildren, type XmlNode } from '../../xml/tree.js';
 import {
   type ColorMod,
   type DmlColor,
@@ -12,7 +12,7 @@ import {
   type SchemeColorName,
   VALUED_COLOR_MOD_KINDS,
   VALUELESS_COLOR_MOD_KINDS,
-} from './colors';
+} from './colors.js';
 import type {
   Effect,
   EffectContainer,
@@ -21,9 +21,9 @@ import type {
   FillBlendMode,
   PresetShadowName,
   ShadowAlign,
-} from './effect';
-import { PRESET_SHADOW_NAMES } from './effect';
-import type { Blip, BlipEffect, Fill, GradientLineDir, GradientStop, RelativeRect, TileFill, TileFlip } from './fill';
+} from './effect.js';
+import { PRESET_SHADOW_NAMES } from './effect.js';
+import type { Blip, BlipEffect, Fill, GradientLineDir, GradientStop, RelativeRect, TileFill, TileFlip } from './fill.js';
 import type {
   AdjPoint2D,
   AdjustHandle,
@@ -36,9 +36,9 @@ import type {
   PathFill,
   PresetGeometry,
   ShapeGuide,
-} from './geometry';
-import type { LineCap, LineCompound, LineEnd, LineEndSize, LineEndType, LineProperties, PresetDash } from './line';
-import type { BlackWhiteMode, Point2D, PositiveSize2D, ShapeProperties, Transform2D } from './shape-properties';
+} from './geometry.js';
+import type { LineCap, LineCompound, LineEnd, LineEndSize, LineEndType, LineProperties, PresetDash } from './line.js';
+import type { BlackWhiteMode, Point2D, PositiveSize2D, ShapeProperties, Transform2D } from './shape-properties.js';
 import type {
   AutoFit,
   BulletProperties,
@@ -63,7 +63,7 @@ import type {
   TextUnderline,
   TextVertical,
   TextWrap,
-} from './text';
+} from './text.js';
 
 const A = (local: string): string => `{${DRAWING_NS}}${local}`;
 

@@ -1,7 +1,7 @@
 // Tests for alignmentToCss — Alignment value-object → CSS-property record.
 
 import { describe, expect, it } from 'vitest';
-import { alignmentToCss, makeAlignment } from '../../src/styles/alignment';
+import { alignmentToCss, makeAlignment } from '../../src/styles/alignment.js';
 
 describe('alignmentToCss', () => {
   it('returns {} for undefined / empty Alignment', () => {

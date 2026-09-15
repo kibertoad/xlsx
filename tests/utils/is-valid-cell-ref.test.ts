@@ -1,7 +1,7 @@
 // Tests for isValidCellRef predicate.
 
 import { describe, expect, it } from 'vitest';
-import { isValidCellRef } from '../../src/utils/coordinate';
+import { isValidCellRef } from '../../src/utils/coordinate.js';
 
 describe('isValidCellRef', () => {
   it('accepts plain A1-style refs', () => {

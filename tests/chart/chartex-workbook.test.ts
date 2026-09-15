@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { makeWaterfallChart } from '../../src/chart/cx/chartex';
-import { makeTwoCellAnchor } from '../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import type { Worksheet } from '../../src/worksheet/worksheet';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { makeWaterfallChart } from '../../src/chart/cx/chartex.js';
+import { makeTwoCellAnchor } from '../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../src/drawing/drawing.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import type { Worksheet } from '../../src/worksheet/worksheet.js';
 
-const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet').Chartsheet | undefined): Worksheet => {
+const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined): Worksheet => {
   if (!ws) throw new Error('expected sheet');
   if (!('rows' in ws)) throw new Error('expected worksheet, got chartsheet');
   return ws;

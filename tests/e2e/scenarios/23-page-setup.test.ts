@@ -14,9 +14,9 @@
 // `headerFooter` / `rowBreaks` APIs (B6 in).
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { makeHeaderFooter, makePageMargins, makePageSetup, makePrintOptions, setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { makeHeaderFooter, makePageMargins, makePageSetup, makePrintOptions, setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 23 — page setup / print options / header-footer', () => {
   it('writes 23-page-setup.xlsx', async () => {

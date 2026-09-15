@@ -1,13 +1,13 @@
 // Tests for getWorkbookStats summary helper.
 
 import { describe, expect, it } from 'vitest';
-import { setFormula } from '../../src/cell/cell';
-import { addDefinedName } from '../../src/workbook/defined-names';
-import { addChartsheet, addWorksheet, createWorkbook, getWorkbookStats } from '../../src/workbook/workbook';
-import { setCustomStringProperty } from '../../src/packaging/custom';
-import { addUrlHyperlink } from '../../src/worksheet/hyperlinks';
-import { addExcelTable } from '../../src/worksheet/table';
-import { mergeCells, setCell, setComment } from '../../src/worksheet/worksheet';
+import { setFormula } from '../../src/cell/cell.js';
+import { addDefinedName } from '../../src/workbook/defined-names.js';
+import { addChartsheet, addWorksheet, createWorkbook, getWorkbookStats } from '../../src/workbook/workbook.js';
+import { setCustomStringProperty } from '../../src/packaging/custom.js';
+import { addUrlHyperlink } from '../../src/worksheet/hyperlinks.js';
+import { addExcelTable } from '../../src/worksheet/table.js';
+import { mergeCells, setCell, setComment } from '../../src/worksheet/worksheet.js';
 
 describe('getWorkbookStats', () => {
   it('empty workbook → zero everything', () => {

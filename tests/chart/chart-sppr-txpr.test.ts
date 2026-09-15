@@ -8,14 +8,14 @@ import {
   makeChartSpace,
   makeScatterChart,
   makeScatterSeries,
-} from '../../src/chart/chart';
-import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml';
-import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
-import { makeNoFill, makeSolidFill } from '../../src/drawing/dml/fill';
-import { makePresetGeometry } from '../../src/drawing/dml/geometry';
-import { makeLine } from '../../src/drawing/dml/line';
-import { makeShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { makeParagraph, makeRun, makeSimpleTextBody, makeTextBody } from '../../src/drawing/dml/text';
+} from '../../src/chart/chart.js';
+import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml.js';
+import { makeColor, makeSchemeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
+import { makeNoFill, makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makePresetGeometry } from '../../src/drawing/dml/geometry.js';
+import { makeLine } from '../../src/drawing/dml/line.js';
+import { makeShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { makeParagraph, makeRun, makeSimpleTextBody, makeTextBody } from '../../src/drawing/dml/text.js';
 
 const roundTrip = (s: ChartSpace): ChartSpace => parseChartXml(chartToBytes(s));
 

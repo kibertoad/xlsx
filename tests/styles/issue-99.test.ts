@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { fromTree } from '../../src/schema/serialize';
-import { makeSide } from '../../src/styles/borders';
-import { SideSchema } from '../../src/styles/borders.schema';
-import { parseXml } from '../../src/xml/parser';
-import { SHEET_MAIN_NS } from '../../src/xml/namespaces';
+import { fromTree } from '../../src/schema/serialize.js';
+import { makeSide } from '../../src/styles/borders.js';
+import { SideSchema } from '../../src/styles/borders.schema.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { SHEET_MAIN_NS } from '../../src/xml/namespaces.js';
 
 // https://github.com/office-kit/xlsx/issues/99
 // OnlyOffice writes explicit `<left style="none"/>` sides. `none` is the first

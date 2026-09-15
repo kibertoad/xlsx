@@ -11,9 +11,9 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Workbook } from '../../src/workbook/index';
-import { loadWorkbook, workbookToBytes } from '../../src/io/index';
-import { fromBuffer } from '../../src/io/node';
+import type { Workbook } from '../../src/workbook/index.js';
+import { loadWorkbook, workbookToBytes } from '../../src/io/index.js';
+import { fromBuffer } from '../../src/io/node.js';
 
 export const OUT_DIR = resolve(__dirname, 'output');
 

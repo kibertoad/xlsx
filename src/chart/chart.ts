@@ -1,6 +1,6 @@
-import type { ShapeProperties } from '../drawing/dml/shape-properties';
-import type { TextBody } from '../drawing/dml/text';
-import type { ChartDrawing } from './user-shapes';
+import type { ShapeProperties } from '../drawing/dml/shape-properties.js';
+import type { TextBody } from '../drawing/dml/text.js';
+import type { ChartDrawing } from './user-shapes.js';
 
 // ChartML data model.
 //

@@ -9,13 +9,13 @@ import {
   getCellNumberFormat,
   setCellAsCurrency,
   setCellFont,
-} from '../../src/styles/cell-style';
-import { makeColor } from '../../src/styles/colors';
-import { makeFill, makePatternFill } from '../../src/styles/fills';
-import { makeFont } from '../../src/styles/fonts';
-import { setCellFill } from '../../src/styles/cell-style';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/styles/cell-style.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { makeFill, makePatternFill } from '../../src/styles/fills.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { setCellFill } from '../../src/styles/cell-style.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('copyCellStyle (same workbook)', () => {
   it('shares the source styleId without allocating a new xf', () => {

@@ -7,33 +7,33 @@
 // scenario name should point straight at the API responsible.
 
 import { describe, expect, it } from 'vitest';
-import { setFormula } from '../../src/cell/cell';
-import { workbookToBytes } from '../../src/io/save';
-import { makeColor } from '../../src/styles/colors';
-import { setCellBackgroundColor, setCellFont } from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addDefinedName } from '../../src/workbook/defined-names';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeAutoFilter } from '../../src/worksheet/auto-filter';
-import { parseMultiCellRange } from '../../src/worksheet/cell-range';
+import { setFormula } from '../../src/cell/cell.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { makeColor } from '../../src/styles/colors.js';
+import { setCellBackgroundColor, setCellFont } from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addDefinedName } from '../../src/workbook/defined-names.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeAutoFilter } from '../../src/worksheet/auto-filter.js';
+import { parseMultiCellRange } from '../../src/worksheet/cell-range.js';
 import {
   addCellIsRule,
   addColorScaleRule,
   addFormulaRule,
-} from '../../src/worksheet/conditional-formatting';
-import { makeDataValidation } from '../../src/worksheet/data-validations';
+} from '../../src/worksheet/conditional-formatting.js';
+import { makeDataValidation } from '../../src/worksheet/data-validations.js';
 import {
   addInternalHyperlink,
   addUrlHyperlink,
-} from '../../src/worksheet/hyperlinks';
+} from '../../src/worksheet/hyperlinks.js';
 import {
   makeHeaderFooter,
   makePageMargins,
   makePageSetup,
   makePrintOptions,
-} from '../../src/worksheet/page-setup';
-import { makeSheetProtection } from '../../src/worksheet/protection';
-import { addExcelTable } from '../../src/worksheet/table';
+} from '../../src/worksheet/page-setup.js';
+import { makeSheetProtection } from '../../src/worksheet/protection.js';
+import { addExcelTable } from '../../src/worksheet/table.js';
 import {
   addDataValidation,
   appendRow,
@@ -53,8 +53,8 @@ import {
   setRowHeight,
   setSheetTabColor,
   type Worksheet,
-} from '../../src/worksheet/worksheet';
-import { validateXlsx } from './validate';
+} from '../../src/worksheet/worksheet.js';
+import { validateXlsx } from './validate.js';
 
 const dump = (issues: { tier: string; part: string; message: string }[]): string =>
   issues.map((i) => `[${i.tier}] ${i.part}: ${i.message}`).join('\n');

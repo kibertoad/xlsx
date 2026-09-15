@@ -5,9 +5,9 @@
 // Node 18+ provides Blob / File / FormData / fetch / Web Streams natively,
 // so this module is also exercised by the Node-hosted vitest runner.
 
-import { OpenXmlIoError } from '../utils/exceptions';
-import type { BufferedSinkWriter, XlsxSink } from './sink';
-import type { XlsxSource } from './source';
+import { OpenXmlIoError } from '../utils/exceptions.js';
+import type { BufferedSinkWriter, XlsxSink } from './sink.js';
+import type { XlsxSource } from './source.js';
 
 /**
  * Wrap a Blob (or File, since File extends Blob) as an XlsxSource. The

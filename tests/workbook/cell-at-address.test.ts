@@ -1,8 +1,8 @@
 // Tests for getCellAtAddress — sheet-qualified A1 → Cell lookup.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook, getCellAtAddress } from '../../src/workbook/workbook';
-import { getCellAddress, setCell } from '../../src/worksheet/worksheet';
+import { addWorksheet, createWorkbook, getCellAtAddress } from '../../src/workbook/workbook.js';
+import { getCellAddress, setCell } from '../../src/worksheet/worksheet.js';
 
 describe('getCellAtAddress', () => {
   it('resolves a bare-title address', () => {

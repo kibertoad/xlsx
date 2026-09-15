@@ -1,6 +1,6 @@
 // DrawingML line properties.
 
-import type { Fill } from './fill';
+import type { Fill } from './fill.js';
 
 export type PresetDash =
   | 'solid'

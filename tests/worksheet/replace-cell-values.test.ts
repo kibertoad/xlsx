@@ -1,11 +1,11 @@
 // Tests for the replaceCellValues find-and-replace helper.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   replaceCellValues,
   setCell,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('replaceCellValues — string search', () => {
   it('replaces exact-string matches and returns the count', () => {

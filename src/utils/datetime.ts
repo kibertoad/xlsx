@@ -14,7 +14,7 @@
 // Date happens lazily only when callers ask. JS Dates are interpreted in UTC
 // throughout to avoid timezone drift between read and write.
 
-import { OpenXmlSchemaError } from './exceptions';
+import { OpenXmlSchemaError } from './exceptions.js';
 
 /** Excel epoch identifier. */
 export type ExcelEpoch = 'windows' | 'mac';

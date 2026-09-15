@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { makeAbsoluteAnchor, makeOneCellAnchor, makeTwoCellAnchor } from '../../src/drawing/anchor';
-import { makeDrawing, makePictureDrawingItem } from '../../src/drawing/drawing';
-import { drawingToBytes, parseDrawingXml } from '../../src/drawing/drawing-xml';
-import { detectImageDimensions, detectImageFormat, loadImage, type XlsxImage } from '../../src/drawing/image';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { makeAbsoluteAnchor, makeOneCellAnchor, makeTwoCellAnchor } from '../../src/drawing/anchor.js';
+import { makeDrawing, makePictureDrawingItem } from '../../src/drawing/drawing.js';
+import { drawingToBytes, parseDrawingXml } from '../../src/drawing/drawing-xml.js';
+import { detectImageDimensions, detectImageFormat, loadImage, type XlsxImage } from '../../src/drawing/image.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 // ---- Test fixtures (synthesised in-memory rather than reading binary files) ----
 

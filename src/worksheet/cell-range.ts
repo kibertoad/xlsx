@@ -5,7 +5,7 @@
 // (containment, shift, union, intersection, iteration) and a `MultiCellRange`
 // lite wrapper for sqref-style attributes.
 
-import type { Cell } from '../cell/cell';
+import type { Cell } from '../cell/cell.js';
 import {
   boundariesToRangeString,
   type CellRangeBoundaries,
@@ -14,8 +14,8 @@ import {
   MAX_ROW,
   rangeBoundaries,
   tupleToCoordinate,
-} from '../utils/coordinate';
-import { OpenXmlSchemaError } from '../utils/exceptions';
+} from '../utils/coordinate.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 /** Re-export under the plan's canonical name. */
 export type CellRange = CellRangeBoundaries;

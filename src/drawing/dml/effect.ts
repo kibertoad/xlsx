@@ -5,8 +5,8 @@
 // children with type=`tree` or `sib`). The Effect union covers the eight
 // ECMA-376 §20.1.8 effect leaf kinds.
 
-import type { DmlColorWithMods } from './colors';
-import type { Fill } from './fill';
+import type { DmlColorWithMods } from './colors.js';
+import type { Fill } from './fill.js';
 
 export type FillBlendMode = 'over' | 'mult' | 'screen' | 'darken' | 'lighten';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromTree, toTree } from '../../src/schema/serialize';
+import { fromTree, toTree } from '../../src/schema/serialize.js';
 import {
   BLACK,
   BLUE,
@@ -9,11 +9,11 @@ import {
   resolveIndexedColor,
   rgbColor,
   WHITE,
-} from '../../src/styles/colors';
-import { ColorSchema } from '../../src/styles/colors.schema';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
-import { parseXml } from '../../src/xml/parser';
-import { serializeXml } from '../../src/xml/serializer';
+} from '../../src/styles/colors.js';
+import { ColorSchema } from '../../src/styles/colors.schema.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { parseXml } from '../../src/xml/parser.js';
+import { serializeXml } from '../../src/xml/serializer.js';
 
 describe('Color value object', () => {
   it('makeColor returns a frozen object', () => {

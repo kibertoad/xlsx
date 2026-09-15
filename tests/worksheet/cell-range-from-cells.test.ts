@@ -1,9 +1,9 @@
 // Tests for cellRangeFromCells — Cell[] → bounding A1 range.
 
 import { describe, expect, it } from 'vitest';
-import { cellRangeFromCells } from '../../src/worksheet/cell-range';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+import { cellRangeFromCells } from '../../src/worksheet/cell-range.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('cellRangeFromCells', () => {
   it('returns a single-cell ref for a one-cell input', () => {

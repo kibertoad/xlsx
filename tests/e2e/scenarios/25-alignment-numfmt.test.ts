@@ -15,10 +15,10 @@
 //     "# ?/?" / "# ??/??" (fractions).
 
 import { describe, expect, it } from 'vitest';
-import { setCellAlignment, setCellNumberFormat } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell, setColumnWidth, setRowHeight } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { setCellAlignment, setCellNumberFormat } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell, setColumnWidth, setRowHeight } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 25 — alignment / advanced number formats', () => {
   it('writes 25-alignment-numfmt.xlsx', async () => {

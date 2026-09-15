@@ -2,7 +2,7 @@
 // Scenario Manager. Per ECMA-376 §18.3.1.74 / §18.3.1.41 (inputCells)
 // and openpyxl/openpyxl/worksheet/scenario.py.
 
-import type { MultiCellRange } from './cell-range';
+import type { MultiCellRange } from './cell-range.js';
 
 /** One <inputCells> entry — a single (cell, override-value) pair. */
 export interface ScenarioInputCell {

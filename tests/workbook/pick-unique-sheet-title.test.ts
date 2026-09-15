@@ -5,7 +5,7 @@ import {
   addWorksheet,
   createWorkbook,
   pickUniqueSheetTitle,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 describe('pickUniqueSheetTitle', () => {
   it('returns the base verbatim when free', () => {
@@ -37,7 +37,7 @@ describe('pickUniqueSheetTitle', () => {
   });
 
   it('returns a value that passes validateSheetTitle (uniqueified result fits Excel rules)', async () => {
-    const { validateSheetTitle } = await import('../../src/workbook/workbook');
+    const { validateSheetTitle } = await import('../../src/workbook/workbook.js');
     const wb = createWorkbook();
     const base = 'x'.repeat(31);
     addWorksheet(wb, base);

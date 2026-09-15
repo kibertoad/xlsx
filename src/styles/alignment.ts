@@ -1,6 +1,6 @@
 // Cell alignment value object. Mirrors openpyxl/openpyxl/styles/alignment.py.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 export type HorizontalAlignment =
   | 'general'

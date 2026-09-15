@@ -9,7 +9,7 @@ import {
   iterWorksheets,
   listChartsheets,
   listWorksheets,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 describe('iterWorksheets / listWorksheets', () => {
   it('iterates every worksheet in tab-strip order', () => {

@@ -4,9 +4,9 @@
 // the formula. Absolute (`$`-prefixed) anchors stay put; falling off the
 // top or left of the grid raises `TranslatorError`. **Never evaluates.**
 
-import { columnIndexFromLetter, columnLetterFromIndex, coordinateToTuple } from '../utils/coordinate';
-import { OpenXmlError } from '../utils/exceptions';
-import { LITERAL, OPERAND, RANGE, renderTokens, type Token, tokenize } from './tokenizer';
+import { columnIndexFromLetter, columnLetterFromIndex, coordinateToTuple } from '../utils/coordinate.js';
+import { OpenXmlError } from '../utils/exceptions.js';
+import { LITERAL, OPERAND, RANGE, renderTokens, type Token, tokenize } from './tokenizer.js';
 
 export class TranslatorError extends OpenXmlError {
   override readonly name = 'TranslatorError';

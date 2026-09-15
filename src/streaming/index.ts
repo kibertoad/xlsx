@@ -9,7 +9,7 @@ export {
   type ReadOnlyCell,
   type ReadOnlyWorkbook,
   type ReadOnlyWorksheet,
-} from './read-only';
+} from './read-only.js';
 
 export {
   createWriteOnlyWorkbook,
@@ -18,4 +18,4 @@ export {
   type WriteOnlyStyle,
   type WriteOnlyWorkbook,
   type WriteOnlyWorksheet,
-} from './write-only';
+} from './write-only.js';

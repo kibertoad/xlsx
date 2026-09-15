@@ -4,7 +4,7 @@
 // Plain object, no DOM, names in Clark notation `{ns}local` so namespace-aware
 // code does not depend on runtime prefix bookkeeping.
 
-import { qname } from './namespaces';
+import { qname } from './namespaces.js';
 
 export interface XmlNode {
   /** Clark-notation qualified name: `{namespace}local` or just `local`. */

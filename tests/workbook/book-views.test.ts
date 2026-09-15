@@ -1,12 +1,12 @@
 // Tests for the typed workbook-level <bookViews> model.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeWorkbookView } from '../../src/workbook/views';
-import { setCell } from '../../src/worksheet/worksheet';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeWorkbookView } from '../../src/workbook/views.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('bookViews round-trip', () => {
   it('preserves a single workbookView with firstSheet / activeTab / window position', async () => {

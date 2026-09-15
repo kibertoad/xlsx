@@ -9,8 +9,8 @@
 //   correctly with axis labels / legend visible.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
 import {
   makeAreaChart,
   makeBarSeries,
@@ -21,12 +21,12 @@ import {
   makeRadarChart,
   makeScatterChart,
   makeScatterSeries,
-} from '../../../src/chart/chart';
-import { makeOneCellAnchor } from '../../../src/drawing/anchor';
-import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing';
-import type { ChartReference } from '../../../src/drawing/drawing';
-import type { ChartSpace } from '../../../src/chart/chart';
-import { writeWorkbook } from '../_helpers';
+} from '../../../src/chart/chart.js';
+import { makeOneCellAnchor } from '../../../src/drawing/anchor.js';
+import { makeChartDrawingItem, makeDrawing } from '../../../src/drawing/drawing.js';
+import type { ChartReference } from '../../../src/drawing/drawing.js';
+import type { ChartSpace } from '../../../src/chart/chart.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 19 — classic chart kinds', () => {
   it('writes 19-charts-classic.xlsx', async () => {

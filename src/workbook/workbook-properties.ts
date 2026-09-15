@@ -45,7 +45,7 @@ export const makeWorkbookProperties = (opts: WorkbookProperties = {}): WorkbookP
 
 // ---- Workbook ergonomic helpers ----------------------------------------
 
-import type { Workbook } from './workbook';
+import type { Workbook } from './workbook.js';
 
 const ensureWorkbookProperties = (wb: Workbook): WorkbookProperties => {
   if (!wb.workbookProperties) wb.workbookProperties = {};

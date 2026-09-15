@@ -1,11 +1,11 @@
 // Tests for the typed chartsheet pageMargins / pageSetup / headerFooter.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addChartsheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeHeaderFooter, makePageMargins, makePageSetup } from '../../src/worksheet/page-setup';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addChartsheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeHeaderFooter, makePageMargins, makePageSetup } from '../../src/worksheet/page-setup.js';
 
 describe('chartsheet page setup round-trip', () => {
   it('preserves pageMargins + pageSetup + headerFooter on a chartsheet', async () => {

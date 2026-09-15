@@ -114,7 +114,7 @@ export const makePageBreak = (opts: PageBreak = {}): PageBreak => ({ ...opts });
 // Operate on a Worksheet directly so callers don't have to allocate the
 // individual typed records up front.
 
-import type { Worksheet } from './worksheet';
+import type { Worksheet } from './worksheet.js';
 
 const ensurePageSetup = (ws: Worksheet): PageSetup => {
   if (!ws.pageSetup) ws.pageSetup = {};

@@ -8,7 +8,7 @@
 // them as opaque XmlNode payloads rather than fully modeling the
 // nested anchor schema. The top-level attrs are typed for editor access.
 
-import type { XmlNode } from '../xml/tree';
+import type { XmlNode } from '../xml/tree.js';
 
 export type OleDvAspect = 'DVASPECT_CONTENT' | 'DVASPECT_ICON';
 export type OleUpdateMode = 'OLEUPDATE_ALWAYS' | 'OLEUPDATE_ONCALL';

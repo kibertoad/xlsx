@@ -19,7 +19,7 @@
 // xlsx archives don't approach those limits in practice; we throw a
 // clear error if we detect overflow there.
 
-import { OpenXmlIoError, OpenXmlNotImplementedError } from '../utils/exceptions';
+import { OpenXmlIoError, OpenXmlNotImplementedError } from '../utils/exceptions.js';
 
 const ZIP32_MAX_ENTRIES = 0xffff;
 const ZIP32_MAX_U32 = 0xffffffff;

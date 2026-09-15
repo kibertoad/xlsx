@@ -1,9 +1,9 @@
 // Tests for the sheet visibility helpers.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
 import {
   addWorksheet,
   createWorkbook,
@@ -12,7 +12,7 @@ import {
   setSheetState,
   showSheet,
   veryHideSheet,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 describe('sheet visibility helpers', () => {
   it('newly created sheets default to "visible"', () => {

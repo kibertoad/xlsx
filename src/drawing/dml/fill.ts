@@ -1,6 +1,6 @@
 // DrawingML fills.
 
-import type { DmlColor, DmlColorWithMods } from './colors';
+import type { DmlColor, DmlColorWithMods } from './colors.js';
 
 /** Relative rectangle (0..100000-thousandths). */
 export interface RelativeRect {

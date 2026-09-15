@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { makeChartsheet } from '../../src/chartsheet/chartsheet';
-import { chartsheetToBytes, parseChartsheetXml, serializeChartsheet } from '../../src/chartsheet/chartsheet-xml';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addChartsheet, addWorksheet, createWorkbook } from '../../src/workbook/workbook';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { makeChartsheet } from '../../src/chartsheet/chartsheet.js';
+import { chartsheetToBytes, parseChartsheetXml, serializeChartsheet } from '../../src/chartsheet/chartsheet-xml.js';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addChartsheet, addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
 describe('Chartsheet XML round-trip', () => {
   it('preserves sheetView attributes', () => {

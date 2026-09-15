@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import {
   addWorksheet,
   createWorkbook,
@@ -11,7 +11,7 @@ import {
   removeSheet,
   setActiveSheet,
   sheetNames,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 import {
   appendRow,
   countCells,
@@ -22,7 +22,7 @@ import {
   iterRows,
   iterValues,
   setCell,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('createWorkbook', () => {
   it('starts empty with a fresh Stylesheet', () => {

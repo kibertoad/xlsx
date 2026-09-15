@@ -7,13 +7,13 @@
 
 import { unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { setFormula } from '../../src/cell/cell';
-import { workbookToBytes } from '../../src/io/save';
-import { setCellFont } from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { mergeCells, setCell, type Worksheet } from '../../src/worksheet/worksheet';
-import { validateXlsx } from './validate';
+import { setFormula } from '../../src/cell/cell.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { setCellFont } from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { mergeCells, setCell, type Worksheet } from '../../src/worksheet/worksheet.js';
+import { validateXlsx } from './validate.js';
 
 const dump = (issues: { tier: string; part: string; message: string }[]): string =>
   issues.map((i) => `[${i.tier}] ${i.part}: ${i.message}`).join('\n');

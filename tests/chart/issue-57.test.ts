@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { Gridlines, ValueAxis } from '../../src/chart';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml';
-import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
-import { makeSolidFill } from '../../src/drawing/dml/fill';
-import { makeShapeProperties } from '../../src/drawing/dml/shape-properties';
+import type { Gridlines, ValueAxis } from '../../src/chart/index.js';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml.js';
+import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
+import { makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makeShapeProperties } from '../../src/drawing/dml/shape-properties.js';
 
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 

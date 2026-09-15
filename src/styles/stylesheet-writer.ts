@@ -4,18 +4,18 @@
 // and what openpyxl writes — readers tolerate any order but Excel's
 // diff-friendly layout helps when comparing fixtures.
 
-import { toTree } from '../schema/serialize';
-import { qname, SHEET_MAIN_NS } from '../xml/namespaces';
-import { serializeXml } from '../xml/serializer';
-import { el, type XmlNode } from '../xml/tree';
-import { AlignmentSchema } from './alignment.schema';
-import { BorderSchema } from './borders.schema';
-import { getDxfs, type StylesheetWithDxfs } from './differential';
-import { fillToTree } from './fills.schema';
-import { FontSchema } from './fonts.schema';
-import { NumberFormatSchema } from './numbers.schema';
-import { ProtectionSchema } from './protection.schema';
-import type { CellXf, Stylesheet } from './stylesheet';
+import { toTree } from '../schema/serialize.js';
+import { qname, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { serializeXml } from '../xml/serializer.js';
+import { el, type XmlNode } from '../xml/tree.js';
+import { AlignmentSchema } from './alignment.schema.js';
+import { BorderSchema } from './borders.schema.js';
+import { getDxfs, type StylesheetWithDxfs } from './differential.js';
+import { fillToTree } from './fills.schema.js';
+import { FontSchema } from './fonts.schema.js';
+import { NumberFormatSchema } from './numbers.schema.js';
+import { ProtectionSchema } from './protection.schema.js';
+import type { CellXf, Stylesheet } from './stylesheet.js';
 
 const STYLESHEET_TAG = qname(SHEET_MAIN_NS, 'styleSheet');
 const FONTS_TAG = qname(SHEET_MAIN_NS, 'fonts');

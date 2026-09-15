@@ -1,14 +1,14 @@
 // Tests for getAllImages / getAllCharts.
 
 import { describe, expect, it } from 'vitest';
-import { addChartAt, addImageAt } from '../../src/drawing/drawing';
-import { loadImage } from '../../src/drawing/image';
+import { addChartAt, addImageAt } from '../../src/drawing/drawing.js';
+import { loadImage } from '../../src/drawing/image.js';
 import {
   addWorksheet,
   createWorkbook,
   getAllCharts,
   getAllImages,
-} from '../../src/workbook/workbook';
+} from '../../src/workbook/workbook.js';
 
 const PNG_1X1 = new Uint8Array([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,

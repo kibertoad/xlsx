@@ -4,14 +4,14 @@
 // and conditional, and we want minimum bundle weight. Pairs with the
 // loader/writer wiring in src/public/{load,save}.ts.
 
-import { escapeXmlAttr } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { SHEET_MAIN_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
-import type { AutoFilter, FilterColumn } from './auto-filter';
-import type { TableColumn, TableDefinition, TableStyleInfo } from './table';
-import { makeTableColumn, makeTableDefinition } from './table';
+import { escapeXmlAttr } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
+import type { AutoFilter, FilterColumn } from './auto-filter.js';
+import type { TableColumn, TableDefinition, TableStyleInfo } from './table.js';
+import { makeTableColumn, makeTableDefinition } from './table.js';
 
 const TABLE_TAG = `{${SHEET_MAIN_NS}}table`;
 const TABLE_COLUMNS_TAG = `{${SHEET_MAIN_NS}}tableColumns`;

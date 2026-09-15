@@ -11,10 +11,10 @@
 //   filters the data below.
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { parseMultiCellRange, parseRange } from '../../../src/worksheet/cell-range';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { parseMultiCellRange, parseRange } from '../../../src/worksheet/cell-range.js';
+import { writeWorkbook } from '../_helpers.js';
 void parseRange;
 
 describe('e2e 09 — data validation + autoFilter', () => {

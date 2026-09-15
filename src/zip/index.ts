@@ -4,9 +4,9 @@
 export type {
   DecompressionLimits,
   ResolvedDecompressionLimits,
-} from './decompression-guard';
-export { DEFAULT_DECOMPRESSION_LIMITS } from './decompression-guard';
-export type { OpenZipOptions, ZipArchive } from './reader';
-export { openZip } from './reader';
-export type { StreamingEntryWriter, ZipWriter } from './writer';
-export { createZipWriter } from './writer';
+} from './decompression-guard.js';
+export { DEFAULT_DECOMPRESSION_LIMITS } from './decompression-guard.js';
+export type { OpenZipOptions, ZipArchive } from './reader.js';
+export { openZip } from './reader.js';
+export type { StreamingEntryWriter, ZipWriter } from './writer.js';
+export { createZipWriter } from './writer.js';

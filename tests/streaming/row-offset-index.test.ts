@@ -6,11 +6,11 @@
 // silently corrupt the iter output.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { workbookToBytes } from '../../src/io/save';
-import { loadWorkbookStream } from '../../src/streaming/read-only';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+import { fromBuffer } from '../../src/io/node.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { loadWorkbookStream } from '../../src/streaming/read-only.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 const buildSheet = async (rows: number): Promise<Uint8Array> => {
   const wb = createWorkbook();

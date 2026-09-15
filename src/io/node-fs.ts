@@ -11,9 +11,9 @@ import { createReadStream, createWriteStream, readFileSync } from 'node:fs';
 import { readFile, unlink } from 'node:fs/promises';
 import { once } from 'node:events';
 import { Readable, Writable } from 'node:stream';
-import { OpenXmlIoError } from '../utils/exceptions';
-import type { BufferedSinkWriter, XlsxSink } from './sink';
-import type { XlsxSource } from './source';
+import { OpenXmlIoError } from '../utils/exceptions.js';
+import type { BufferedSinkWriter, XlsxSink } from './sink.js';
+import type { XlsxSource } from './source.js';
 
 const EMPTY_BYTES = new Uint8Array(0);
 

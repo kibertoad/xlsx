@@ -6,8 +6,8 @@
 // and break list. The chartsheet sibling (smaller) has been typed
 // separately in src/chartsheet/chartsheet.ts.
 
-import type { HeaderFooter, PageBreak, PageMargins, PageSetup, PrintOptions } from './page-setup';
-import type { Pane, Selection, SheetViewMode } from './views';
+import type { HeaderFooter, PageBreak, PageMargins, PageSetup, PrintOptions } from './page-setup.js';
+import type { Pane, Selection, SheetViewMode } from './views.js';
 
 export type CustomSheetViewState = 'visible' | 'hidden' | 'veryHidden';
 

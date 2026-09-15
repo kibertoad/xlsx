@@ -10,7 +10,7 @@ export type {
   WorkbookOverview,
   WorkbookSheetOverview,
   WorkbookStats,
-} from './workbook';
+} from './workbook.js';
 export {
   addChartsheet,
   addWorksheet,
@@ -33,8 +33,8 @@ export {
   setCellAtAddress,
   setSheetState,
   sheetNames,
-} from './workbook';
-export type { DefinedName, DefinedNameTarget } from './defined-names';
+} from './workbook.js';
+export type { DefinedName, DefinedNameTarget } from './defined-names.js';
 export {
   addDefinedName,
   getDefinedName,
@@ -42,40 +42,40 @@ export {
   listDefinedNames,
   makeDefinedName,
   removeDefinedName,
-} from './defined-names';
-export type { WorkbookProtection } from './protection';
-export { makeWorkbookProtection } from './protection';
-export type { SharedStringEntry, SharedStringsTable } from './shared-strings';
+} from './defined-names.js';
+export type { WorkbookProtection } from './protection.js';
+export { makeWorkbookProtection } from './protection.js';
+export type { SharedStringEntry, SharedStringsTable } from './shared-strings.js';
 export {
   addSharedString,
   getSharedStringAt,
   getSharedStringIndex,
   makeSharedStrings,
   sharedStringCount,
-} from './shared-strings';
+} from './shared-strings.js';
 export type {
   CustomViewShowComments,
   CustomViewShowObjects,
   CustomWorkbookView,
   WorkbookView,
   WorkbookViewVisibility,
-} from './views';
-export { makeCustomWorkbookView, makeWorkbookView } from './views';
-export type { CalcMode, CalcProperties, RefMode } from './calc-properties';
-export { makeCalcProperties } from './calc-properties';
+} from './views.js';
+export { makeCustomWorkbookView, makeWorkbookView } from './views.js';
+export type { CalcMode, CalcProperties, RefMode } from './calc-properties.js';
+export { makeCalcProperties } from './calc-properties.js';
 export type {
   ShowObjectsMode,
   UpdateLinksMode,
   WorkbookProperties,
-} from './workbook-properties';
-export { makeWorkbookProperties } from './workbook-properties';
-export type { FileVersion } from './file-version';
-export { makeFileVersion } from './file-version';
-export type { FileSharing } from './file-sharing';
-export { makeFileSharing } from './file-sharing';
-export type { FileRecoveryProperties } from './file-recovery';
-export { makeFileRecoveryProperties } from './file-recovery';
-export type { SmartTagProperties, SmartTagShowMode, SmartTagType } from './smart-tags';
-export { makeSmartTagProperties, makeSmartTagType } from './smart-tags';
-export type { FunctionGroup, FunctionGroups } from './function-groups';
-export { makeFunctionGroup, makeFunctionGroups } from './function-groups';
+} from './workbook-properties.js';
+export { makeWorkbookProperties } from './workbook-properties.js';
+export type { FileVersion } from './file-version.js';
+export { makeFileVersion } from './file-version.js';
+export type { FileSharing } from './file-sharing.js';
+export { makeFileSharing } from './file-sharing.js';
+export type { FileRecoveryProperties } from './file-recovery.js';
+export { makeFileRecoveryProperties } from './file-recovery.js';
+export type { SmartTagProperties, SmartTagShowMode, SmartTagType } from './smart-tags.js';
+export { makeSmartTagProperties, makeSmartTagType } from './smart-tags.js';
+export type { FunctionGroup, FunctionGroups } from './function-groups.js';
+export { makeFunctionGroup, makeFunctionGroups } from './function-groups.js';

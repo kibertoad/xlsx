@@ -10,8 +10,8 @@ import {
   parseSheetRange,
   rangeBoundaries,
   tupleToCoordinate,
-} from '../../src/utils/coordinate';
-import { OpenXmlSchemaError } from '../../src/utils/exceptions';
+} from '../../src/utils/coordinate.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 
 describe('columnLetterFromIndex / columnIndexFromLetter', () => {
   // Verified against openpyxl's get_column_letter / column_index_from_string.

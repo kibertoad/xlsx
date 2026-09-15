@@ -1,11 +1,11 @@
 // Tests for the typed workbook-level <customWorkbookViews> model.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeCustomWorkbookView } from '../../src/workbook/views';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeCustomWorkbookView } from '../../src/workbook/views.js';
 
 describe('customWorkbookViews round-trip', () => {
   it('preserves a saved view with full attribute set', async () => {

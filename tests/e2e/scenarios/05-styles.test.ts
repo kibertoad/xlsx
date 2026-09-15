@@ -18,10 +18,10 @@
 //   yyyy-mm-dd / [h]:mm:ss applied to a sample value.
 
 import { describe, expect, it } from 'vitest';
-import { addBorder, addCellXf, addFill, addFont, addNumFmt, defaultCellXf, makeAlignment, makeBorder, makeColor, makeFont, makePatternFill, makeProtection, makeSide } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addBorder, addCellXf, addFill, addFont, addNumFmt, defaultCellXf, makeAlignment, makeBorder, makeColor, makeFont, makePatternFill, makeProtection, makeSide } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 05 — styles', () => {
   it('writes 05-styles.xlsx', async () => {

@@ -5,14 +5,14 @@ import {
   parseTextBody,
   serializeShapeProperties,
   serializeTextBody,
-} from '../../drawing/dml/dml-xml';
-import type { ShapeProperties } from '../../drawing/dml/shape-properties';
-import type { TextBody } from '../../drawing/dml/text';
-import { escapeXmlAttr, escapeXmlText } from '../../utils/escape';
-import { OpenXmlSchemaError } from '../../utils/exceptions';
-import { CX_NS, REL_NS } from '../../xml/namespaces';
-import { parseXml } from '../../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../../xml/tree';
+} from '../../drawing/dml/dml-xml.js';
+import type { ShapeProperties } from '../../drawing/dml/shape-properties.js';
+import type { TextBody } from '../../drawing/dml/text.js';
+import { escapeXmlAttr, escapeXmlText } from '../../utils/escape.js';
+import { OpenXmlSchemaError } from '../../utils/exceptions.js';
+import { CX_NS, REL_NS } from '../../xml/namespaces.js';
+import { parseXml } from '../../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../../xml/tree.js';
 import type {
   CxAxis,
   CxChart,
@@ -29,7 +29,7 @@ import type {
   CxSeries,
   CxStrDim,
   CxTitle,
-} from './chartex';
+} from './chartex.js';
 
 const T = (local: string): string => `{${CX_NS}}${local}`;
 const CHART_SPACE = T('chartSpace');

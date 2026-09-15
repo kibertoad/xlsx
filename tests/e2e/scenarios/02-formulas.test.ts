@@ -11,10 +11,10 @@
 // - F1 cell with #N/A error returned by NA().
 
 import { describe, expect, it } from 'vitest';
-import { setArrayFormula, setFormula, setSharedFormula } from '../../../src/cell/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { setArrayFormula, setFormula, setSharedFormula } from '../../../src/cell/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 02 — formulas', () => {
   it('writes 02-formulas.xlsx', async () => {

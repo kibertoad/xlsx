@@ -10,8 +10,8 @@
 // fills.schema.ts). All values are plain readonly + frozen so the Stylesheet
 // pool can dedupe.
 
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { type Color, colorToHex, makeColor } from './colors';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { type Color, colorToHex, makeColor } from './colors.js';
 
 // ---- pattern fills ---------------------------------------------------------
 

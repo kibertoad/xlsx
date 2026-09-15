@@ -9,10 +9,10 @@
 // - D1..D2 show: very large + very small numbers without losing precision
 
 import { describe, expect, it } from 'vitest';
-import { makeErrorValue } from '../../../src/cell/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { makeErrorValue } from '../../../src/cell/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 01 — basic cell values', () => {
   it('writes 01-basic-cells.xlsx', async () => {

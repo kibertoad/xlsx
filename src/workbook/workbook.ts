@@ -2,13 +2,13 @@
 // composes via free functions. The Stylesheet pool is held inline so styling
 // operations don't need a side channel.
 
-import type { Chartsheet } from '../chartsheet/chartsheet';
-import { makeChartsheet } from '../chartsheet/chartsheet';
-import { makeAbsoluteAnchor } from '../drawing/anchor';
-import { type ChartReference, makeChartDrawingItem, makeDrawing } from '../drawing/drawing';
-import type { CoreProperties } from '../packaging/core';
-import type { CustomProperties } from '../packaging/custom';
-import type { ExtendedProperties } from '../packaging/extended';
+import type { Chartsheet } from '../chartsheet/chartsheet.js';
+import { makeChartsheet } from '../chartsheet/chartsheet.js';
+import { makeAbsoluteAnchor } from '../drawing/anchor.js';
+import { type ChartReference, makeChartDrawingItem, makeDrawing } from '../drawing/drawing.js';
+import type { CoreProperties } from '../packaging/core.js';
+import type { CustomProperties } from '../packaging/custom.js';
+import type { ExtendedProperties } from '../packaging/extended.js';
 import {
   getCellAlignment,
   getCellBorder,
@@ -16,21 +16,21 @@ import {
   getCellFont,
   getCellNumberFormat,
   getCellProtection,
-} from '../styles/cell-style';
-import type { Stylesheet } from '../styles/stylesheet';
-import { makeStylesheet } from '../styles/stylesheet';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { type CellValue, isFormulaValue } from '../cell/cell';
-import type { Alignment } from '../styles/alignment';
-import type { Border } from '../styles/borders';
-import type { Fill } from '../styles/fills';
-import type { Font } from '../styles/fonts';
-import type { Protection } from '../styles/protection';
-import { coordinateToTuple, parseSheetRange } from '../utils/coordinate';
-import { multiCellRangeContainsCell, parseRange, rangeContainsCell, rangeToString } from '../worksheet/cell-range';
-import type { LegacyComment } from '../worksheet/comments';
-import type { Hyperlink } from '../worksheet/hyperlinks';
-import type { CellsByKindCounts, Worksheet } from '../worksheet/worksheet';
+} from '../styles/cell-style.js';
+import type { Stylesheet } from '../styles/stylesheet.js';
+import { makeStylesheet } from '../styles/stylesheet.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { type CellValue, isFormulaValue } from '../cell/cell.js';
+import type { Alignment } from '../styles/alignment.js';
+import type { Border } from '../styles/borders.js';
+import type { Fill } from '../styles/fills.js';
+import type { Font } from '../styles/fonts.js';
+import type { Protection } from '../styles/protection.js';
+import { coordinateToTuple, parseSheetRange } from '../utils/coordinate.js';
+import { multiCellRangeContainsCell, parseRange, rangeContainsCell, rangeToString } from '../worksheet/cell-range.js';
+import type { LegacyComment } from '../worksheet/comments.js';
+import type { Hyperlink } from '../worksheet/hyperlinks.js';
+import type { CellsByKindCounts, Worksheet } from '../worksheet/worksheet.js';
 import {
   classifyCellValue,
   countCellsByKind,
@@ -41,7 +41,7 @@ import {
   isWorksheetEmpty,
   makeWorksheet,
   setCellByCoord,
-} from '../worksheet/worksheet';
+} from '../worksheet/worksheet.js';
 
 export type SheetState = 'visible' | 'hidden' | 'veryHidden';
 
@@ -70,7 +70,7 @@ export interface Workbook {
   /** Author display names, shared between threaded comments. */
   authors: string[];
   /** Workbook + sheet-scope defined names (named ranges, print areas etc). */
-  definedNames: import('./defined-names').DefinedName[];
+  definedNames: import('./defined-names.js').DefinedName[];
   /**
    * Raw `xl/theme/theme1.xml` payload kept verbatim across read → write. The
    * theme XML is large and seldom edited by writers; we just shuttle it.
@@ -114,8 +114,8 @@ export interface Workbook {
    * `<sheets>` element, the rest after `<definedNames>`.
    */
   workbookXmlExtras?: {
-    beforeSheets: import('../xml/tree').XmlNode[];
-    afterSheets: import('../xml/tree').XmlNode[];
+    beforeSheets: import('../xml/tree.js').XmlNode[];
+    afterSheets: import('../xml/tree.js').XmlNode[];
   };
   /**
    * The `<workbook>` root's markup-compatibility header, as Excel wrote it:
@@ -134,32 +134,32 @@ export interface Workbook {
    * the modern hash quad or the legacy 16-bit hash. Round-tripped verbatim;
    * password hashing helpers come later.
    */
-  workbookProtection?: import('./protection').WorkbookProtection;
+  workbookProtection?: import('./protection.js').WorkbookProtection;
   /**
    * `<bookViews>` — the workbook's window/tab-strip presets. Most workbooks
    * have a single entry whose `firstSheet` / `activeTab` drive the tab the user
    * sees first. Stored as an array because Excel allows multiple views (rare).
    */
-  bookViews?: import('./views').WorkbookView[];
+  bookViews?: import('./views.js').WorkbookView[];
   /**
    * `<customWorkbookViews>` — saved per-user view presets used by the
    * deprecated "Shared Workbook" feature. Each entry carries its own window
    * position, active sheet, and visibility toggles.
    */
-  customWorkbookViews?: import('./views').CustomWorkbookView[];
+  customWorkbookViews?: import('./views.js').CustomWorkbookView[];
   /** `<calcPr>` — calculation engine settings (calcMode / iterate / fullPrecision etc.). */
-  calcProperties?: import('./calc-properties').CalcProperties;
+  calcProperties?: import('./calc-properties.js').CalcProperties;
   /** `<fileVersion>` — Office app/version metadata Excel records on save. */
-  fileVersion?: import('./file-version').FileVersion;
+  fileVersion?: import('./file-version.js').FileVersion;
   /** `<fileSharing>` — read-only-recommended toggle + write-protection password. */
-  fileSharing?: import('./file-sharing').FileSharing;
+  fileSharing?: import('./file-sharing.js').FileSharing;
   /**
    * `<oleSize ref="…">` — bounding range Excel uses when the workbook is
    * embedded as an OLE object inside another Office document.
    */
   oleSize?: string;
   /** `<fileRecoveryPr>` — autoRecover-style flags Excel writes after a recovery save. */
-  fileRecoveryPr?: import('./file-recovery').FileRecoveryProperties;
+  fileRecoveryPr?: import('./file-recovery.js').FileRecoveryProperties;
   /**
    * `<pivotCaches>` — links from workbook root to xl/pivotCache parts. The
    * underlying parts survive via the passthrough archive; this typed array
@@ -175,17 +175,17 @@ export interface Workbook {
    */
   externalReferences?: ReadonlyArray<{ rId: string }>;
   /** `<smartTagPr>` — Excel 2003 smart-tag persistence flags. */
-  smartTagPr?: import('./smart-tags').SmartTagProperties;
+  smartTagPr?: import('./smart-tags.js').SmartTagProperties;
   /** `<smartTagTypes>` — Excel 2003 smart-tag type registrations. */
-  smartTagTypes?: ReadonlyArray<import('./smart-tags').SmartTagType>;
+  smartTagTypes?: ReadonlyArray<import('./smart-tags.js').SmartTagType>;
   /** `<functionGroups>` — built-in + user-defined XLL function groups. */
-  functionGroups?: import('./function-groups').FunctionGroups;
+  functionGroups?: import('./function-groups.js').FunctionGroups;
   /**
    * `<workbookPr>` — VBA codeName, defaultThemeVersion, link-update prompt
    * mode, etc. `date1904` is mirrored here for completeness but the canonical
    * source remains `wb.date1904`.
    */
-  workbookProperties?: import('./workbook-properties').WorkbookProperties;
+  workbookProperties?: import('./workbook-properties.js').WorkbookProperties;
   /**
    * Workbook-level rels that don't match a modeled type. Re-emitted with their
    * original Id so captured `<pivotCaches r:id="…"/>` etc. still resolve after
@@ -809,7 +809,7 @@ export function getWorkbookCellsByKind(wb: Workbook): CellsByKindCounts {
  * `undefined` when the cell isn't materialised. Throws on malformed addresses,
  * missing sheets, or range inputs.
  */
-export function getCellAtAddress(wb: Workbook, address: string): import('../cell/cell').Cell | undefined {
+export function getCellAtAddress(wb: Workbook, address: string): import('../cell/cell.js').Cell | undefined {
   const { sheet: sheetTitle, range } = parseSheetRange(address);
   if (range.includes(':')) {
     throw new OpenXmlSchemaError(
@@ -832,7 +832,7 @@ export function setCellAtAddress(
   wb: Workbook,
   address: string,
   value: CellValue,
-): import('../cell/cell').Cell {
+): import('../cell/cell.js').Cell {
   const { sheet: sheetTitle, range } = parseSheetRange(address);
   if (range.includes(':')) {
     throw new OpenXmlSchemaError(
@@ -1099,7 +1099,7 @@ export function* iterWorksheetsByState(
  */
 export function* iterAllCells(
   wb: Workbook,
-): IterableIterator<{ sheet: Worksheet; cell: import('../cell/cell').Cell }> {
+): IterableIterator<{ sheet: Worksheet; cell: import('../cell/cell.js').Cell }> {
   for (const sheet of iterWorksheets(wb)) {
     const rowKeys = [...sheet.rows.keys()].sort((a, b) => a - b);
     for (const r of rowKeys) {
@@ -1122,8 +1122,8 @@ export function* iterAllCells(
  */
 export function getAllMergedRanges(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; range: import('../worksheet/cell-range').CellRange }> {
-  const out: Array<{ sheet: Worksheet; range: import('../worksheet/cell-range').CellRange }> = [];
+): ReadonlyArray<{ sheet: Worksheet; range: import('../worksheet/cell-range.js').CellRange }> {
+  const out: Array<{ sheet: Worksheet; range: import('../worksheet/cell-range.js').CellRange }> = [];
   for (const sheet of iterWorksheets(wb)) {
     for (const range of sheet.mergedCells) out.push({ sheet, range });
   }
@@ -1136,8 +1136,8 @@ export function getAllMergedRanges(
  */
 export function getAllHyperlinks(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; hyperlink: import('../worksheet/hyperlinks').Hyperlink }> {
-  const out: Array<{ sheet: Worksheet; hyperlink: import('../worksheet/hyperlinks').Hyperlink }> = [];
+): ReadonlyArray<{ sheet: Worksheet; hyperlink: import('../worksheet/hyperlinks.js').Hyperlink }> {
+  const out: Array<{ sheet: Worksheet; hyperlink: import('../worksheet/hyperlinks.js').Hyperlink }> = [];
   for (const sheet of iterWorksheets(wb)) {
     for (const h of sheet.hyperlinks) out.push({ sheet, hyperlink: h });
   }
@@ -1150,8 +1150,8 @@ export function getAllHyperlinks(
  */
 export function getAllComments(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; comment: import('../worksheet/comments').LegacyComment }> {
-  const out: Array<{ sheet: Worksheet; comment: import('../worksheet/comments').LegacyComment }> = [];
+): ReadonlyArray<{ sheet: Worksheet; comment: import('../worksheet/comments.js').LegacyComment }> {
+  const out: Array<{ sheet: Worksheet; comment: import('../worksheet/comments.js').LegacyComment }> = [];
   for (const sheet of iterWorksheets(wb)) {
     for (const c of sheet.legacyComments) out.push({ sheet, comment: c });
   }
@@ -1165,8 +1165,8 @@ export function getAllComments(
  */
 export function getAllTables(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; table: import('../worksheet/table').TableDefinition }> {
-  const out: Array<{ sheet: Worksheet; table: import('../worksheet/table').TableDefinition }> = [];
+): ReadonlyArray<{ sheet: Worksheet; table: import('../worksheet/table.js').TableDefinition }> {
+  const out: Array<{ sheet: Worksheet; table: import('../worksheet/table.js').TableDefinition }> = [];
   for (const sheet of iterWorksheets(wb)) {
     for (const t of sheet.tables) out.push({ sheet, table: t });
   }
@@ -1181,7 +1181,7 @@ export function getAllTables(
 export function findTable(
   wb: Workbook,
   displayName: string,
-): { sheet: Worksheet; table: import('../worksheet/table').TableDefinition } | undefined {
+): { sheet: Worksheet; table: import('../worksheet/table.js').TableDefinition } | undefined {
   for (const sheet of iterWorksheets(wb)) {
     for (const t of sheet.tables) {
       if (t.displayName === displayName) return { sheet, table: t };
@@ -1198,8 +1198,8 @@ export function findTable(
  */
 export function findCellInWorkbook(
   wb: Workbook,
-  predicate: (cell: import('../cell/cell').Cell, sheet: Worksheet) => boolean,
-): { sheet: Worksheet; cell: import('../cell/cell').Cell } | undefined {
+  predicate: (cell: import('../cell/cell.js').Cell, sheet: Worksheet) => boolean,
+): { sheet: Worksheet; cell: import('../cell/cell.js').Cell } | undefined {
   for (const { sheet, cell } of iterAllCells(wb)) {
     if (predicate(cell, sheet)) return { sheet, cell };
   }
@@ -1212,9 +1212,9 @@ export function findCellInWorkbook(
  */
 export function findCellsInWorkbook(
   wb: Workbook,
-  predicate: (cell: import('../cell/cell').Cell, sheet: Worksheet) => boolean,
-): ReadonlyArray<{ sheet: Worksheet; cell: import('../cell/cell').Cell }> {
-  const out: Array<{ sheet: Worksheet; cell: import('../cell/cell').Cell }> = [];
+  predicate: (cell: import('../cell/cell.js').Cell, sheet: Worksheet) => boolean,
+): ReadonlyArray<{ sheet: Worksheet; cell: import('../cell/cell.js').Cell }> {
+  const out: Array<{ sheet: Worksheet; cell: import('../cell/cell.js').Cell }> = [];
   for (const { sheet, cell } of iterAllCells(wb)) {
     if (predicate(cell, sheet)) out.push({ sheet, cell });
   }
@@ -1232,14 +1232,14 @@ export function replaceCellValuesInWorkbook(
   wb: Workbook,
   search:
     | string
-    | ((value: import('../cell/cell').CellValue, cell: import('../cell/cell').Cell, sheet: Worksheet) => boolean),
-  replacement: import('../cell/cell').CellValue,
+    | ((value: import('../cell/cell.js').CellValue, cell: import('../cell/cell.js').Cell, sheet: Worksheet) => boolean),
+  replacement: import('../cell/cell.js').CellValue,
 ): number {
   let n = 0;
   const matchFn =
     typeof search === 'string'
-      ? (v: import('../cell/cell').CellValue) => typeof v === 'string' && v === search
-      : (v: import('../cell/cell').CellValue, c: import('../cell/cell').Cell, s: Worksheet) => search(v, c, s);
+      ? (v: import('../cell/cell.js').CellValue) => typeof v === 'string' && v === search
+      : (v: import('../cell/cell.js').CellValue, c: import('../cell/cell.js').Cell, s: Worksheet) => search(v, c, s);
   for (const { sheet, cell } of iterAllCells(wb)) {
     if (matchFn(cell.value, cell, sheet)) {
       cell.value = replacement;
@@ -1255,10 +1255,10 @@ export function replaceCellValuesInWorkbook(
  */
 export function getAllDataValidations(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; validation: import('../worksheet/data-validations').DataValidation }> {
+): ReadonlyArray<{ sheet: Worksheet; validation: import('../worksheet/data-validations.js').DataValidation }> {
   const out: Array<{
     sheet: Worksheet;
-    validation: import('../worksheet/data-validations').DataValidation;
+    validation: import('../worksheet/data-validations.js').DataValidation;
   }> = [];
   for (const sheet of iterWorksheets(wb)) {
     for (const v of sheet.dataValidations) out.push({ sheet, validation: v });
@@ -1272,8 +1272,8 @@ export function getAllDataValidations(
  */
 export function getAllImages(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; item: import('../drawing/drawing').DrawingItem }> {
-  const out: Array<{ sheet: Worksheet; item: import('../drawing/drawing').DrawingItem }> = [];
+): ReadonlyArray<{ sheet: Worksheet; item: import('../drawing/drawing.js').DrawingItem }> {
+  const out: Array<{ sheet: Worksheet; item: import('../drawing/drawing.js').DrawingItem }> = [];
   for (const sheet of iterWorksheets(wb)) {
     if (!sheet.drawing) continue;
     for (const item of sheet.drawing.items) {
@@ -1289,8 +1289,8 @@ export function getAllImages(
  */
 export function getAllCharts(
   wb: Workbook,
-): ReadonlyArray<{ sheet: Worksheet; item: import('../drawing/drawing').DrawingItem }> {
-  const out: Array<{ sheet: Worksheet; item: import('../drawing/drawing').DrawingItem }> = [];
+): ReadonlyArray<{ sheet: Worksheet; item: import('../drawing/drawing.js').DrawingItem }> {
+  const out: Array<{ sheet: Worksheet; item: import('../drawing/drawing.js').DrawingItem }> = [];
   for (const sheet of iterWorksheets(wb)) {
     if (!sheet.drawing) continue;
     for (const item of sheet.drawing.items) {
@@ -1309,11 +1309,11 @@ export function getAllConditionalFormatting(
   wb: Workbook,
 ): ReadonlyArray<{
   sheet: Worksheet;
-  formatting: import('../worksheet/conditional-formatting').ConditionalFormatting;
+  formatting: import('../worksheet/conditional-formatting.js').ConditionalFormatting;
 }> {
   const out: Array<{
     sheet: Worksheet;
-    formatting: import('../worksheet/conditional-formatting').ConditionalFormatting;
+    formatting: import('../worksheet/conditional-formatting.js').ConditionalFormatting;
   }> = [];
   for (const sheet of iterWorksheets(wb)) {
     for (const cf of sheet.conditionalFormatting) out.push({ sheet, formatting: cf });

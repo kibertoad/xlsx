@@ -4,11 +4,11 @@
 // (`rId{N}`) auto-increment using the smallest unused integer so the list stays
 // deterministic even when callers mix in pre-assigned ids.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { fromTree, toTree } from '../schema/serialize';
-import { PKG_REL_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { fromTree, toTree } from '../schema/serialize.js';
+import { PKG_REL_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
 
 export interface Relationship {
   /** rIdN identifier; unique within the parent .rels file. */

@@ -11,10 +11,10 @@
 //   titles).
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { makeDefinedName } from '../../../src/workbook/defined-names';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { makeDefinedName } from '../../../src/workbook/defined-names.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 15 — defined names (named ranges + print area)', () => {
   it('writes 15-defined-names.xlsx', async () => {

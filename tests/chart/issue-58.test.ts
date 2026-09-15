@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import type { ChartNumberFormat, ValueAxis } from '../../src/chart';
-import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart';
-import { chartToBytes } from '../../src/chart/chart-xml';
+import type { ChartNumberFormat, ValueAxis } from '../../src/chart/index.js';
+import { makeBarChart, makeBarSeries, makeChartSpace } from '../../src/chart/chart.js';
+import { chartToBytes } from '../../src/chart/chart-xml.js';
 
 describe('issue #58 — ChartNumberFormat is publicly importable from @office-kit/xlsx/chart', () => {
   it('lets a caller name the type used by axis numFmt', () => {

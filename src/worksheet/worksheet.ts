@@ -5,11 +5,11 @@
 // empty rows, and JSON.stringify with `Map` round-trips cleanly via the
 // workbook's `jsonReplacer`. Worksheets are mutable for hot-path performance.
 
-import type { CellValue } from '../cell/cell';
-import { type Cell, cellValueAsString, makeCell, setArrayFormula, setFormula } from '../cell/cell';
-import { type InlineFont, makeRichText, type TextRun } from '../cell/rich-text';
-import type { Drawing } from '../drawing/drawing';
-import { type Color, makeColor } from '../styles/colors';
+import type { CellValue } from '../cell/cell.js';
+import { type Cell, cellValueAsString, makeCell, setArrayFormula, setFormula } from '../cell/cell.js';
+import { type InlineFont, makeRichText, type TextRun } from '../cell/rich-text.js';
+import type { Drawing } from '../drawing/drawing.js';
+import { type Color, makeColor } from '../styles/colors.js';
 import {
   columnIndexFromLetter,
   columnLetterFromIndex,
@@ -18,28 +18,28 @@ import {
   MAX_COL,
   MAX_ROW,
   tupleToCoordinate,
-} from '../utils/coordinate';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import type { AutoFilter } from './auto-filter';
-import { type CellRange, parseRange, rangeContainsCell, rangesOverlap, rangeToString } from './cell-range';
-import type { LegacyComment } from './comments';
-import { makeLegacyComment } from './comments';
-import type { ConditionalFormatting } from './conditional-formatting';
-import type { DataValidation } from './data-validations';
-import { type ColumnDimension, makeColumnDimension, makeRowDimension, type RowDimension } from './dimensions';
-import type { DataConsolidate } from './data-consolidate';
-import type { ScenarioList } from './scenarios';
-import type { CellWatch, IgnoredError } from './errors';
-import type { HeaderFooter, PageBreak, PageMargins, PageSetup, PrintOptions } from './page-setup';
-import type { WorksheetPhoneticProperties } from './phonetic';
-import { makeSheetProperties, type SheetProperties } from './properties';
-import type { SheetProtection } from './protection';
-import type { ProtectedRange } from './protected-ranges';
-import type { SortState } from './sort-state';
-import type { WebPublishItem, WorksheetCustomProperty } from './web-publish';
-import { type Hyperlink, makeHyperlink } from './hyperlinks';
-import type { TableDefinition } from './table';
-import { freezePaneRef, makeFreezePane, makeSheetView, type SheetView } from './views';
+} from '../utils/coordinate.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import type { AutoFilter } from './auto-filter.js';
+import { type CellRange, parseRange, rangeContainsCell, rangesOverlap, rangeToString } from './cell-range.js';
+import type { LegacyComment } from './comments.js';
+import { makeLegacyComment } from './comments.js';
+import type { ConditionalFormatting } from './conditional-formatting.js';
+import type { DataValidation } from './data-validations.js';
+import { type ColumnDimension, makeColumnDimension, makeRowDimension, type RowDimension } from './dimensions.js';
+import type { DataConsolidate } from './data-consolidate.js';
+import type { ScenarioList } from './scenarios.js';
+import type { CellWatch, IgnoredError } from './errors.js';
+import type { HeaderFooter, PageBreak, PageMargins, PageSetup, PrintOptions } from './page-setup.js';
+import type { WorksheetPhoneticProperties } from './phonetic.js';
+import { makeSheetProperties, type SheetProperties } from './properties.js';
+import type { SheetProtection } from './protection.js';
+import type { ProtectedRange } from './protected-ranges.js';
+import type { SortState } from './sort-state.js';
+import type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
+import { type Hyperlink, makeHyperlink } from './hyperlinks.js';
+import type { TableDefinition } from './table.js';
+import { freezePaneRef, makeFreezePane, makeSheetView, type SheetView } from './views.js';
 
 export interface Worksheet {
   title: string;
@@ -153,24 +153,24 @@ export interface Worksheet {
    * `<smartTags>` — per-cell smart-tag annotations (Excel 2003 era). Pairs with
    * the workbook-level smartTagTypes registry.
    */
-  smartTags: import('./smart-tags').CellSmartTags[];
+  smartTags: import('./smart-tags.js').CellSmartTags[];
   /**
    * `<customSheetViews>` — saved per-user view presets for this worksheet
    * (Excel's "Custom Views" feature). Each entry snapshots zoom / gridline /
    * formula / heading toggles plus its own page-setup block and break list.
    */
-  customSheetViews: import('./custom-sheet-views').CustomSheetView[];
+  customSheetViews: import('./custom-sheet-views.js').CustomSheetView[];
   /**
    * `<oleObjects>` — embedded OLE objects (linked Word documents, Equation
    * editor formulas, etc.). The objectPr child is round-tripped verbatim as an
    * XmlNode.
    */
-  oleObjects: import('./ole-objects').OleObject[];
+  oleObjects: import('./ole-objects.js').OleObject[];
   /**
    * `<controls>` — form controls (checkboxes / list boxes / spin buttons placed
    * via the Developer tab). The controlPr child is round-tripped verbatim.
    */
-  controls: import('./ole-objects').FormControl[];
+  controls: import('./ole-objects.js').FormControl[];
   /** `<printOptions>` — gridlines, headings, horizontal/vertical centering on the printed page. */
   printOptions?: PrintOptions;
   /** `<pageMargins>` — six required margins in inches. */
@@ -238,8 +238,8 @@ export interface Worksheet {
    * openpyxl-emitted files round-trip cleanly.
    */
   bodyExtras?: {
-    beforeSheetData: import('../xml/tree').XmlNode[];
-    afterSheetData: import('../xml/tree').XmlNode[];
+    beforeSheetData: import('../xml/tree.js').XmlNode[];
+    afterSheetData: import('../xml/tree.js').XmlNode[];
   };
 }
 
@@ -574,7 +574,7 @@ export interface CellsByKindCounts {
  * Shared between {@link countCellsByKind} and the workbook-wide overview so
  * the two never drift in how they classify (e.g. `Date` vs `duration`).
  */
-export function classifyCellValue(v: import('../cell/cell').CellValue): keyof CellsByKindCounts {
+export function classifyCellValue(v: import('../cell/cell.js').CellValue): keyof CellsByKindCounts {
   if (v === null) return 'null';
   if (typeof v === 'string') return 'string';
   if (typeof v === 'number') return 'number';

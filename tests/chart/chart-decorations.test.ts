@@ -11,13 +11,13 @@ import {
   makeScatterChart,
   makeScatterSeries,
   type Trendline,
-} from '../../src/chart/chart';
-import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml';
-import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors';
-import { makeSolidFill } from '../../src/drawing/dml/fill';
-import { makeLine } from '../../src/drawing/dml/line';
-import { makeShapeProperties } from '../../src/drawing/dml/shape-properties';
-import { makeParagraph, makeRun, makeSimpleTextBody, makeTextBody } from '../../src/drawing/dml/text';
+} from '../../src/chart/chart.js';
+import { chartToBytes, parseChartXml } from '../../src/chart/chart-xml.js';
+import { makeColor, makeSrgbColor } from '../../src/drawing/dml/colors.js';
+import { makeSolidFill } from '../../src/drawing/dml/fill.js';
+import { makeLine } from '../../src/drawing/dml/line.js';
+import { makeShapeProperties } from '../../src/drawing/dml/shape-properties.js';
+import { makeParagraph, makeRun, makeSimpleTextBody, makeTextBody } from '../../src/drawing/dml/text.js';
 
 const roundTrip = (s: ChartSpace): ChartSpace => parseChartXml(chartToBytes(s));
 

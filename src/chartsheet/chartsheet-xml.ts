@@ -1,23 +1,23 @@
 // `xl/chartsheets/sheetN.xml` reader / writer.
 
-import type { Color } from '../styles/colors';
-import { escapeXmlAttr } from '../utils/escape';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { REL_NS, SHEET_MAIN_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { findChild, findChildren, type XmlNode } from '../xml/tree';
+import type { Color } from '../styles/colors.js';
+import { escapeXmlAttr } from '../utils/escape.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import {
   parseHeaderFooter,
   parsePageMargins,
   parsePageSetup,
   parseWebPublishItem,
-} from '../worksheet/reader';
+} from '../worksheet/reader.js';
 import {
   serializeHeaderFooter,
   serializePageMargins,
   serializePageSetup,
   serializeWebPublishItems,
-} from '../worksheet/writer';
+} from '../worksheet/writer.js';
 import {
   type Chartsheet,
   type ChartsheetCustomSheetView,
@@ -26,7 +26,7 @@ import {
   type ChartsheetProtection,
   type ChartsheetView,
   makeChartsheet,
-} from './chartsheet';
+} from './chartsheet.js';
 
 const CHARTSHEET_TAG = `{${SHEET_MAIN_NS}}chartsheet`;
 const SHEET_PR_TAG = `{${SHEET_MAIN_NS}}sheetPr`;

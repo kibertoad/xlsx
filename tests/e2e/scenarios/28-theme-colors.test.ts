@@ -14,10 +14,10 @@
 //   bugs. Indices are labelled in column A.
 
 import { describe, expect, it } from 'vitest';
-import { addCellXf, addFill, defaultCellXf, makeColor, makePatternFill } from '../../../src/styles/index';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell, setColumnWidth } from '../../../src/worksheet/index';
-import { writeWorkbook } from '../_helpers';
+import { addCellXf, addFill, defaultCellXf, makeColor, makePatternFill } from '../../../src/styles/index.js';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell, setColumnWidth } from '../../../src/worksheet/index.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 28 — theme + indexed palette', () => {
   it('writes 28-theme-colors.xlsx', async () => {

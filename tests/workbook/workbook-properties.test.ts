@@ -1,12 +1,12 @@
 // Tests for the typed workbook-level <workbookPr> model.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { makeWorkbookProperties } from '../../src/workbook/workbook-properties';
-import { setCell } from '../../src/worksheet/worksheet';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeWorkbookProperties } from '../../src/workbook/workbook-properties.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('workbookPr round-trip', () => {
   it('preserves codeName + defaultThemeVersion + updateLinks + showObjects', async () => {

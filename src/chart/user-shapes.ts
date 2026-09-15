@@ -5,8 +5,8 @@
 // positioned either relatively (0..1 of chart width / height) or absolutely
 // (relative anchor + EMU extent).
 
-import type { ShapeProperties, PositiveSize2D } from '../drawing/dml/shape-properties';
-import type { TextBody } from '../drawing/dml/text';
+import type { ShapeProperties, PositiveSize2D } from '../drawing/dml/shape-properties.js';
+import type { TextBody } from '../drawing/dml/text.js';
 
 /** `<cdr:from>` / `<cdr:to>` marker. Decimal in 0..1. */
 export interface ChartRelativeMarker {

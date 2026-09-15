@@ -5,7 +5,7 @@ import {
   isValidColumnLetter,
   isValidColumnNumber,
   isValidRowNumber,
-} from '../../src/utils/coordinate';
+} from '../../src/utils/coordinate.js';
 
 describe('isValidColumnLetter', () => {
   it('accepts A..XFD (case-insensitive)', () => {

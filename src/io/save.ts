@@ -14,30 +14,30 @@
 // docProps / theme / VBA / drawings / charts are reserved for later iterations
 // — load tolerates their absence.
 
-import { escapeXmlAttr, escapeXmlText } from '../utils/escape';
-import { chartToBytes } from '../chart/chart-xml';
-import { chartExToBytes } from '../chart/cx/chartex-xml';
-import { userShapesToBytes } from '../chart/user-shapes-xml';
-import { chartsheetToBytes } from '../chartsheet/chartsheet-xml';
-import type { Drawing, DrawingItem } from '../drawing/drawing';
-import { drawingToBytes } from '../drawing/drawing-xml';
-import { IMAGE_FORMAT_EXTENSION, IMAGE_FORMAT_MIME, type XlsxImageFormat } from '../drawing/image';
-import type { XlsxSink } from '../io/sink';
-import { OpenXmlIoError, OpenXmlSchemaError } from '../utils/exceptions';
-import { corePropsToBytes } from '../packaging/core';
-import { customPropsToBytes } from '../packaging/custom';
-import { extendedPropsToBytes } from '../packaging/extended';
-import { addDefault, addOverride, makeManifest, manifestToBytes } from '../packaging/manifest';
-import { makeRelationships, type Relationships, relsToBytes } from '../packaging/relationships';
-import { stylesheetToBytes } from '../styles/stylesheet-writer';
-import { makeSharedStrings, sharedStringsToBytes } from '../workbook/shared-strings';
-import { type Workbook, validateSheetTitle } from '../workbook/workbook';
-import type { LegacyComment } from '../worksheet/comments';
-import { commentsToBytes, placeholderVmlDrawing } from '../worksheet/comments-xml';
-import type { TableDefinition } from '../worksheet/table';
-import { tableToBytes } from '../worksheet/table-xml';
-import { worksheetToBytes } from '../worksheet/writer';
-import { serializeXml as serializeXmlNode } from '../xml/serializer';
+import { escapeXmlAttr, escapeXmlText } from '../utils/escape.js';
+import { chartToBytes } from '../chart/chart-xml.js';
+import { chartExToBytes } from '../chart/cx/chartex-xml.js';
+import { userShapesToBytes } from '../chart/user-shapes-xml.js';
+import { chartsheetToBytes } from '../chartsheet/chartsheet-xml.js';
+import type { Drawing, DrawingItem } from '../drawing/drawing.js';
+import { drawingToBytes } from '../drawing/drawing-xml.js';
+import { IMAGE_FORMAT_EXTENSION, IMAGE_FORMAT_MIME, type XlsxImageFormat } from '../drawing/image.js';
+import type { XlsxSink } from '../io/sink.js';
+import { OpenXmlIoError, OpenXmlSchemaError } from '../utils/exceptions.js';
+import { corePropsToBytes } from '../packaging/core.js';
+import { customPropsToBytes } from '../packaging/custom.js';
+import { extendedPropsToBytes } from '../packaging/extended.js';
+import { addDefault, addOverride, makeManifest, manifestToBytes } from '../packaging/manifest.js';
+import { makeRelationships, type Relationships, relsToBytes } from '../packaging/relationships.js';
+import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
+import { makeSharedStrings, sharedStringsToBytes } from '../workbook/shared-strings.js';
+import { type Workbook, validateSheetTitle } from '../workbook/workbook.js';
+import type { LegacyComment } from '../worksheet/comments.js';
+import { commentsToBytes, placeholderVmlDrawing } from '../worksheet/comments-xml.js';
+import type { TableDefinition } from '../worksheet/table.js';
+import { tableToBytes } from '../worksheet/table-xml.js';
+import { worksheetToBytes } from '../worksheet/writer.js';
+import { serializeXml as serializeXmlNode } from '../xml/serializer.js';
 import {
   ARC_APP,
   ARC_CONTENT_TYPES,
@@ -60,8 +60,8 @@ import {
   THEME_TYPE,
   WORKSHEET_TYPE,
   XLSX_TYPE,
-} from '../xml/namespaces';
-import { createZipWriter } from '../zip/writer';
+} from '../xml/namespaces.js';
+import { createZipWriter } from '../zip/writer.js';
 
 const CORE_PROPS_TYPE = 'application/vnd.openxmlformats-package.core-properties+xml';
 const EXT_PROPS_TYPE = 'application/vnd.openxmlformats-officedocument.extended-properties+xml';
@@ -767,7 +767,7 @@ function serializeWorkbookXml(wb: Workbook, sheetRIds: ReadonlyArray<string>): s
   const ignorableAttr = ignorable !== undefined ? ` mc:Ignorable="${escapeAttr(ignorable)}"` : '';
   const inScopePrefixes: Record<string, string> = { [SHEET_MAIN_NS]: '', [REL_NS]: 'r' };
   for (const d of rootNs) inScopePrefixes[d.ns] ??= d.prefix;
-  const emitExtra = (node: import('../xml/tree').XmlNode): string =>
+  const emitExtra = (node: import('../xml/tree.js').XmlNode): string =>
     serializeChildNode(node, inScopePrefixes);
 
   const parts: string[] = [
@@ -879,7 +879,7 @@ function serializeWorkbookXml(wb: Workbook, sheetRIds: ReadonlyArray<string>): s
 }
 
 function serializeCalcProperties(
-  cp: import('../workbook/calc-properties').CalcProperties,
+  cp: import('../workbook/calc-properties.js').CalcProperties,
 ): string | undefined {
   let attrs = '';
   if (cp.calcId !== undefined) attrs += ` calcId="${cp.calcId}"`;
@@ -900,7 +900,7 @@ function serializeCalcProperties(
 }
 
 function serializeFunctionGroups(
-  fg: import('../workbook/function-groups').FunctionGroups,
+  fg: import('../workbook/function-groups.js').FunctionGroups,
 ): string | undefined {
   let attrs = '';
   if (fg.builtInGroupCount !== undefined) attrs += ` builtInGroupCount="${fg.builtInGroupCount}"`;
@@ -913,7 +913,7 @@ function serializeFunctionGroups(
 }
 
 function serializeSmartTagPr(
-  stp: import('../workbook/smart-tags').SmartTagProperties,
+  stp: import('../workbook/smart-tags.js').SmartTagProperties,
 ): string | undefined {
   let attrs = '';
   if (stp.embed !== undefined) attrs += ` embed="${stp.embed ? '1' : '0'}"`;
@@ -923,7 +923,7 @@ function serializeSmartTagPr(
 }
 
 function serializeSmartTagTypes(
-  tags: ReadonlyArray<import('../workbook/smart-tags').SmartTagType>,
+  tags: ReadonlyArray<import('../workbook/smart-tags.js').SmartTagType>,
 ): string {
   const inner: string[] = ['<smartTagTypes>'];
   for (const t of tags) {
@@ -938,7 +938,7 @@ function serializeSmartTagTypes(
 }
 
 function serializeFileRecoveryPr(
-  fp: import('../workbook/file-recovery').FileRecoveryProperties,
+  fp: import('../workbook/file-recovery.js').FileRecoveryProperties,
 ): string | undefined {
   let attrs = '';
   if (fp.autoRecover !== undefined) attrs += ` autoRecover="${fp.autoRecover ? '1' : '0'}"`;
@@ -950,7 +950,7 @@ function serializeFileRecoveryPr(
 }
 
 function serializeFileSharing(
-  fs: import('../workbook/file-sharing').FileSharing,
+  fs: import('../workbook/file-sharing.js').FileSharing,
 ): string | undefined {
   let attrs = '';
   if (fs.readOnlyRecommended !== undefined)
@@ -967,7 +967,7 @@ function serializeFileSharing(
 }
 
 function serializeFileVersion(
-  fv: import('../workbook/file-version').FileVersion,
+  fv: import('../workbook/file-version.js').FileVersion,
 ): string | undefined {
   let attrs = '';
   if (fv.appName !== undefined) attrs += ` appName="${escapeAttr(fv.appName)}"`;
@@ -981,7 +981,7 @@ function serializeFileVersion(
 
 function effectiveWorkbookProperties(
   wb: Workbook,
-): import('../workbook/workbook-properties').WorkbookProperties | undefined {
+): import('../workbook/workbook-properties.js').WorkbookProperties | undefined {
   const explicit = wb.workbookProperties;
   if (explicit) {
     // Mirror the canonical date1904 flag if the typed model omits it.
@@ -995,10 +995,10 @@ function effectiveWorkbookProperties(
 }
 
 function serializeWorkbookProperties(
-  wp: import('../workbook/workbook-properties').WorkbookProperties,
+  wp: import('../workbook/workbook-properties.js').WorkbookProperties,
 ): string | undefined {
   let attrs = '';
-  const boolKeys: ReadonlyArray<keyof import('../workbook/workbook-properties').WorkbookProperties> = [
+  const boolKeys: ReadonlyArray<keyof import('../workbook/workbook-properties.js').WorkbookProperties> = [
     'date1904',
     'dateCompatibility',
     'showBorderUnselectedTables',
@@ -1028,7 +1028,7 @@ function serializeWorkbookProperties(
 }
 
 function serializeCustomWorkbookViews(
-  views: ReadonlyArray<import('../workbook/views').CustomWorkbookView>,
+  views: ReadonlyArray<import('../workbook/views.js').CustomWorkbookView>,
 ): string {
   const parts: string[] = ['<customWorkbookViews>'];
   for (const v of views) {
@@ -1065,7 +1065,7 @@ function serializeCustomWorkbookViews(
 }
 
 function serializeBookViews(
-  views: ReadonlyArray<import('../workbook/views').WorkbookView>,
+  views: ReadonlyArray<import('../workbook/views.js').WorkbookView>,
   prefixOf: Readonly<Record<string, string>>,
 ): string {
   const parts: string[] = ['<bookViews>'];
@@ -1102,7 +1102,7 @@ function serializeBookViews(
 }
 
 function serializeWorkbookProtection(
-  wp: import('../workbook/protection').WorkbookProtection,
+  wp: import('../workbook/protection.js').WorkbookProtection,
 ): string | undefined {
   let attrs = '';
   const strAttrs = [
@@ -1145,7 +1145,7 @@ const escapeAttr = escapeXmlAttr;
  * allocated one — which matters when `mc:Ignorable` names those prefixes.
  */
 function serializeChildNode(
-  node: import('../xml/tree').XmlNode,
+  node: import('../xml/tree.js').XmlNode,
   inScopePrefixes?: Readonly<Record<string, string>>,
 ): string {
   const bytes = serializeXmlNode(node, {

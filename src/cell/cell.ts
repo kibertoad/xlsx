@@ -6,10 +6,10 @@
 // discriminated unions for the special CellValue shapes (formula, rich text,
 // duration, error).
 
-import { columnLetterFromIndex, MAX_COL, MAX_ROW } from '../utils/coordinate';
-import { OpenXmlSchemaError } from '../utils/exceptions';
-import { ERROR_CODES } from '../utils/inference';
-import { type RichText, richTextToString } from './rich-text';
+import { columnLetterFromIndex, MAX_COL, MAX_ROW } from '../utils/coordinate.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { ERROR_CODES } from '../utils/inference.js';
+import { type RichText, richTextToString } from './rich-text.js';
 
 /** Excel error tokens. */
 export type ExcelErrorCode = '#NULL!' | '#DIV/0!' | '#VALUE!' | '#REF!' | '#NAME?' | '#NUM!' | '#N/A' | '#GETTING_DATA';

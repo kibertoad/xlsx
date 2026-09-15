@@ -5,11 +5,11 @@
 // a fixed attr on those text elements via the schema layer's `text` element
 // kind.
 
-import { defineSchema, type Schema } from '../schema/core';
-import { fromTree, toTree } from '../schema/serialize';
-import { COREPROPS_NS, DCORE_NS, DCTERMS_NS, XSI_NS } from '../xml/namespaces';
-import { parseXml } from '../xml/parser';
-import { serializeXml } from '../xml/serializer';
+import { defineSchema, type Schema } from '../schema/core.js';
+import { fromTree, toTree } from '../schema/serialize.js';
+import { COREPROPS_NS, DCORE_NS, DCTERMS_NS, XSI_NS } from '../xml/namespaces.js';
+import { parseXml } from '../xml/parser.js';
+import { serializeXml } from '../xml/serializer.js';
 
 /**
  * Set of properties exposed under `docProps/core.xml`. All fields are optional;
@@ -102,7 +102,7 @@ export function corePropsFromBytes(bytes: Uint8Array | string): CoreProperties {
 
 // ---- Workbook ergonomic helpers ----------------------------------------
 
-import type { Workbook } from '../workbook/workbook';
+import type { Workbook } from '../workbook/workbook.js';
 
 const ensureCoreProperties = (wb: Workbook): CoreProperties => {
   if (!wb.properties) wb.properties = {};

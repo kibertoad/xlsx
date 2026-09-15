@@ -11,10 +11,10 @@ import {
   setItalic,
   setStrikethrough,
   setUnderline,
-} from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('setBold / setItalic / setStrikethrough', () => {
   it('toggle the corresponding boolean flag', () => {

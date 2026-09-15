@@ -5,8 +5,8 @@ import {
   addWorksheet,
   createWorkbook,
   replaceCellValuesInWorkbook,
-} from '../../src/workbook/workbook';
-import { setCell } from '../../src/worksheet/worksheet';
+} from '../../src/workbook/workbook.js';
+import { setCell } from '../../src/worksheet/worksheet.js';
 
 describe('replaceCellValuesInWorkbook', () => {
   it('replaces matches across every worksheet (string mode)', () => {

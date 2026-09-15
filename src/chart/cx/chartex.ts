@@ -1,5 +1,5 @@
-import type { ShapeProperties } from '../../drawing/dml/shape-properties';
-import type { TextBody } from '../../drawing/dml/text';
+import type { ShapeProperties } from '../../drawing/dml/shape-properties.js';
+import type { TextBody } from '../../drawing/dml/text.js';
 
 // Chartex (cx:) data model.
 //

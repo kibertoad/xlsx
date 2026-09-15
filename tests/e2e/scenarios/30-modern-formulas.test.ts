@@ -22,10 +22,10 @@
 // - F2 = VLOOKUP("Bob",A2:C8,3,FALSE) returns Bob's salary (88000).
 
 import { describe, expect, it } from 'vitest';
-import { addWorksheet, createWorkbook } from '../../../src/workbook/index';
-import { setCell } from '../../../src/worksheet/index';
-import { setFormula } from '../../../src/cell/cell';
-import { writeWorkbook } from '../_helpers';
+import { addWorksheet, createWorkbook } from '../../../src/workbook/index.js';
+import { setCell } from '../../../src/worksheet/index.js';
+import { setFormula } from '../../../src/cell/cell.js';
+import { writeWorkbook } from '../_helpers.js';
 
 describe('e2e 30 — single-value formulas', () => {
   it('writes 30-modern-formulas.xlsx', async () => {

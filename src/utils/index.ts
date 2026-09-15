@@ -1,7 +1,7 @@
 // Utility surfaces — coordinate / datetime / units / inference / escape /
 // css / exception types.
 
-export type { CellCoordinate, CellCoordinateNumeric, CellRangeBoundaries } from './coordinate';
+export type { CellCoordinate, CellCoordinateNumeric, CellRangeBoundaries } from './coordinate.js';
 export {
   boundariesToRangeString,
   columnIndexFromLetter,
@@ -19,8 +19,8 @@ export {
   parseSheetRange,
   rangeBoundaries,
   tupleToCoordinate,
-} from './coordinate';
-export type { ExcelEpoch } from './datetime';
+} from './coordinate.js';
+export type { ExcelEpoch } from './datetime.js';
 export {
   dateToExcel,
   durationToExcel,
@@ -30,10 +30,10 @@ export {
   MAC_EPOCH_MS,
   toIso8601,
   WINDOWS_EPOCH_MS,
-} from './datetime';
-export { cssRecordToInlineStyle } from './css';
-export { escapeCellString, unescapeCellString } from './escape';
-export type { OpenXmlErrorOptions } from './exceptions';
+} from './datetime.js';
+export { cssRecordToInlineStyle } from './css.js';
+export { escapeCellString, unescapeCellString } from './escape.js';
+export type { OpenXmlErrorOptions } from './exceptions.js';
 export {
   OpenXmlDecompressionBombError,
   OpenXmlError,
@@ -41,9 +41,9 @@ export {
   OpenXmlIoError,
   OpenXmlNotImplementedError,
   OpenXmlSchemaError,
-} from './exceptions';
-export type { CellDataType } from './inference';
-export { ERROR_CODES, inferCellType } from './inference';
+} from './exceptions.js';
+export type { CellDataType } from './inference.js';
+export { ERROR_CODES, inferCellType } from './inference.js';
 export {
   cmFromEmu,
   EMU_PER_CM,
@@ -59,4 +59,4 @@ export {
   pointFromEmu,
   pointToPixel,
   pxFromEmu,
-} from './units';
+} from './units.js';

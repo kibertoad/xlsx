@@ -1,19 +1,19 @@
 // Tests for the duplicateSheet workbook helper.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer } from '../../src/io/node';
-import { loadWorkbook } from '../../src/io/load';
-import { workbookToBytes } from '../../src/io/save';
-import { setCellFont } from '../../src/styles/cell-style';
-import { makeFont } from '../../src/styles/fonts';
-import { addWorksheet, createWorkbook, duplicateSheet, getSheet } from '../../src/workbook/workbook';
-import { addExcelTable } from '../../src/worksheet/table';
+import { fromBuffer } from '../../src/io/node.js';
+import { loadWorkbook } from '../../src/io/load.js';
+import { workbookToBytes } from '../../src/io/save.js';
+import { setCellFont } from '../../src/styles/cell-style.js';
+import { makeFont } from '../../src/styles/fonts.js';
+import { addWorksheet, createWorkbook, duplicateSheet, getSheet } from '../../src/workbook/workbook.js';
+import { addExcelTable } from '../../src/worksheet/table.js';
 import {
   setCell,
   setColumnWidth,
   setComment,
   type Worksheet,
-} from '../../src/worksheet/worksheet';
+} from '../../src/worksheet/worksheet.js';
 
 describe('duplicateSheet', () => {
   it('clones cells, dimensions, comments verbatim', () => {

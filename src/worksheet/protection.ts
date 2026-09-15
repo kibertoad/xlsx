@@ -71,7 +71,7 @@ export const makeSheetProtection = (opts: SheetProtection = {}): SheetProtection
 
 // ---- Worksheet ergonomic helpers ----------------------------------------
 
-import type { Worksheet } from './worksheet';
+import type { Worksheet } from './worksheet.js';
 
 /**
  * Excel's "Protect Sheet" defaults — when you click the dialog without changing

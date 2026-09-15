@@ -10,7 +10,7 @@ import type {
   TextBody,
   TextParagraph,
   TextRun,
-} from '../../src/drawing';
+} from '../../src/drawing/index.js';
 import {
   makeBreak,
   makeColor,
@@ -27,7 +27,7 @@ import {
   makeTextBody,
   PRESET_PATTERN_NAMES,
   SCHEME_COLOR_NAMES,
-} from '../../src/drawing';
+} from '../../src/drawing/index.js';
 
 describe('issues #55 + #56 — DML colour + fill + text helpers re-export from @office-kit/xlsx/drawing', () => {
   it('exposes makeSrgbColor / makeSchemeColor / makeColor as values', () => {
