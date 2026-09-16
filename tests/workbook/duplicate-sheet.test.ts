@@ -13,6 +13,7 @@ import {
   setColumnWidth,
   setComment,
   type Worksheet,
+  writeRange,
 } from '../../src/worksheet/worksheet.js';
 
 describe('duplicateSheet', () => {
@@ -45,7 +46,7 @@ describe('duplicateSheet', () => {
   it('renumbers tables + suffixes displayName to keep workbook uniqueness', () => {
     const wb = createWorkbook();
     const a = addWorksheet(wb, 'A');
-    setCell(a, 1, 1, 'h');
+    writeRange(a, 'A1', [['c1', 'c2']]);
     addExcelTable(wb, a, { name: 'Tbl', ref: 'A1:B2', columns: ['c1', 'c2'] });
 
     const b = duplicateSheet(wb, 'A', 'B');
@@ -60,7 +61,7 @@ describe('duplicateSheet', () => {
   it('custom tableSuffix is honoured', () => {
     const wb = createWorkbook();
     const a = addWorksheet(wb, 'A');
-    setCell(a, 1, 1, 'h');
+    writeRange(a, 'A1', [['c1', 'c2']]);
     addExcelTable(wb, a, { name: 'Tbl', ref: 'A1:B2', columns: ['c1', 'c2'] });
     const b = duplicateSheet(wb, 'A', 'B', { tableSuffix: '_dupe' });
     expect(b.tables[0]?.displayName).toBe('Tbl_dupe');

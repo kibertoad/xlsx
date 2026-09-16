@@ -38,6 +38,7 @@ import type { SortState } from './sort-state.js';
 import type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
 import { type Hyperlink, makeHyperlink } from './hyperlinks.js';
 import type { TableDefinition } from './table.js';
+import { validateTableAgainstSheet } from './table-validate.js';
 import { freezePaneRef, makeFreezePane, makeSheetView, type SheetView } from './views.js';
 
 export interface Worksheet {
@@ -1980,8 +1981,16 @@ export function getAutoFilter(ws: Worksheet): AutoFilter | undefined {
 
 // ---- tables --------------------------------------------------------------
 
-/** Append a table. The id and displayName must be workbook-unique — the caller is responsible. */
+/**
+ * Append a table, rejecting one whose geometry or column names disagree with
+ * the cells under it: the column count has to match the width of `ref`, `ref`
+ * has to contain the header and totals rows, column names have
+ * to be unique and non-empty, and every header cell has to hold its column's
+ * name as text. The id and displayName must be workbook-unique, and stay the
+ * caller's responsibility: neither is visible from a single sheet.
+ */
 export function addTable(ws: Worksheet, table: TableDefinition): TableDefinition {
+  validateTableAgainstSheet(ws, table);
   ws.tables.push(table);
   return table;
 }

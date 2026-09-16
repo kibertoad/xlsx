@@ -9,7 +9,7 @@
 
 import type { Workbook } from '../workbook/workbook.js';
 import type { AutoFilter } from './auto-filter.js';
-import type { Worksheet } from './worksheet.js';
+import { addTable, type Worksheet } from './worksheet.js';
 
 export interface TableColumn {
   /** 1-based column id (per-table). */
@@ -103,6 +103,9 @@ const nextTableId = (wb: Workbook): number => {
  * in one call. Auto-assigns the workbook-unique `id`, derives `displayName`
  * from the supplied `name`, and constructs `TableColumn` records (1-based ids)
  * from a string-array shorthand.
+ *
+ * Goes through {@link addTable}, so the definition is checked against the sheet
+ * before it lands. Pass `headerRowCount: 0` for a genuinely header-less table.
  */
 export const addExcelTable = (
   wb: Workbook,
@@ -138,6 +141,5 @@ export const addExcelTable = (
     ...(styleInfo ? { styleInfo } : {}),
     ...(opts.autoFilter ? { autoFilter: opts.autoFilter } : {}),
   });
-  ws.tables.push(def);
-  return def;
+  return addTable(ws, def);
 };
