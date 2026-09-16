@@ -2,7 +2,7 @@
 '@office-kit/xlsx': minor
 ---
 
-feat: `SaveOptions.mtime` for byte-identical output, and `compressionLevel` is now wired through
+feat!: `SaveOptions.mtime` for byte-identical output, and `compressionLevel` is now wired through
 
 ZIP has no "no timestamp" encoding, so fflate stamped the wall clock into every
 entry's local header and central-directory record. Two saves of the same workbook
