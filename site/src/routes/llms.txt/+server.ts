@@ -411,7 +411,7 @@ ws.views.push(makeSheetView({ pane: makeFreezePane('B2') }));   // freeze both
 
 \`\`\`ts
 import {
-  addExcelTable, addAutoFilter,
+  addExcelTable, writeRange, addAutoFilter,
   makeDataValidation, addDataValidation,
   makeCfRule, makeConditionalFormatting, addConditionalFormatting,
 } from '@office-kit/xlsx/worksheet';
@@ -419,6 +419,12 @@ import {
 // Excel Table — named range with banded styling and a filter dropdown on
 // every header. Use the higher-level addExcelTable; for full control,
 // makeTableDefinition + ws.tables.set(...).
+//
+// Write the header row first: addExcelTable checks that each header cell holds
+// its column name and that the counts match the range width, because Excel
+// repairs the file (dropping the table) when they disagree. headerRowCount: 0
+// skips the check for a header-less table.
+writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);
 addExcelTable(wb, ws, {
   name: 'Items',
   ref: 'A1:C4',

@@ -318,8 +318,12 @@ addDefinedName(wb, { name: 'Totals', value: 'Q1!$A$1:$A$10,Q2!$A$1:$A$10' });
 ### Promote a range to an Excel Table
 
 ```ts
-import { addExcelTable } from '@office-kit/xlsx/worksheet';
+import { addExcelTable, writeRange } from '@office-kit/xlsx/worksheet';
 
+// Write the header row first: addExcelTable checks that each header cell holds
+// its column name and that the counts match, because Excel repairs the file
+// (dropping the table) when they disagree.
+writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);
 addExcelTable(wb, ws, {
   name: 'Items',
   ref: 'A1:C4',

@@ -176,9 +176,10 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         source: tablesWithFilter,
         notes: [
           'Pass `style` for one-arg style selection or `styleInfo` for full control over banded rows / columns.',
-          'For just a filter without table styling, use `addAutoFilter(ws, "A1:C4")`.',
+          'Write the header row first: `addExcelTable` checks that each header cell already holds its column name, and that the column count matches the range width. Excel repairs a file where they disagree by dropping the table. Pass `headerRowCount: 0` for a genuinely header-less table.',
+          'For just a filter without table styling, use `setAutoFilter(ws, makeAutoFilter({ ref: "A1:C4" }))`.',
         ],
-        relatedApi: ['addExcelTable', 'addAutoFilter'],
+        relatedApi: ['addExcelTable', 'setAutoFilter', 'makeAutoFilter'],
       },
       {
         slug: 'dropdown-validation',
