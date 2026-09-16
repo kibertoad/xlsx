@@ -11,6 +11,7 @@ import formulas from './formulas.ts?raw';
 import addBarChart from './add-bar-chart.ts?raw';
 import insertImage from './insert-image.ts?raw';
 import tablesWithFilter from './tables-with-filter.ts?raw';
+import inputColumn from './input-column.ts?raw';
 import dropdownValidation from './dropdown-validation.ts?raw';
 import conditionalColorScale from './conditional-color-scale.ts?raw';
 import hyperlinks from './hyperlinks.ts?raw';
@@ -191,6 +192,19 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'Pass a sheet-relative formula (`=Sheet1!$A$1:$A$10`) instead of a literal array if the choices come from another range.',
         ],
         relatedApi: ['makeDataValidation', 'addDataValidation'],
+      },
+      {
+        slug: 'input-column',
+        title: 'A column the recipient fills in',
+        teaser:
+          'Excel\'s built-in "Input" style marks a column as editable; a decimal validation keeps what they type usable.',
+        path: 'site/src/lib/examples/recipes/input-column.ts',
+        source: inputColumn,
+        notes: [
+          '`ensureCell` reaches a blank cell without writing over it, so the style lands on an empty cell rather than one you just cleared.',
+          'Pair this with `setRangeProtection(wb, ws, "C2:C3", { locked: false })` and a sheet protection if the rest of the sheet should be read-only.',
+        ],
+        relatedApi: ['applyBuiltinStyle', 'ensureCell', 'makeDataValidation', 'addDataValidation'],
       },
       {
         slug: 'color-scale',

@@ -58,11 +58,18 @@ hides a real bug elsewhere). Just call `addWorksheet` directly.
 | --------------------------------------- | ----------------------------------- |
 | `ws['A1'] = 42`                         | `setCellByCoord(ws, 'A1', 42)`      |
 | `ws.cell(row=1, column=1, value=42)`    | `setCell(ws, 1, 1, 42)`             |
+| `ws.cell(row=1, column=1)`              | `ensureCell(ws, 1, 1)`              |
 | `ws['A1'].value`                        | `ws.rows.get(1)?.get(1)?.value`     |
 | `ws.iter_rows()`                        | `iterRows(ws)`                      |
 | `Cell(formula='=A1+B1')`                | `setFormula(cell, 'A1+B1')`         |
 
-Coordinates are 1-based on both sides. Cell values cover the same shapes
+Coordinates are 1-based on both sides. Watch the no-value row: openpyxl's
+`ws.cell(row=r, column=c)` hands back the cell as it stands, while `setCell`
+always writes its `value` argument (which is why the argument is mandatory).
+`ensureCell` is the get-or-create form, and it is what a styling or formula
+pass over already-populated rows should use.
+
+Cell values cover the same shapes
 openpyxl does:
 
 - numbers (`number`)

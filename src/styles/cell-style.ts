@@ -21,7 +21,7 @@ import type { Cell } from '../cell/cell.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { Workbook } from '../workbook/workbook.js';
 import { parseRange } from '../worksheet/cell-range.js';
-import { setCell, type Worksheet } from '../worksheet/worksheet.js';
+import { ensureCell, type Worksheet } from '../worksheet/worksheet.js';
 import type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignment.js';
 import { alignmentToCss, makeAlignment } from './alignment.js';
 import type { Border, SideStyle } from './borders.js';
@@ -314,8 +314,7 @@ export function setRangeStyle(
   // patch as for blanks.
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
-      let cell = ws.rows.get(r)?.get(c);
-      if (!cell) cell = setCell(ws, r, c);
+      const cell = ensureCell(ws, r, c);
       const next: CellXf = { ...currentXf(wb.styles, cell), ...patch };
       cell.styleId = addCellXf(wb.styles, next);
     }
@@ -461,8 +460,7 @@ export function setRangeWrapText(wb: Workbook, ws: Worksheet, range: string, on 
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
-      let cell = ws.rows.get(r)?.get(c);
-      if (!cell) cell = setCell(ws, r, c);
+      const cell = ensureCell(ws, r, c);
       wrapCellText(wb, cell, on);
     }
   }
@@ -497,8 +495,7 @@ export function setRangeAlignment(
   }
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
-      let cell = ws.rows.get(r)?.get(c);
-      if (!cell) cell = setCell(ws, r, c);
+      const cell = ensureCell(ws, r, c);
       const cur = currentXf(wb.styles, cell).alignment;
       setCellAlignment(wb, cell, mergeAlignment(cur, alignment));
     }
@@ -834,8 +831,7 @@ export function setRangeBorderBox(
       if (bottom !== undefined) sides.bottom = bottom;
       if (left !== undefined) sides.left = left;
       if (right !== undefined) sides.right = right;
-      let cell = ws.rows.get(r)?.get(col);
-      if (!cell) cell = setCell(ws, r, col);
+      const cell = ensureCell(ws, r, col);
       setCellBorder(wb, cell, makeBorder(sides));
     }
   }

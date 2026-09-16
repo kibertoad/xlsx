@@ -43,6 +43,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Build a small workbook → `Buffer` (Node) | `createWorkbook` + `addWorksheet` + `setCell` + `workbookToBuffer` |
 | Edit one cell of an existing file (Node) | `loadWorkbook` + `fromFile` + `setCell` + `saveWorkbook` + `toFile` |
 | Append rows to a worksheet | `appendRow` (or `appendRows`) |
+| Reach a cell without overwriting its value | `ensureCell` |
 
 ### Stream-write (huge sheets)
 
@@ -69,6 +70,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Promote a range to an Excel Table | `addExcelTable` |
 | AutoFilter on a header row (no table styling) | `addAutoFilter` |
 | Dropdown data validation | `makeDataValidation` + `addDataValidation` |
+| A column the recipient fills in | `applyBuiltinStyle` + `addDataValidation` |
 | Heat-map (3-color scale) | `makeCfRule` + `addConditionalFormatting` |
 
 ### Drawings
@@ -229,6 +231,17 @@ appendRows(ws, [
 ]);
 ```
 
+### Reach a cell without overwriting its value
+
+```ts
+import { setFormula } from '@office-kit/xlsx/cell';
+import { ensureCell } from '@office-kit/xlsx/worksheet';
+
+// setCell always writes its value argument, so `setCell(ws, 4, 1, null)` over a
+// populated cell blanks it. ensureCell allocates only when the cell is missing.
+setFormula(ensureCell(ws, 4, 1), 'SUM(A1:A3)');
+```
+
 ### Stream-write millions of rows to a file
 
 ```ts
@@ -281,10 +294,9 @@ setCellNumberFormat(wb, setCell(ws, 1, 1, new Date()), FORMAT_DATE_DATETIME);
 
 ```ts
 import { setFormula } from '@office-kit/xlsx/cell';
-import { setCell } from '@office-kit/xlsx/worksheet';
+import { ensureCell } from '@office-kit/xlsx/worksheet';
 
-const c = setCell(ws, 3, 1, null);
-setFormula(c, 'SUM(A1:A2)', { cachedValue: 42 });
+setFormula(ensureCell(ws, 3, 1), 'SUM(A1:A2)', { cachedValue: 42 });
 ```
 
 ### Make a cell clickable
@@ -348,6 +360,21 @@ addDataValidation(
     sqref: 'B2:B100',
     formula1: '"red,green,blue"',
   }),
+);
+```
+
+### A column the recipient fills in
+
+```ts
+import { applyBuiltinStyle } from '@office-kit/xlsx/styles';
+import { addDataValidation, ensureCell, makeDataValidation } from '@office-kit/xlsx/worksheet';
+
+for (let row = 2; row <= 20; row++) {
+  applyBuiltinStyle(wb, ensureCell(ws, row, 3), 'Input');
+}
+addDataValidation(
+  ws,
+  makeDataValidation({ type: 'decimal', operator: 'between', sqref: 'C2:C20', formula1: '0', formula2: '10' }),
 );
 ```
 

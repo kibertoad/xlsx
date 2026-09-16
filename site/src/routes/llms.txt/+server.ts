@@ -55,7 +55,7 @@ name, you know where to import it from.
 | \`@office-kit/xlsx/node\`        | Node-fs bridges: \`fromFile\`, \`fromFileSync\`, \`fromBuffer\`, \`fromReadable\`, \`toFile\`, \`toWritable\`, \`toBuffer\`, \`workbookToBuffer\` |
 | \`@office-kit/xlsx/streaming\`   | \`loadWorkbookStream\`, \`createWriteOnlyWorkbook\` + their type surface (\`ReadOnlyWorkbook\`, \`ReadOnlyWorksheet\`, \`ReadOnlyCell\`, \`IterRowsOptions\`, \`LoadWorkbookStreamOptions\`, \`WriteOnlyWorkbook\`, \`WriteOnlyWorksheet\`, \`WriteOnlyOptions\`, \`WriteOnlyRowItem\`, \`WriteOnlyStyle\`) |
 | \`@office-kit/xlsx/workbook\`    | \`createWorkbook\`, \`addWorksheet\`, \`addChartsheet\`, \`addDefinedName\`, \`makeWorkbookProtection\`, \`makeWorkbookView\` / \`makeCustomWorkbookView\`, \`makeCalcProperties\`, \`makeWorkbookProperties\`, \`makeFileVersion\`, \`makeFileSharing\`, \`makeFileRecoveryProperties\`, \`makeSmartTagProperties\` / \`makeSmartTagType\`, \`makeFunctionGroup\` / \`makeFunctionGroups\` |
-| \`@office-kit/xlsx/worksheet\`   | \`setCell\`, \`setCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`addAutoFilter\` / \`addAutoFilterColumn\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
+| \`@office-kit/xlsx/worksheet\`   | \`setCell\` (value is mandatory and always replaces), \`ensureCell\` (get-or-create, never overwrites), \`setCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`addAutoFilter\` / \`addAutoFilterColumn\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
 | \`@office-kit/xlsx/cell\`        | \`makeCell\`, \`getCoordinate\`, \`setCellValue\`, \`bindValue\`, \`setFormula\` / \`setSharedFormula\` / \`setArrayFormula\` / \`setDataTableFormula\`, \`makeErrorValue\` / \`makeDurationValue\`, \`makeRichText\` / \`makeTextRun\` / \`richTextToString\`, predicates (\`isFormulaCell\`, \`isRichTextCell\`, \`isEmptyCell\`, \`isMergedCell\`, \`isErrorCell\`, \`isFormulaValue\`, \`isRichTextValue\`, \`isErrorValue\`, \`isDurationValue\`), and value coercers (\`cellValueAsString\`, \`cellValueAsBoolean\`, \`cellValueAsDate\`, \`cellValueAsNumber\`, \`cellValueAsPrimitive\`); types \`Cell\`, \`CellValue\`, \`MergedCell\`, \`FormulaValue\`, \`RichText\`, \`TextRun\`, \`InlineFont\`, \`ExcelErrorCode\` |
 | \`@office-kit/xlsx/styles\`      | Per-cell: \`setBold\`, \`setFontSize\`, \`setFontName\`, \`setFontColor\`, \`setCellFont\`, \`setCellFill\`, \`setCellBorder\` / \`setCellBorderAll\`, \`setCellAlignment\` / \`centerCell\`, \`setCellProtection\`, \`setCellNumberFormat\`, \`setCellStyle\`, \`setCellBackgroundColor\`, \`setCellAsCurrency\`, \`setCellAsPercent\`, \`setCellAsDate\`, \`setCellAsNumber\`. Range-wide \`setRange*\` variants for the same axes. Built-in format constants \`FORMAT_GENERAL\`, \`FORMAT_TEXT\`, \`FORMAT_NUMBER\`, \`FORMAT_NUMBER_00\`, \`FORMAT_PERCENTAGE\`, \`FORMAT_PERCENTAGE_00\`, \`FORMAT_DATE_DATETIME\`, etc. Named-style + DXF (differential format) APIs |
 | \`@office-kit/xlsx/chart\`       | Legacy \`c:\` chart kinds — \`makeBarChart\`, \`makeLineChart\`, \`makeAreaChart\`, \`makePieChart\`, \`makeDoughnutChart\`, \`makeScatterChart\`, \`makeRadarChart\`, \`makeBubbleChart\`, \`makeStockChart\`, \`makeSurfaceChart\`, \`makeOfPieChart\`. Series builder \`makeBarSeries\`. Top-level wrapper \`makeChartSpace\`. Modern \`cx:\` chartex kinds — \`makeSunburstChart\`, \`makeTreemapChart\`, \`makeWaterfallChart\`, \`makeHistogramChart\`, \`makeParetoChart\`, \`makeFunnelChart\`, \`makeBoxWhiskerChart\`, \`makeRegionMapChart\` |
@@ -95,6 +95,9 @@ Bundle budgets, min + brotli:
   \`\`\`
 - \`setCell(sheet, row, col, value)\` returns the \`Cell\` it created, so you
   can chain it into \`setFormula\`, \`setBold\`, \`setCellNumberFormat\`, etc.
+  \`value\` is mandatory and always replaces what is there: use
+  \`ensureCell(ws, row, col)\` to reach a cell you are about to style or attach
+  a formula to, or a styling pass over populated rows will blank them.
 - For A1-style addressing, prefer \`setCellByCoord(ws, 'A1', value)\` /
   \`getCellByCoord(ws, 'A1')\`.
 - To convert between A1 and row/col, use the helpers in \`@office-kit/xlsx/utils\`
@@ -195,7 +198,7 @@ URL.revokeObjectURL(url);
 \`\`\`ts
 import { workbookToBytes } from '@office-kit/xlsx/io';
 import { createWorkbook, addWorksheet, addDefinedName } from '@office-kit/xlsx/workbook';
-import { setCell, mergeCells, makeFreezePane, makeSheetView } from '@office-kit/xlsx/worksheet';
+import { setCell, ensureCell, mergeCells, makeFreezePane, makeSheetView } from '@office-kit/xlsx/worksheet';
 import { setFormula } from '@office-kit/xlsx/cell';
 import { setBold, centerCell } from '@office-kit/xlsx/styles';
 
@@ -216,7 +219,7 @@ setCell(ws, 3, 2, 12_400);
 setCell(ws, 4, 1, 'EU');
 setCell(ws, 4, 2, 9_800);
 
-setFormula(setCell(ws, 5, 2, null), 'SUM(B3:B4)', { cachedValue: 22_200 });
+setFormula(ensureCell(ws, 5, 2), 'SUM(B3:B4)', { cachedValue: 22_200 });
 
 // Freeze header
 ws.views.push(makeSheetView({ pane: makeFreezePane('A3') }));
@@ -352,16 +355,16 @@ means opaque; \`80\` would be 50% alpha.
 
 \`\`\`ts
 import { setFormula, setSharedFormula, setArrayFormula } from '@office-kit/xlsx/cell';
-import { setCell } from '@office-kit/xlsx/worksheet';
+import { ensureCell } from '@office-kit/xlsx/worksheet';
 
 // Plain formula with optional cached value
-setFormula(setCell(ws, 3, 1, null), 'SUM(A1:A2)', { cachedValue: 42 });
+setFormula(ensureCell(ws, 3, 1), 'SUM(A1:A2)', { cachedValue: 42 });
 
 // Array formula (CSE — host range describes the spill area)
-setArrayFormula(setCell(ws, 1, 3, null), 'TRANSPOSE(A1:A3)', { ref: 'C1:C3' });
+setArrayFormula(ensureCell(ws, 1, 3), 'TRANSPOSE(A1:A3)', { ref: 'C1:C3' });
 
 // Shared formula (Excel optimization for runs of similar formulas)
-setSharedFormula(setCell(ws, 2, 1, null), '=A1*2', { si: 0, master: true, ref: 'A2:A10' });
+setSharedFormula(ensureCell(ws, 2, 1), '=A1*2', { si: 0, master: true, ref: 'A2:A10' });
 \`\`\`
 
 \`cachedValue\` is optional. Excel will recalc on open anyway, but providing
@@ -586,6 +589,7 @@ externally first, then load the resulting plain xlsx.
 | Currency / percent | \`setCellAsCurrency\` / \`setCellAsPercent\` |
 | Date number format | \`setCellNumberFormat\` + \`FORMAT_DATE_DATETIME\` |
 | Formula with cached value | \`setCell\` + \`setFormula\` |
+| Reach a cell without blanking it | \`ensureCell\` |
 | Hyperlink | \`setHyperlink\` |
 | Merge + freeze header | \`mergeCells\` + \`makeFreezePane\` + \`makeSheetView\` |
 | Defined name across sheets | \`addDefinedName\` |

@@ -5,7 +5,7 @@ import { setFormula } from '@office-kit/xlsx/cell';
 import { saveWorkbook } from '@office-kit/xlsx/io';
 import { toFile } from '@office-kit/xlsx/node';
 import { addDefinedName, addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook';
-import { setCell } from '@office-kit/xlsx/worksheet';
+import { ensureCell, setCell } from '@office-kit/xlsx/worksheet';
 
 const wb = createWorkbook();
 const inputs = addWorksheet(wb, 'Inputs');
@@ -20,6 +20,6 @@ addDefinedName(wb, { name: 'Revenue', value: 'Inputs!$B$1' });
 addDefinedName(wb, { name: 'Cost', value: 'Inputs!$B$2' });
 
 setCell(summary, 1, 1, 'Margin');
-setFormula(setCell(summary, 1, 2), '(Revenue - Cost) / Revenue', { cachedValue: 0.35 });
+setFormula(ensureCell(summary, 1, 2), '(Revenue - Cost) / Revenue', { cachedValue: 0.35 });
 
 await saveWorkbook(wb, toFile('multi-sheet.xlsx'));
