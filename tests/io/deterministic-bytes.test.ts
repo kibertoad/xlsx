@@ -12,6 +12,7 @@ import { createWriteOnlyWorkbook } from '../../src/streaming/write-only.js';
 import { OpenXmlIoError } from '../../src/utils/exceptions.js';
 import { addWorksheet, createWorkbook, getSheet } from '../../src/workbook/workbook.js';
 import { appendRows, getCell } from '../../src/worksheet/worksheet.js';
+import { createZipWriter } from '../../src/zip/writer.js';
 
 const STAMP = new Date(Date.UTC(2026, 0, 2, 3, 4, 0));
 const STAMP_ISO = STAMP.toISOString();
@@ -126,15 +127,64 @@ describe('deterministic output', () => {
   });
 });
 
-// fflate encodes the DOS stamp with local-time getters, so the writer offsets
-// the date before handing it over. Without that, a golden file committed from a
-// laptop does not match the one CI renders from the same input.
+// Pinned headers must agree even when UTC components describe a local DST gap.
 describe('a pinned stamp survives the machine it was rendered on', () => {
   const original = process.env['TZ'];
 
   afterEach(() => {
     if (original === undefined) delete process.env['TZ'];
     else process.env['TZ'] = original;
+  });
+
+  it.each([
+    ['America/New_York', '2026-03-08T02:30:00Z'],
+    ['America/New_York', '2026-11-01T02:30:00Z'],
+    ['Europe/Berlin', '2026-03-29T02:30:00Z'],
+    ['Pacific/Apia', '2011-12-30T12:00:00Z'],
+  ])('preserves UTC components across clock transitions in %s (%s)', async (zone, iso) => {
+    const mtime = new Date(iso);
+    process.env['TZ'] = 'UTC';
+    const utc = await workbookToBytes(buildReport(), { mtime });
+    process.env['TZ'] = zone;
+    const local = await workbookToBytes(buildReport(), { mtime });
+    expect(firstEntryStamp(local)).toBe(iso.replace('T', ' ').replace('Z', ''));
+    expect(local).toEqual(utc);
+  });
+
+  it('pins local and central headers without modifying stored payloads', async () => {
+    process.env['TZ'] = 'America/New_York';
+    const mtime = new Date('2026-03-08T02:30:00Z');
+    const payload = new Uint8Array(40);
+    new DataView(payload.buffer).setUint32(0, 0x04034b50, true);
+    const sink = toBuffer();
+    const zip = createZipWriter(sink, { mtime });
+    await zip.addEntry('stored', payload, { compress: false });
+    const entry = zip.addStreamingEntry('streamed', { compress: false });
+    entry.write(payload);
+    await entry.end();
+    await zip.finalize();
+    const bytes = sink.result();
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const end = bytes.byteLength - 22;
+    let central = view.getUint32(end + 16, true);
+    for (let i = 0; i < 2; i++) {
+      expect(view.getUint32(central, true)).toBe(0x02014b50);
+      const local = view.getUint32(central + 42, true);
+      expect(firstEntryStamp(bytes.subarray(local))).toBe('2026-03-08 02:30:00');
+      expect(view.getUint32(central + 12, true)).toBe(view.getUint32(local + 10, true));
+      const data = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+      expect(new Uint8Array(bytes.subarray(data, data + payload.length))).toEqual(payload);
+      central += 46 + view.getUint16(central + 28, true) + view.getUint16(central + 30, true) + view.getUint16(central + 32, true);
+    }
+  });
+
+  it.each([
+    ['1980-01-01T00:00:00Z', '1980-01-01 00:00:00'],
+    ['2099-12-31T23:59:59Z', '2099-12-31 23:59:58'],
+  ])('preserves boundary dates at ZIP resolution: %s', async (iso, expected) => {
+    process.env['TZ'] = 'Pacific/Kiritimati';
+    const bytes = await workbookToBytes(buildReport(), { mtime: new Date(iso) });
+    expect(firstEntryStamp(bytes)).toBe(expected);
   });
 
   it('renders the same bytes in two timezones', async () => {

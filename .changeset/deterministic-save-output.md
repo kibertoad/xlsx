@@ -18,8 +18,8 @@ The stamp records the date's UTC wall time, so the archive is the same on every
 machine. ZIP's DOS date field carries no timezone, and fflate reads a `Date`
 through local-time getters, which would have made the bytes depend on the writer's
 `TZ`: a golden file committed from a laptop would not match the one CI renders
-from the same input. A date whose year falls outside 1980-2099, the range the
-field can hold, is rejected with an `OpenXmlIoError` before anything is written
+from the same input. A date whose year falls outside 1980-2099, the range supported by
+the ZIP backend, is rejected with an `OpenXmlIoError` before anything is written
 rather than part-way through the first entry. Resolution is two seconds, per the
 format.
 
@@ -31,5 +31,7 @@ no longer typechecks, and the value is now honoured, so output that silently cam
 back at fflate's default level 6 changes in size and in bytes. A level outside
 `0..9` throws instead of falling back to fflate's default, which is what the old
 "Reserved" option effectively did. `CompressionLevel` is exported from
-`@office-kit/xlsx/io` and `@office-kit/xlsx/streaming` alongside the options types
-that use it.
+`@office-kit/xlsx/zip`, alongside `ZipWriterOptions`.
+
+UTC timestamps remain identical across daylight-saving transitions, including
+local times that do not exist in the writer’s timezone.

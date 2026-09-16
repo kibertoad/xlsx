@@ -25,11 +25,17 @@ import { OpenXmlIoError } from '../utils/exceptions.js';
 import { applyZip64EntryCountPatch } from './zip64-patch.js';
 
 const ZIP32_MAX_ENTRIES = 0xffff;
+const LOCAL_TIMESTAMP_OFFSET = 10;
+const CENTRAL_TIMESTAMP_OFFSET = 12;
+const CENTRAL_HEADER_SIZE = 46;
+const CENTRAL_NAME_LENGTH_OFFSET = 28;
+const CENTRAL_EXTRA_LENGTH_OFFSET = 30;
+const CENTRAL_COMMENT_LENGTH_OFFSET = 32;
 
 /** Deflate effort: 0 skips compression, 9 is the slowest and smallest. */
 export type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
-/** ZIP's DOS date field cannot express a year outside this range. */
+/** Supported year range of the fflate ZIP backend. */
 const MIN_ZIP_YEAR = 1980;
 const MAX_ZIP_YEAR = 2099;
 
@@ -102,26 +108,8 @@ export interface StreamingEntryWriter {
   end(): Promise<void>;
 }
 
-/**
- * ZIP writer backed by fflate's streaming `Zip` class. Entries are pushed
- * through `ZipDeflate` / `ZipPassThrough` streams as they arrive, so peak
- * memory stays at the size of the in-flight entry plus the output buffer rather
- * than the full archive.
- *
- * The sink contract is `toBytes()`, but that name is historical: the sink is
- * driven by a chunked `write(chunk)` API that fans bytes out as they arrive.
- * The buffered Node/browser sinks (`toBuffer`, `toBlob`, `toArrayBuffer`)
- * concatenate the chunks for a single-shot result; streaming sinks
- * (`toFile`, `toWritable`) forward each chunk to disk / the wrapped writable
- * without ever holding the full archive resident. Either kind plugs in here.
- */
-/**
- * fflate reads `mtime` with local-time getters, so the same pinned Date lands
- * in different header bytes in each timezone. Offsetting by the zone puts the
- * date's UTC wall time in the field on every machine, which is the whole point
- * of pinning it.
- */
-const toZipStamp = (mtime: Date): Date => {
+/** Encode UTC components directly: local dates cannot represent a DST gap. */
+const toZipStamp = (mtime: Date): number => {
   const ms = mtime.getTime();
   if (Number.isNaN(ms)) {
     throw new OpenXmlIoError('createZipWriter: mtime is an invalid Date');
@@ -129,10 +117,15 @@ const toZipStamp = (mtime: Date): Date => {
   const year = mtime.getUTCFullYear();
   if (year < MIN_ZIP_YEAR || year > MAX_ZIP_YEAR) {
     throw new OpenXmlIoError(
-      `createZipWriter: mtime ${mtime.toISOString()} is outside the range a ZIP timestamp can hold (${MIN_ZIP_YEAR}-${MAX_ZIP_YEAR})`,
+      `createZipWriter: mtime ${mtime.toISOString()} is outside the supported ZIP timestamp range (${MIN_ZIP_YEAR}-${MAX_ZIP_YEAR})`,
     );
   }
-  return new Date(ms + mtime.getTimezoneOffset() * 60_000);
+  return ((year - MIN_ZIP_YEAR) << 25)
+    | ((mtime.getUTCMonth() + 1) << 21)
+    | (mtime.getUTCDate() << 16)
+    | (mtime.getUTCHours() << 11)
+    | (mtime.getUTCMinutes() << 5)
+    | (mtime.getUTCSeconds() >> 1);
 };
 
 /**
@@ -146,6 +139,19 @@ const validateCompressionLevel = (level: number): void => {
   }
 };
 
+/**
+ * ZIP writer backed by fflate's streaming `Zip` class. Entries are pushed
+ * through `ZipDeflate` / `ZipPassThrough` streams as they arrive, so peak
+ * memory stays at the size of the in-flight entry plus the output buffer rather
+ * than the full archive.
+ *
+ * The sink contract is `toBytes()`, but that name is historical: the sink is
+ * driven by a chunked `write(chunk)` API that fans bytes out as they arrive.
+ * The buffered Node/browser sinks (`toBuffer`, `toBlob`, `toArrayBuffer`)
+ * concatenate the chunks for a single-shot result; streaming sinks
+ * (`toFile`, `toWritable`) forward each chunk to disk / the wrapped writable
+ * without ever holding the full archive resident. Either kind plugs in here.
+ */
 export function createZipWriter(sink: XlsxSink, opts: ZipWriterOptions = {}): ZipWriter {
   // Both options are checked before the sink is opened: a bad one otherwise
   // surfaces from fflate half-way through the first entry, by which time a file
@@ -154,11 +160,16 @@ export function createZipWriter(sink: XlsxSink, opts: ZipWriterOptions = {}): Zi
   const stamp = opts.mtime === undefined ? undefined : toZipStamp(opts.mtime);
   const writer = sink.toBytes();
   const deflateOpts = opts.compressionLevel === undefined ? undefined : { level: opts.compressionLevel };
-  // ZipDeflate's constructor only accepts compression options, so mtime is set
-  // on the entry afterwards; fflate reads the field when it emits the headers.
+  let pendingLocalHeader = false;
+  // fflate clones mtime and reads local getters, so even a Date subclass cannot
+  // represent UTC times in a local DST gap. Give it a safe placeholder and patch
+  // only its header chunks below; payload chunks must never be signature-scanned.
   const newEntry = (path: string, compress: boolean): ZipDeflate | ZipPassThrough => {
     const file = compress ? new ZipDeflate(path, deflateOpts) : new ZipPassThrough(path);
-    if (stamp !== undefined) file.mtime = stamp;
+    if (stamp !== undefined) {
+      file.mtime = new Date(2000, 0, 1);
+      pendingLocalHeader = true;
+    }
     return file;
   };
   let finalised: Promise<Uint8Array> | undefined;
@@ -183,6 +194,23 @@ export function createZipWriter(sink: XlsxSink, opts: ZipWriterOptions = {}): Zi
     // ZipDeflate emits an empty trailer chunk on the final callback even when
     // there are no bytes; guard against pushing an undefined chunk.
     if (chunk && chunk.byteLength > 0) {
+      if (stamp !== undefined && (final || pendingLocalHeader)) {
+        const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+        if (final) {
+          // fflate emits the complete central directory plus EOCD as one chunk.
+          let offset = 0;
+          for (let i = 0; i < seen.size; i++) {
+            view.setUint32(offset + CENTRAL_TIMESTAMP_OFFSET, stamp, true);
+            offset += CENTRAL_HEADER_SIZE + view.getUint16(offset + CENTRAL_NAME_LENGTH_OFFSET, true)
+              + view.getUint16(offset + CENTRAL_EXTRA_LENGTH_OFFSET, true)
+              + view.getUint16(offset + CENTRAL_COMMENT_LENGTH_OFFSET, true);
+          }
+        } else if (pendingLocalHeader) {
+          // With one entry open at a time, its first chunk is the local header.
+          view.setUint32(LOCAL_TIMESTAMP_OFFSET, stamp, true);
+          pendingLocalHeader = false;
+        }
+      }
       if (final) {
         // Buffer the trailing CD + EOCD block; written after possible patch.
         finalChunk = chunk;

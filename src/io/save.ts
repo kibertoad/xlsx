@@ -95,7 +95,7 @@ export interface SaveOptions {
    * golden-file tests and content-addressed caches need.
    *
    * Recorded as the date's UTC wall time, to ZIP's two-second resolution; the
-   * year has to fall in 1980-2099, which is all the DOS field can hold.
+   * year has to fall in 1980-2099, the range supported by the ZIP backend.
    */
   mtime?: Date;
   /** Deflate level, 0 (no compression) to 9 (smallest). Defaults to fflate's own 6. */

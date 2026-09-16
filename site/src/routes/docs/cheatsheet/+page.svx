@@ -47,7 +47,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Empty a cell but keep its formatting | `setCell` with `null` |
 | Remove a cell, formatting included | `deleteCell` (or `clearRange`) |
 | Assert on a workbook you just generated | `loadWorkbook` + `fromArrayBuffer` + `getSheet` |
-| Same bytes every time for the same input | `workbookToBytes({ mtime })` |
+| Same bytes every time for the same input | `workbookToBytes(wb, { mtime })` |
 
 ### Stream-write (huge sheets)
 
