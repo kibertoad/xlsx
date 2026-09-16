@@ -16,6 +16,7 @@ input produces identical bytes.
 
 `SaveOptions.compressionLevel` was declared but documented as "Reserved" and never
 read; it now reaches fflate's deflate stream on both the buffered and the streaming
-writer, and is typed `0 | 1 | ... | 9` rather than `number`. That narrowing is the
-only breaking part of this change: `{ compressionLevel: someNumber }` no longer
-typechecks, though it never did anything either.
+writer, and is typed `0 | 1 | ... | 9` rather than `number`. Two things change for
+callers who already set it: the type narrows, so `{ compressionLevel: someNumber }`
+no longer typechecks, and the value is now honoured, so output that silently came
+back at fflate's default level 6 changes in size and in bytes.
