@@ -69,7 +69,7 @@ describe('ensureCell under a merge', () => {
     expect(getCell(ws, 1, 2)).toBeUndefined();
 
     ensureCell(ws, 1, 2);
-    const out = new TextDecoder().decode(worksheetToBytes(ws, { sharedStrings: makeSharedStrings() }));
+    const out = new TextDecoder().decode(worksheetToBytes(ws, { sharedStrings: makeSharedStrings(), styles: wb.styles }));
     expect(out).toContain('<c r="B1"/>');
     expect(getCell(ws, 1, 1)?.value).toBe('title');
   });

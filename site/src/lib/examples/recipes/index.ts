@@ -6,6 +6,7 @@
 import openAndIterate from './open-and-iterate.ts?raw';
 import buildFromScratch from './build-from-scratch.ts?raw';
 import styleCells from './style-cells.ts?raw';
+import reportStyles from './report-styles.ts?raw';
 import numberFormats from './number-formats.ts?raw';
 import formulas from './formulas.ts?raw';
 import addBarChart from './add-bar-chart.ts?raw';
@@ -110,6 +111,8 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         source: styleCells,
         notes: [
           'These helpers are *cell-level* shortcuts. For range-wide changes, look at `setRangeFont`, `setRangeAlignment`, `setRangeBorderBox`, etc.',
+          '`setBold` and friends merge into the existing font. `setCellFont` replaces it whole, which drops the workbook default (Calibri 11) unless the `Font` you pass is complete. Use `patchCellFont` to change several fields at once.',
+          'Styling a whole report cell by cell adds up. `registerCellStyle` (next recipe) builds each look once and hands you an id the write itself carries.',
           'Background colors are hex `AARRGGBB` strings — leading `FF` is opaque alpha.',
         ],
         relatedApi: [
@@ -119,6 +122,20 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'centerCell',
           'setCellBorderAll',
         ],
+      },
+      {
+        slug: 'report-styles',
+        title: 'Style a whole report by style id',
+        teaser:
+          '`registerCellStyle` returns a `styleId`; `setCell` and `appendRow` take it, so formatting arrives with the value instead of in a second pass.',
+        path: 'site/src/lib/examples/recipes/report-styles.ts',
+        source: reportStyles,
+        notes: [
+          'A `styleId` is a complete style, not a patch: an axis you leave out of the spec renders as the workbook default even if the target cell had something there.',
+          'Equal specs dedup to one xf, so reusing three ids across a thousand rows costs three records.',
+          '`styleIds` are column-indexed, and `appendRows` reuses them for every row. A column with an id is written even when its value is empty, which is how a bordered-but-blank input column survives the append; it also means ids past a row\'s last value widen the sheet.',
+        ],
+        relatedApi: ['registerCellStyle', 'setCell', 'appendRow', 'patchCellFont'],
       },
       {
         slug: 'number-formats',
@@ -164,7 +181,7 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'Merge a title across columns, then freeze row 1 so it stays put while scrolling.',
         path: 'site/src/lib/examples/recipes/merge-and-freeze.ts',
         source: mergeAndFreeze,
-        relatedApi: ['mergeCells', 'makeFreezePane', 'makeSheetView'],
+        relatedApi: ['mergeCells', 'setFreezePanes'],
       },
       {
         slug: 'hyperlinks',

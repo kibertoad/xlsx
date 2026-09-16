@@ -11,6 +11,7 @@
 
 import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell.js';
 import type { Relationships } from '../packaging/relationships.js';
+import type { Stylesheet } from '../styles/stylesheet.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import { escapeCellString, escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
@@ -46,6 +47,12 @@ const HYPERLINK_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/200
 export interface WorksheetWriteContext {
   /** Accumulator the writer mutates as it emits string cells. */
   sharedStrings: SharedStringsTable;
+  /**
+   * Stylesheet the sheet's cells resolve their `styleId` against. Held live
+   * rather than as a count, because the write-only path grows the pool while
+   * rows stream out.
+   */
+  styles: Stylesheet;
   /**
    * Workbook epoch for `Date` / `{kind:'duration'}` cell serialisation. `true`
    * = Mac 1904 epoch; `false` (default) = Windows 1900 epoch. Modern Excel
@@ -136,7 +143,14 @@ function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
     parts.push(`<row r="${rowIdx}"${dimAttrs}>`);
     for (const colIdx of colKeys) {
       const cell = row.get(colIdx);
-      if (cell) parts.push(serializeCell(cell, ctx));
+      if (!cell) continue;
+      // styleId 0 emits no `s=` attribute at all, so it stays legal even on the
+      // empty pool an unstyled workbook carries.
+      if (cell.styleId !== 0 &&
+          (!Number.isInteger(cell.styleId) || cell.styleId < 0 || cell.styleId >= ctx.styles.cellXfs.length)) {
+        throw unknownStyleId(cell, ws.title, ctx.styles.cellXfs.length);
+      }
+      parts.push(serializeCell(cell, ctx));
     }
     parts.push('</row>');
   }
@@ -269,6 +283,21 @@ const serializeDimension = (ws: Worksheet): string => {
   const ref = minRow === maxRow && minCol === maxCol ? `${col1}${minRow}` : `${col1}${minRow}:${col2}${maxRow}`;
   return `<dimension ref="${ref}"/>`;
 };
+
+/**
+ * Excel resolves `<c s="n">` against `cellXfs`, and refuses to open a sheet
+ * whose `n` names no entry: the file loads with the repair dialog and the sheet
+ * is dropped. A `styleId` that leaves the pool it came from is the way to get
+ * there, most often an id from `registerCellStyle` applied to a cell in a
+ * different workbook, so refuse to emit rather than write a file Excel will
+ * reject.
+ */
+const unknownStyleId = (cell: Cell, sheetTitle: string, xfCount: number): OpenXmlSchemaError =>
+  new OpenXmlSchemaError(
+    `Cell ${getCoordinate(cell)} on sheet "${sheetTitle}" has styleId ${cell.styleId}, ` +
+      `outside this workbook's cellXfs pool [0, ${xfCount}). A styleId is an index into one ` +
+      `workbook's stylesheet; ids from registerCellStyle are valid only for the workbook that produced them.`,
+  );
 
 const colLetters = (n: number): string => {
   let m = n;

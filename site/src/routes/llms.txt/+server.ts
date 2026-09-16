@@ -55,9 +55,9 @@ name, you know where to import it from.
 | \`@office-kit/xlsx/node\`        | Node-fs bridges: \`fromFile\`, \`fromFileSync\`, \`fromBuffer\`, \`fromReadable\`, \`toFile\`, \`toWritable\`, \`toBuffer\`, \`workbookToBuffer\` |
 | \`@office-kit/xlsx/streaming\`   | \`loadWorkbookStream\`, \`createWriteOnlyWorkbook\` + their type surface (\`ReadOnlyWorkbook\`, \`ReadOnlyWorksheet\`, \`ReadOnlyCell\`, \`IterRowsOptions\`, \`LoadWorkbookStreamOptions\`, \`WriteOnlyWorkbook\`, \`WriteOnlyWorksheet\`, \`WriteOnlyOptions\`, \`WriteOnlyRowItem\`, \`WriteOnlyStyle\`) |
 | \`@office-kit/xlsx/workbook\`    | \`createWorkbook\`, \`addWorksheet\`, \`addChartsheet\`, \`addDefinedName\`, \`makeWorkbookProtection\`, \`makeWorkbookView\` / \`makeCustomWorkbookView\`, \`makeCalcProperties\` + the calc-option setters (\`setCalcMode\`, \`setIterativeCalc\`, \`setCalcOnSave\`, \`setFullCalcOnLoad\`, \`setFullPrecision\`), \`makeWorkbookProperties\`, \`makeFileVersion\`, \`makeFileSharing\`, \`makeFileRecoveryProperties\`, \`makeSmartTagProperties\` / \`makeSmartTagType\`, \`makeFunctionGroup\` / \`makeFunctionGroups\` |
-| \`@office-kit/xlsx/worksheet\`   | \`setCell\` (value is mandatory and always replaces), \`ensureCell\` (get-or-create, never overwrites), \`setCellByCoord\` / \`ensureCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`addTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`setAutoFilter\` / \`getAutoFilter\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
+| \`@office-kit/xlsx/worksheet\`   | \`setCell\` (value is mandatory and always replaces), \`ensureCell\` (get-or-create, never overwrites), \`setCellByCoord\` / \`ensureCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`setFreezePanes\` / \`getFreezePanes\` / \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`addTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`setAutoFilter\` / \`getAutoFilter\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
 | \`@office-kit/xlsx/cell\`        | \`makeCell\`, \`getCoordinate\`, \`setCellValue\`, \`bindValue\`, \`makeFormula\` / \`makeArrayFormula\` / \`makeSharedFormula\` / \`makeDataTableFormula\` (a formula as a value, for a \`setCell\` write) and the in-place \`setFormula\` / \`setArrayFormula\` / \`setSharedFormula\` / \`setDataTableFormula\`, \`makeErrorValue\` / \`makeDurationValue\`, \`makeRichText\` / \`makeTextRun\` / \`richTextToString\`, predicates (\`isFormulaCell\`, \`isRichTextCell\`, \`isEmptyCell\`, \`isMergedCell\`, \`isErrorCell\`, \`isFormulaValue\`, \`isRichTextValue\`, \`isErrorValue\`, \`isDurationValue\`), and value coercers (\`cellValueAsString\`, \`cellValueAsBoolean\`, \`cellValueAsDate\`, \`cellValueAsNumber\`, \`cellValueAsPrimitive\`); types \`Cell\`, \`CellValue\`, \`MergedCell\`, \`FormulaValue\`, \`RichText\`, \`TextRun\`, \`InlineFont\`, \`ExcelErrorCode\` |
-| \`@office-kit/xlsx/styles\`      | Per-cell: \`setBold\`, \`setFontSize\`, \`setFontName\`, \`setFontColor\`, \`setCellFont\`, \`setCellFill\`, \`setCellBorder\` / \`setCellBorderAll\`, \`setCellAlignment\` / \`centerCell\`, \`setCellProtection\`, \`setCellNumberFormat\`, \`setCellStyle\`, \`setCellBackgroundColor\`, \`setCellAsCurrency\`, \`setCellAsPercent\`, \`setCellAsDate\`, \`setCellAsNumber\`. Range-wide \`setRange*\` variants for the same axes. Built-in format constants \`FORMAT_GENERAL\`, \`FORMAT_TEXT\`, \`FORMAT_NUMBER\`, \`FORMAT_NUMBER_00\`, \`FORMAT_PERCENTAGE\`, \`FORMAT_PERCENTAGE_00\`, \`FORMAT_DATE_DATETIME\`, etc. Named-style + DXF (differential format) APIs |
+| \`@office-kit/xlsx/styles\`      | \`registerCellStyle\` returns a \`styleId\` you pass to \`setCell\` / \`appendRow\`. Per-cell: \`patchCellFont\` (merge), \`setBold\`, \`setFontSize\`, \`setFontName\`, \`setFontColor\`, \`setCellFont\` (replace), \`setCellFill\`, \`setCellBorder\` / \`setCellBorderAll\`, \`setCellAlignment\` / \`centerCell\`, \`setCellProtection\`, \`setCellNumberFormat\`, \`setCellStyle\`, \`setCellBackgroundColor\`, \`setCellAsCurrency\`, \`setCellAsPercent\`, \`setCellAsDate\`, \`setCellAsNumber\`. Range-wide \`setRange*\` variants for the same axes. Built-in format constants \`FORMAT_GENERAL\`, \`FORMAT_TEXT\`, \`FORMAT_NUMBER\`, \`FORMAT_NUMBER_00\`, \`FORMAT_PERCENTAGE\`, \`FORMAT_PERCENTAGE_00\`, \`FORMAT_DATE_DATETIME\`, etc. Named-style + DXF (differential format) APIs |
 | \`@office-kit/xlsx/chart\`       | Legacy \`c:\` chart kinds — \`makeBarChart\`, \`makeLineChart\`, \`makeAreaChart\`, \`makePieChart\`, \`makeDoughnutChart\`, \`makeScatterChart\`, \`makeRadarChart\`, \`makeBubbleChart\`, \`makeStockChart\`, \`makeSurfaceChart\`, \`makeOfPieChart\`. Series builder \`makeBarSeries\`. Top-level wrapper \`makeChartSpace\`. Modern \`cx:\` chartex kinds — \`makeSunburstChart\`, \`makeTreemapChart\`, \`makeWaterfallChart\`, \`makeHistogramChart\`, \`makeParetoChart\`, \`makeFunnelChart\`, \`makeBoxWhiskerChart\`, \`makeRegionMapChart\` |
 | \`@office-kit/xlsx/chartsheet\`  | Standalone chartsheets (\`addChartsheet\` lives on \`@office-kit/xlsx/workbook\`; chartsheet shape and helpers live here) |
 | \`@office-kit/xlsx/drawing\`     | \`addImageAt\`, \`addChartAt\`, \`loadImage\`, \`detectImageFormat\`, \`detectImageDimensions\`; \`makeAbsoluteAnchor\`, \`makeOneCellAnchor\`, \`makeTwoCellAnchor\`, \`anchorMarkerFromCellRef\`; \`makeDrawing\`, \`makePictureDrawingItem\`, \`makeChartDrawingItem\`, \`listImagesOnSheet\`, \`listChartsOnSheet\`, \`removeAllImages\`, \`removeAllCharts\`, \`removeAllDrawingItems\`; DML preset geometry / effect helpers |
@@ -198,7 +198,7 @@ URL.revokeObjectURL(url);
 \`\`\`ts
 import { workbookToBytes } from '@office-kit/xlsx/io';
 import { createWorkbook, addWorksheet, addDefinedName } from '@office-kit/xlsx/workbook';
-import { setCell, mergeCells, makeFreezePane, makeSheetView } from '@office-kit/xlsx/worksheet';
+import { setCell, mergeCells, setFreezePanes } from '@office-kit/xlsx/worksheet';
 import { makeFormula } from '@office-kit/xlsx/cell';
 import { setBold, centerCell } from '@office-kit/xlsx/styles';
 
@@ -222,7 +222,7 @@ setCell(ws, 4, 2, 9_800);
 setCell(ws, 5, 2, makeFormula('SUM(B3:B4)', { cachedValue: 22_200 }));
 
 // Freeze header
-ws.views.push(makeSheetView({ pane: makeFreezePane('A3') }));
+setFreezePanes(ws, { rows: 2, cols: 0 });
 
 // Cross-sheet reference
 addDefinedName(wb, { name: 'TotalRevenue', value: 'Sales!$B$5' });
@@ -416,12 +416,13 @@ text via \`setCell\`; \`setHyperlink\` wires up the URL underneath.
 ## Merge and freeze
 
 \`\`\`ts
-import { mergeCells, unmergeCells, makeFreezePane, makeSheetView } from '@office-kit/xlsx/worksheet';
+import { mergeCells, unmergeCells, setFreezePanes } from '@office-kit/xlsx/worksheet';
 
-mergeCells(ws, 'A1:C1');                       // accepts string or { from, to } range
-ws.views.push(makeSheetView({ pane: makeFreezePane('A2') }));   // freeze row 1
-ws.views.push(makeSheetView({ pane: makeFreezePane('B1') }));   // freeze col A
-ws.views.push(makeSheetView({ pane: makeFreezePane('B2') }));   // freeze both
+mergeCells(ws, 'A1:C1');                       // accepts string or { minRow, minCol, maxRow, maxCol }
+setFreezePanes(ws, { rows: 1, cols: 0 });      // freeze row 1 (same as 'A2')
+setFreezePanes(ws, { rows: 0, cols: 1 });      // freeze col A (same as 'B1')
+setFreezePanes(ws, { rows: 1, cols: 1 });      // freeze both  (same as 'B2')
+setFreezePanes(ws, undefined);                 // unfreeze
 \`\`\`
 
 ## Excel Tables, AutoFilter, Data Validation, Conditional Formatting
@@ -609,6 +610,8 @@ externally first, then load the resulting plain xlsx.
 | Append rows | \`appendRow\` / \`appendRows\` |
 | Stream-write millions of rows | \`createWriteOnlyWorkbook\` + \`appendRow\` + \`ws.close\` + \`wb.finalize\` |
 | Bold + size + fill on header | \`setBold\` + \`setFontSize\` + \`setCellBackgroundColor\` |
+| Several font fields at once | \`patchCellFont\` |
+| One style reused across a report | \`registerCellStyle\` + \`setCell\` / \`appendRow\` |
 | Currency / percent | \`setCellAsCurrency\` / \`setCellAsPercent\` |
 | Date number format | \`setCellNumberFormat\` + \`FORMAT_DATE_DATETIME\` |
 | Formula with cached value | \`setCell\` + \`makeFormula\` |
@@ -616,7 +619,7 @@ externally first, then load the resulting plain xlsx.
 | Reach a cell without blanking it | \`ensureCell\` |
 | Byte-identical output | \`workbookToBytes(wb, { mtime })\` |
 | Hyperlink | \`setHyperlink\` |
-| Merge + freeze header | \`mergeCells\` + \`makeFreezePane\` + \`makeSheetView\` |
+| Merge + freeze header | \`mergeCells\` + \`setFreezePanes\` |
 | Defined name across sheets | \`addDefinedName\` |
 | Excel Table | \`addExcelTable\` |
 | AutoFilter only | \`setAutoFilter\` + \`makeAutoFilter\` |

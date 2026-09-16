@@ -48,7 +48,15 @@ export interface Font {
   readonly scheme?: FontScheme;
 }
 
-export function makeFont(opts: Partial<Font> = {}): Font {
+/**
+ * Input shape for building a Font. Wider than `Partial<Font>` under
+ * `exactOptionalPropertyTypes`: a field may be present and `undefined`, which
+ * {@link makeFont} drops the same way it drops an absent one. That is what lets
+ * a caller merging two fonts express "this field goes away".
+ */
+export type FontPatch = { [K in keyof Font]?: Font[K] | undefined };
+
+export function makeFont(opts: FontPatch = {}): Font {
   const out: { -readonly [K in keyof Font]: Font[K] } = {};
   if (opts.name !== undefined) {
     if (typeof opts.name !== 'string') {
