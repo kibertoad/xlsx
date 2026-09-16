@@ -145,7 +145,8 @@ function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
       if (!cell) continue;
       // styleId 0 emits no `s=` attribute at all, so it stays legal even on the
       // empty pool an unstyled workbook carries.
-      if (cell.styleId !== 0 && (cell.styleId < 0 || cell.styleId >= ctx.styles.cellXfs.length)) {
+      if (cell.styleId !== 0 &&
+          (!Number.isInteger(cell.styleId) || cell.styleId < 0 || cell.styleId >= ctx.styles.cellXfs.length)) {
         throw unknownStyleId(cell, ws.title, ctx.styles.cellXfs.length);
       }
       parts.push(serializeCell(cell, ctx));

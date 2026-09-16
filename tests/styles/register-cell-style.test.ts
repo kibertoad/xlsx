@@ -113,6 +113,14 @@ describe('registerCellStyle', () => {
     expect(getCellFont(wb, c).bold).toBe(true);
   });
 
+  it.each([Number.NaN, 0.5, -1, Number.POSITIVE_INFINITY])('rejects invalid styleId %s', async (styleId) => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Report');
+    registerCellStyle(wb, { numberFormat: '#,##0' });
+    setCell(ws, 1, 1, 1234, styleId);
+    await expect(workbookToBytes(wb)).rejects.toThrow(OpenXmlSchemaError);
+  });
+
   it('refuses to save an id that belongs to another workbook', async () => {
     const source = createWorkbook();
     const id = registerCellStyle(source, { numberFormat: '#,##0', border: THIN });
