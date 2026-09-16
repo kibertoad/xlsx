@@ -25,6 +25,37 @@ import { OpenXmlIoError } from '../utils/exceptions.js';
 import { applyZip64EntryCountPatch } from './zip64-patch.js';
 
 const ZIP32_MAX_ENTRIES = 0xffff;
+const LOCAL_TIMESTAMP_OFFSET = 10;
+const CENTRAL_TIMESTAMP_OFFSET = 12;
+const CENTRAL_HEADER_SIZE = 46;
+const CENTRAL_NAME_LENGTH_OFFSET = 28;
+const CENTRAL_EXTRA_LENGTH_OFFSET = 30;
+const CENTRAL_COMMENT_LENGTH_OFFSET = 32;
+
+/** Deflate effort: 0 skips compression, 9 is the slowest and smallest. */
+export type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/** Supported year range of the fflate ZIP backend. */
+const MIN_ZIP_YEAR = 1980;
+const MAX_ZIP_YEAR = 2099;
+
+export interface ZipWriterOptions {
+  /**
+   * Last-modified timestamp stamped into every entry's local header and
+   * central-directory record. ZIP has no "no timestamp" encoding, so fflate
+   * defaults each entry to the wall clock and two archives built from
+   * identical input differ in bytes. Pin this to get reproducible output for
+   * golden-file tests or content-addressed caching.
+   *
+   * Recorded as the date's UTC wall time, to a two-second resolution, with the
+   * year required to fall in 1980-2099. The DOS field carries no timezone, so
+   * writing local components would leave the bytes depending on the writer's
+   * `TZ`, which is the opposite of what pinning a stamp is for.
+   */
+  mtime?: Date;
+  /** Deflate level handed to fflate. Defaults to fflate's own 6. */
+  compressionLevel?: CompressionLevel;
+}
 
 export interface ZipWriter {
   /**
@@ -77,6 +108,37 @@ export interface StreamingEntryWriter {
   end(): Promise<void>;
 }
 
+/** Encode UTC components directly: local dates cannot represent a DST gap. */
+const toZipStamp = (mtime: Date): number => {
+  const ms = mtime.getTime();
+  if (Number.isNaN(ms)) {
+    throw new OpenXmlIoError('createZipWriter: mtime is an invalid Date');
+  }
+  const year = mtime.getUTCFullYear();
+  if (year < MIN_ZIP_YEAR || year > MAX_ZIP_YEAR) {
+    throw new OpenXmlIoError(
+      `createZipWriter: mtime ${mtime.toISOString()} is outside the supported ZIP timestamp range (${MIN_ZIP_YEAR}-${MAX_ZIP_YEAR})`,
+    );
+  }
+  return ((year - MIN_ZIP_YEAR) << 25)
+    | ((mtime.getUTCMonth() + 1) << 21)
+    | (mtime.getUTCDate() << 16)
+    | (mtime.getUTCHours() << 11)
+    | (mtime.getUTCMinutes() << 5)
+    | (mtime.getUTCSeconds() >> 1);
+};
+
+/**
+ * fflate looks the level up in a table and falls back to 6 for anything off
+ * the end, so an out-of-range level would quietly produce default output. The
+ * union type catches that for TypeScript callers; this catches it for the rest.
+ */
+const validateCompressionLevel = (level: number): void => {
+  if (!Number.isInteger(level) || level < 0 || level > 9) {
+    throw new OpenXmlIoError(`createZipWriter: compressionLevel must be an integer in [0, 9]; got ${level}`);
+  }
+};
+
 /**
  * ZIP writer backed by fflate's streaming `Zip` class. Entries are pushed
  * through `ZipDeflate` / `ZipPassThrough` streams as they arrive, so peak
@@ -90,8 +152,26 @@ export interface StreamingEntryWriter {
  * (`toFile`, `toWritable`) forward each chunk to disk / the wrapped writable
  * without ever holding the full archive resident. Either kind plugs in here.
  */
-export function createZipWriter(sink: XlsxSink): ZipWriter {
+export function createZipWriter(sink: XlsxSink, opts: ZipWriterOptions = {}): ZipWriter {
+  // Both options are checked before the sink is opened: a bad one otherwise
+  // surfaces from fflate half-way through the first entry, by which time a file
+  // sink holds a partial archive.
+  if (opts.compressionLevel !== undefined) validateCompressionLevel(opts.compressionLevel);
+  const stamp = opts.mtime === undefined ? undefined : toZipStamp(opts.mtime);
   const writer = sink.toBytes();
+  const deflateOpts = opts.compressionLevel === undefined ? undefined : { level: opts.compressionLevel };
+  let pendingLocalHeader = false;
+  // fflate clones mtime and reads local getters, so even a Date subclass cannot
+  // represent UTC times in a local DST gap. Give it a safe placeholder and patch
+  // only its header chunks below; payload chunks must never be signature-scanned.
+  const newEntry = (path: string, compress: boolean): ZipDeflate | ZipPassThrough => {
+    const file = compress ? new ZipDeflate(path, deflateOpts) : new ZipPassThrough(path);
+    if (stamp !== undefined) {
+      file.mtime = new Date(2000, 0, 1);
+      pendingLocalHeader = true;
+    }
+    return file;
+  };
   let finalised: Promise<Uint8Array> | undefined;
   let endCalled = false;
   const seen = new Set<string>();
@@ -114,6 +194,23 @@ export function createZipWriter(sink: XlsxSink): ZipWriter {
     // ZipDeflate emits an empty trailer chunk on the final callback even when
     // there are no bytes; guard against pushing an undefined chunk.
     if (chunk && chunk.byteLength > 0) {
+      if (stamp !== undefined && (final || pendingLocalHeader)) {
+        const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+        if (final) {
+          // fflate emits the complete central directory plus EOCD as one chunk.
+          let offset = 0;
+          for (let i = 0; i < seen.size; i++) {
+            view.setUint32(offset + CENTRAL_TIMESTAMP_OFFSET, stamp, true);
+            offset += CENTRAL_HEADER_SIZE + view.getUint16(offset + CENTRAL_NAME_LENGTH_OFFSET, true)
+              + view.getUint16(offset + CENTRAL_EXTRA_LENGTH_OFFSET, true)
+              + view.getUint16(offset + CENTRAL_COMMENT_LENGTH_OFFSET, true);
+          }
+        } else if (pendingLocalHeader) {
+          // With one entry open at a time, its first chunk is the local header.
+          view.setUint32(LOCAL_TIMESTAMP_OFFSET, stamp, true);
+          pendingLocalHeader = false;
+        }
+      }
       if (final) {
         // Buffer the trailing CD + EOCD block; written after possible patch.
         finalChunk = chunk;
@@ -142,7 +239,7 @@ export function createZipWriter(sink: XlsxSink): ZipWriter {
   };
 
   return {
-    async addEntry(path, bytes, opts) {
+    async addEntry(path, bytes, entryOpts) {
       if (!(bytes instanceof Uint8Array)) {
         throw new OpenXmlIoError(
           'createZipWriter: ReadableStream entries are not yet supported (deferred to streaming writer)',
@@ -150,8 +247,7 @@ export function createZipWriter(sink: XlsxSink): ZipWriter {
       }
       guardAdd(path);
       seen.add(path);
-      const compress = opts?.compress ?? true;
-      const file = compress ? new ZipDeflate(path) : new ZipPassThrough(path);
+      const file = newEntry(path, entryOpts?.compress ?? true);
       try {
         zip.add(file);
         file.push(bytes, /* final */ true);
@@ -163,12 +259,11 @@ export function createZipWriter(sink: XlsxSink): ZipWriter {
       }
     },
 
-    addStreamingEntry(path, opts) {
+    addStreamingEntry(path, entryOpts) {
       guardAdd(path);
       seen.add(path);
       streamingOpen = true;
-      const compress = opts?.compress ?? true;
-      const file = compress ? new ZipDeflate(path) : new ZipPassThrough(path);
+      const file = newEntry(path, entryOpts?.compress ?? true);
       try {
         zip.add(file);
       } catch (cause) {
