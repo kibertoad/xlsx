@@ -57,6 +57,7 @@ hides a real bug elsewhere). Just call `addWorksheet` directly.
 | openpyxl                                | @office-kit/xlsx                            |
 | --------------------------------------- | ----------------------------------- |
 | `ws['A1'] = 42`                         | `setCellByCoord(ws, 'A1', 42)`      |
+| `ws['A1']` (reach the cell)             | `ensureCellByCoord(ws, 'A1')`       |
 | `ws.cell(row=1, column=1, value=42)`    | `setCell(ws, 1, 1, 42)`             |
 | `ws.cell(row=1, column=1)`              | `ensureCell(ws, 1, 1)`              |
 | `ws['A1'].value`                        | `ws.rows.get(1)?.get(1)?.value`     |
@@ -69,8 +70,7 @@ always writes its `value` argument (which is why the argument is mandatory).
 `ensureCell` is the get-or-create form, and it is what a styling or formula
 pass over already-populated rows should use.
 
-Cell values cover the same shapes
-openpyxl does:
+Cell values cover the same shapes openpyxl does:
 
 - numbers (`number`)
 - strings (`string`, automatically deduped via the shared-strings table)

@@ -60,7 +60,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Bold + font size + fill on a header cell | `setBold` + `setFontSize` + `setCellBackgroundColor` |
 | Number format: currency / percent | `setCellAsCurrency` + `setCellAsPercent` |
 | Number format: date | `setCellNumberFormat` + `FORMAT_DATE_DATETIME` |
-| Add a formula (with cached value) | `setCell` + `setFormula` |
+| Add a formula (with cached value) | `ensureCell` + `setFormula` |
 | Make a cell clickable | `setHyperlink` |
 | Merge cells + freeze the header row | `mergeCells` + `makeFreezePane` + `makeSheetView` |
 

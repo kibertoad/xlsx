@@ -65,8 +65,9 @@ The library exposes a layered model split across subpaths:
 
 | Function | Purpose |
 |----------|---------|
-| `setCell(sheet, row, col, value)` | Set a cell value; coercion handled (string / number / boolean). |
-| `setFormula(cell, formula)` | Apply a formula to a Cell returned by `setCell`. Use `setSharedFormula` / `setArrayFormula` from `@office-kit/xlsx/cell` for the array / shared variants. |
+| `setCell(sheet, row, col, value)` | Write a cell value; coercion handled (string / number / boolean). `value` is mandatory and replaces whatever the cell held. |
+| `ensureCell(sheet, row, col)` | Reach a cell without writing to it: returns the existing Cell, or allocates a blank one. `ensureCellByCoord(sheet, 'A1')` for A1 addressing. |
+| `setFormula(cell, formula)` | Apply a formula to a Cell from `ensureCell` / `setCell`. Use `setSharedFormula` / `setArrayFormula` from `@office-kit/xlsx/cell` for the array / shared variants. |
 | `getCell(sheet, row, col)` | Read a cell. Returns `undefined` if empty. |
 | `setCellStyle(wb, cell, opts)` | Apply per-aspect style (font / fill / border / alignment / numberFormat) to a cell. |
 

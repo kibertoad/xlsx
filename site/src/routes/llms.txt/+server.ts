@@ -55,7 +55,7 @@ name, you know where to import it from.
 | \`@office-kit/xlsx/node\`        | Node-fs bridges: \`fromFile\`, \`fromFileSync\`, \`fromBuffer\`, \`fromReadable\`, \`toFile\`, \`toWritable\`, \`toBuffer\`, \`workbookToBuffer\` |
 | \`@office-kit/xlsx/streaming\`   | \`loadWorkbookStream\`, \`createWriteOnlyWorkbook\` + their type surface (\`ReadOnlyWorkbook\`, \`ReadOnlyWorksheet\`, \`ReadOnlyCell\`, \`IterRowsOptions\`, \`LoadWorkbookStreamOptions\`, \`WriteOnlyWorkbook\`, \`WriteOnlyWorksheet\`, \`WriteOnlyOptions\`, \`WriteOnlyRowItem\`, \`WriteOnlyStyle\`) |
 | \`@office-kit/xlsx/workbook\`    | \`createWorkbook\`, \`addWorksheet\`, \`addChartsheet\`, \`addDefinedName\`, \`makeWorkbookProtection\`, \`makeWorkbookView\` / \`makeCustomWorkbookView\`, \`makeCalcProperties\`, \`makeWorkbookProperties\`, \`makeFileVersion\`, \`makeFileSharing\`, \`makeFileRecoveryProperties\`, \`makeSmartTagProperties\` / \`makeSmartTagType\`, \`makeFunctionGroup\` / \`makeFunctionGroups\` |
-| \`@office-kit/xlsx/worksheet\`   | \`setCell\` (value is mandatory and always replaces), \`ensureCell\` (get-or-create, never overwrites), \`setCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`addAutoFilter\` / \`addAutoFilterColumn\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
+| \`@office-kit/xlsx/worksheet\`   | \`setCell\` (value is mandatory and always replaces), \`ensureCell\` (get-or-create, never overwrites), \`setCellByCoord\` / \`ensureCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`addAutoFilter\` / \`addAutoFilterColumn\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
 | \`@office-kit/xlsx/cell\`        | \`makeCell\`, \`getCoordinate\`, \`setCellValue\`, \`bindValue\`, \`setFormula\` / \`setSharedFormula\` / \`setArrayFormula\` / \`setDataTableFormula\`, \`makeErrorValue\` / \`makeDurationValue\`, \`makeRichText\` / \`makeTextRun\` / \`richTextToString\`, predicates (\`isFormulaCell\`, \`isRichTextCell\`, \`isEmptyCell\`, \`isMergedCell\`, \`isErrorCell\`, \`isFormulaValue\`, \`isRichTextValue\`, \`isErrorValue\`, \`isDurationValue\`), and value coercers (\`cellValueAsString\`, \`cellValueAsBoolean\`, \`cellValueAsDate\`, \`cellValueAsNumber\`, \`cellValueAsPrimitive\`); types \`Cell\`, \`CellValue\`, \`MergedCell\`, \`FormulaValue\`, \`RichText\`, \`TextRun\`, \`InlineFont\`, \`ExcelErrorCode\` |
 | \`@office-kit/xlsx/styles\`      | Per-cell: \`setBold\`, \`setFontSize\`, \`setFontName\`, \`setFontColor\`, \`setCellFont\`, \`setCellFill\`, \`setCellBorder\` / \`setCellBorderAll\`, \`setCellAlignment\` / \`centerCell\`, \`setCellProtection\`, \`setCellNumberFormat\`, \`setCellStyle\`, \`setCellBackgroundColor\`, \`setCellAsCurrency\`, \`setCellAsPercent\`, \`setCellAsDate\`, \`setCellAsNumber\`. Range-wide \`setRange*\` variants for the same axes. Built-in format constants \`FORMAT_GENERAL\`, \`FORMAT_TEXT\`, \`FORMAT_NUMBER\`, \`FORMAT_NUMBER_00\`, \`FORMAT_PERCENTAGE\`, \`FORMAT_PERCENTAGE_00\`, \`FORMAT_DATE_DATETIME\`, etc. Named-style + DXF (differential format) APIs |
 | \`@office-kit/xlsx/chart\`       | Legacy \`c:\` chart kinds — \`makeBarChart\`, \`makeLineChart\`, \`makeAreaChart\`, \`makePieChart\`, \`makeDoughnutChart\`, \`makeScatterChart\`, \`makeRadarChart\`, \`makeBubbleChart\`, \`makeStockChart\`, \`makeSurfaceChart\`, \`makeOfPieChart\`. Series builder \`makeBarSeries\`. Top-level wrapper \`makeChartSpace\`. Modern \`cx:\` chartex kinds — \`makeSunburstChart\`, \`makeTreemapChart\`, \`makeWaterfallChart\`, \`makeHistogramChart\`, \`makeParetoChart\`, \`makeFunnelChart\`, \`makeBoxWhiskerChart\`, \`makeRegionMapChart\` |
@@ -360,11 +360,14 @@ import { ensureCell } from '@office-kit/xlsx/worksheet';
 // Plain formula with optional cached value
 setFormula(ensureCell(ws, 3, 1), 'SUM(A1:A2)', { cachedValue: 42 });
 
-// Array formula (CSE — host range describes the spill area)
-setArrayFormula(ensureCell(ws, 1, 3), 'TRANSPOSE(A1:A3)', { ref: 'C1:C3' });
+// Array formula (CSE): the ref is the spill area, and it comes before the formula
+setArrayFormula(ensureCell(ws, 1, 3), 'C1:C3', 'TRANSPOSE(A1:A3)');
 
-// Shared formula (Excel optimization for runs of similar formulas)
-setSharedFormula(ensureCell(ws, 2, 1), '=A1*2', { si: 0, master: true, ref: 'A2:A10' });
+// Shared formula (Excel optimization for runs of similar formulas). The first
+// cell of the group carries the formula text and the ref; the rest carry the
+// si alone and Excel shifts the references.
+setSharedFormula(ensureCell(ws, 2, 1), 0, 'A1*2', 'A2:A10');
+setSharedFormula(ensureCell(ws, 3, 1), 0);
 \`\`\`
 
 \`cachedValue\` is optional. Excel will recalc on open anyway, but providing
@@ -588,7 +591,7 @@ externally first, then load the resulting plain xlsx.
 | Bold + size + fill on header | \`setBold\` + \`setFontSize\` + \`setCellBackgroundColor\` |
 | Currency / percent | \`setCellAsCurrency\` / \`setCellAsPercent\` |
 | Date number format | \`setCellNumberFormat\` + \`FORMAT_DATE_DATETIME\` |
-| Formula with cached value | \`setCell\` + \`setFormula\` |
+| Formula with cached value | \`ensureCell\` + \`setFormula\` |
 | Reach a cell without blanking it | \`ensureCell\` |
 | Hyperlink | \`setHyperlink\` |
 | Merge + freeze header | \`mergeCells\` + \`makeFreezePane\` + \`makeSheetView\` |

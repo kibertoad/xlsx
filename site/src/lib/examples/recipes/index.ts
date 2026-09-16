@@ -83,7 +83,7 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'Add several worksheets, define names that span them, and reference them in a formula.',
         path: 'site/src/lib/examples/recipes/multi-sheet.ts',
         source: multiSheet,
-        relatedApi: ['addWorksheet', 'addDefinedName', 'setCellFormula'],
+        relatedApi: ['addWorksheet', 'addDefinedName', 'ensureCell', 'setFormula'],
       },
       {
         slug: 'node-fs-helpers',
@@ -142,9 +142,9 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         source: formulas,
         notes: [
           'Cached values are optional — Excel will recalc anyway when the file opens, but cached values keep the file viewable in tools that don\'t recalc.',
-          'For shared and array formulas, use `setSharedFormula` / `setArrayFormula` from `@office-kit/xlsx/cell` on the Cell returned by `setCell`.',
+          'For shared and array formulas, use `setSharedFormula` / `setArrayFormula` from `@office-kit/xlsx/cell` on the Cell returned by `ensureCell`.',
         ],
-        relatedApi: ['setCell', 'setFormula', 'setArrayFormula', 'setSharedFormula'],
+        relatedApi: ['ensureCell', 'setFormula', 'setArrayFormula', 'setSharedFormula'],
       },
       {
         slug: 'merge-and-freeze',
@@ -201,7 +201,8 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         path: 'site/src/lib/examples/recipes/input-column.ts',
         source: inputColumn,
         notes: [
-          '`ensureCell` reaches a blank cell without writing over it, so the style lands on an empty cell rather than one you just cleared.',
+          '`ensureCell` styles the whole column the same way whether a row is already filled in or still blank; `setCell` would have to know each existing value to avoid wiping it.',
+          '`showInputMessage` and `showErrorMessage` default to false in ECMA-376. Without them Excel shows neither the prompt nor the error and accepts any entry.',
           'Pair this with `setRangeProtection(wb, ws, "C2:C3", { locked: false })` and a sheet protection if the rest of the sheet should be read-only.',
         ],
         relatedApi: ['applyBuiltinStyle', 'ensureCell', 'makeDataValidation', 'addDataValidation'],
