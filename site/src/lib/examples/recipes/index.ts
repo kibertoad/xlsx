@@ -19,6 +19,7 @@ import mergeAndFreeze from './merge-and-freeze.ts?raw';
 import multiSheet from './multi-sheet.ts?raw';
 import browserFileInput from './browser-file-input.ts?raw';
 import assertGeneratedWorkbook from './assert-generated-workbook.ts?raw';
+import deterministicBytes from './deterministic-bytes.ts?raw';
 
 import basicReadWrite from '../basic-read-write.ts?raw';
 import nodeFs from '../node-fs.ts?raw';
@@ -278,6 +279,20 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           '`addWorksheet` already validates the title (31-character limit, `[]:*?/\\` and the reserved name `History`), so a test of your own for those is testing this library.',
         ],
         relatedApi: ['loadWorkbook', 'fromArrayBuffer', 'getSheet', 'getRangeValues', 'iterCells'],
+      },
+      {
+        slug: 'deterministic-bytes',
+        title: 'Byte-identical output for identical input',
+        teaser:
+          'Pin `mtime` and the core properties, and the same payload always renders the same bytes.',
+        path: 'site/src/lib/examples/recipes/deterministic-bytes.ts',
+        source: deterministicBytes,
+        notes: [
+          'ZIP has no "no timestamp" encoding: each entry carries a DOS mtime, and without `mtime` it comes from the wall clock. That alone makes two renders of the same payload differ.',
+          '`createWriteOnlyWorkbook` takes the same option, as does `compressionLevel` (0 stores, 9 is smallest) on both paths.',
+          'Core properties are the other moving part. Set `created` / `modified` from your payload, not from `new Date()`.',
+        ],
+        relatedApi: ['workbookToBytes', 'saveWorkbook', 'createWriteOnlyWorkbook'],
       },
     ],
   },
