@@ -228,3 +228,56 @@ export function listCellStyleXfs(ss: Stylesheet): ReadonlyArray<CellXf> {
 export function defaultCellXf(): CellXf {
   return Object.freeze({ fontId: 0, fillId: 0, borderId: 0, numFmtId: 0 });
 }
+
+/**
+ * A cell's look expressed across every style axis at once. Each axis is
+ * independent: pass any subset, and the axes you leave out are decided by
+ * whichever function consumes the spec.
+ */
+export interface CellStyleSpec {
+  font?: Font;
+  fill?: Fill;
+  border?: Border;
+  alignment?: Alignment;
+  protection?: Protection;
+  numberFormat?: string;
+}
+
+/**
+ * Resolve a style spec to the CellXf fields it sets, registering each component
+ * in its pool. The result is a patch, not a whole xf: axes absent from `spec`
+ * are absent here too, so a caller can either spread it over
+ * {@link defaultCellXf} for a complete style or over an existing xf to merge.
+ *
+ * Every path that turns a user-facing style spec into an xf goes through this,
+ * so a new axis on {@link CellStyleSpec} reaches the modelled writer and the
+ * streaming write-only writer together.
+ */
+export function buildXfPatch(ss: Stylesheet, spec: CellStyleSpec): { -readonly [K in keyof CellXf]?: CellXf[K] } {
+  const patch: { -readonly [K in keyof CellXf]?: CellXf[K] } = {};
+  if (spec.font !== undefined) {
+    patch.fontId = addFont(ss, spec.font);
+    patch.applyFont = true;
+  }
+  if (spec.fill !== undefined) {
+    patch.fillId = addFill(ss, spec.fill);
+    patch.applyFill = true;
+  }
+  if (spec.border !== undefined) {
+    patch.borderId = addBorder(ss, spec.border);
+    patch.applyBorder = true;
+  }
+  if (spec.alignment !== undefined) {
+    patch.alignment = spec.alignment;
+    patch.applyAlignment = true;
+  }
+  if (spec.protection !== undefined) {
+    patch.protection = spec.protection;
+    patch.applyProtection = true;
+  }
+  if (spec.numberFormat !== undefined) {
+    patch.numFmtId = addNumFmt(ss, spec.numberFormat);
+    patch.applyNumberFormat = true;
+  }
+  return patch;
+}

@@ -485,6 +485,7 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
     if (ref.kind === 'worksheet') {
       bytes = worksheetToBytes(ref.sheet, {
         sharedStrings: sst,
+        styles: wb.styles,
         date1904: wb.date1904,
         rels: sheetRels,
         registerTable,

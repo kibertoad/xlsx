@@ -377,17 +377,42 @@ export function clearAllCells(ws: Worksheet): number {
   return n;
 }
 
+export interface AppendRowOptions {
+  /**
+   * Style ids to apply per column, positionally aligned with `values`. Build
+   * the ids once with `registerCellStyle` from `@office-kit/xlsx/styles` and
+   * reuse them for every row.
+   *
+   * A column carrying a style id is written even when its value is empty, so a
+   * bordered-but-blank input column survives the append. Ids past the end of
+   * `values` therefore materialise styled blank cells, widening the sheet: a
+   * 4-value row with 5 ids occupies 5 columns, and `getMaxCol`, the
+   * `<dimension>` ref and `iterRows` all see the fifth. For ragged rows that
+   * should stop at their own last value, trim the array per row:
+   * `{ styleIds: columnStyles.slice(0, values.length) }`.
+   */
+  styleIds?: ReadonlyArray<number | undefined>;
+}
+
 /**
  * Append a row of values starting at the next empty row. Returns the row index
  * (1-based). Mirrors openpyxl's `Worksheet.append`. `null` / `undefined`
- * entries leave the cell empty.
+ * entries leave the cell empty unless `opts.styleIds` names a style for that
+ * column.
  */
-export function appendRow(ws: Worksheet, values: ReadonlyArray<CellValue | undefined>): number {
+export function appendRow(
+  ws: Worksheet,
+  values: ReadonlyArray<CellValue | undefined>,
+  opts: AppendRowOptions = {},
+): number {
   const row = ws._appendRowCursor + 1;
-  for (let i = 0; i < values.length; i++) {
+  const styleIds = opts.styleIds;
+  const width = styleIds === undefined ? values.length : Math.max(values.length, styleIds.length);
+  for (let i = 0; i < width; i++) {
     const value = values[i];
-    if (value === undefined || value === null) continue;
-    setCell(ws, row, i + 1, value);
+    const styleId = styleIds?.[i];
+    if ((value === undefined || value === null) && styleId === undefined) continue;
+    setCell(ws, row, i + 1, value ?? null, styleId);
   }
   // Even if every value is empty, advance the cursor so the next call doesn't
   // overwrite this row's would-be position.
@@ -397,15 +422,22 @@ export function appendRow(ws: Worksheet, values: ReadonlyArray<CellValue | undef
 
 /**
  * Bulk version of {@link appendRow}: append a 2D array of values one row at a
- * time. Returns `{firstRow, lastRow}` — both 1-based, inclusive. An empty input
- * returns `{firstRow, lastRow: firstRow - 1}` so callers can detect the no-op
- * without throwing.
+ * time. Returns `{firstRow, lastRow}`, both 1-based and inclusive. An empty
+ * input returns `{firstRow, lastRow: firstRow - 1}` so callers can detect the
+ * no-op without throwing.
  *
  * Common usage: `appendRows(ws, csvParsedRows)` for fast import.
+ *
+ * `opts` is column-indexed, not row-indexed: the same
+ * {@link AppendRowOptions.styleIds} apply to every row, which is the point when
+ * a column has one format down the whole table. Rows shorter than `styleIds`
+ * still get the trailing styled blanks described there, so trim per row when
+ * the input is ragged.
  */
 export function appendRows(
   ws: Worksheet,
   rows: ReadonlyArray<ReadonlyArray<CellValue | undefined>>,
+  opts: AppendRowOptions = {},
 ): { firstRow: number; lastRow: number } {
   const firstRow = ws._appendRowCursor + 1;
   if (rows.length === 0) {
@@ -413,7 +445,7 @@ export function appendRows(
   }
   let lastRow = firstRow - 1;
   for (const row of rows) {
-    lastRow = appendRow(ws, row);
+    lastRow = appendRow(ws, row, opts);
   }
   return { firstRow, lastRow };
 }

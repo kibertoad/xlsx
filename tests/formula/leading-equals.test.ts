@@ -22,6 +22,7 @@ import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { makeStylesheet } from '../../src/styles/stylesheet.js';
 import { makeSharedStrings } from '../../src/workbook/shared-strings.js';
 import { addDefinedName } from '../../src/workbook/defined-names.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
@@ -46,7 +47,7 @@ const sheetXml = (rows: string): string =>
   `<worksheet xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheetData>${rows}</sheetData></worksheet>`;
 
 const sheetText = (ws: Worksheet): string =>
-  new TextDecoder().decode(worksheetToBytes(ws, { sharedStrings: makeSharedStrings() }));
+  new TextDecoder().decode(worksheetToBytes(ws, { sharedStrings: makeSharedStrings(), styles: makeStylesheet() }));
 
 const formulaAt = (ws: Worksheet, row: number, col: number): FormulaValue => {
   const value = getCell(ws, row, col)?.value;
