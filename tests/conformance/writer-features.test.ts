@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { setFormula } from '../../src/cell/cell.js';
+import { makeRichText } from '../../src/cell/rich-text.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { makeColor } from '../../src/styles/colors.js';
 import { setCellBackgroundColor, setCellFont } from '../../src/styles/cell-style.js';
@@ -171,6 +172,19 @@ describe('conformance: writer feature survey', () => {
         columns: ['name', 'qty'],
         headerRowCount: 1,
       });
+      await expectClean(wb);
+    });
+
+    it('Excel table over a rich-text header row', async () => {
+      const wb = createWorkbook();
+      const w = ws(addWorksheet(wb, 'RT'));
+      setCell(w, 1, 1, { kind: 'rich-text', runs: makeRichText([{ text: 'S' }, { text: 'KU', font: { b: true } }]) });
+      setCell(w, 1, 2, 'qty');
+      setCell(w, 2, 1, 'A-001');
+      setCell(w, 2, 2, 3);
+      setCell(w, 3, 1, 'A-002');
+      setCell(w, 3, 2, 5);
+      addExcelTable(wb, w, { name: 'Rich', ref: 'A1:B3', columns: ['SKU', 'qty'] });
       await expectClean(wb);
     });
 

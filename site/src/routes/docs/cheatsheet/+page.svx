@@ -46,6 +46,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Reach a cell without overwriting its value | `ensureCell` |
 | Empty a cell but keep its formatting | `setCell` with `null` |
 | Remove a cell, formatting included | `deleteCell` (or `clearRange`) |
+| Assert on a workbook you just generated | `loadWorkbook` + `fromArrayBuffer` + `getSheet` |
 
 ### Stream-write (huge sheets)
 
@@ -60,7 +61,8 @@ for every export see <a href="{base}/api">API reference</a>.
 | Bold + font size + fill on a header cell | `setBold` + `setFontSize` + `setCellBackgroundColor` |
 | Number format: currency / percent | `setCellAsCurrency` + `setCellAsPercent` |
 | Number format: date | `setCellNumberFormat` + `FORMAT_DATE_DATETIME` |
-| Add a formula (with cached value) | `ensureCell` + `setFormula` |
+| Add a formula (with cached value) | `setCell` + `makeFormula` |
+| Recalculate the workbook on open | `setFullCalcOnLoad` |
 | Make a cell clickable | `setHyperlink` |
 | Merge cells + freeze the header row | `mergeCells` + `makeFreezePane` + `makeSheetView` |
 
@@ -70,7 +72,7 @@ for every export see <a href="{base}/api">API reference</a>.
 |------|-----------|
 | Multiple sheets + a defined name | `addWorksheet` + `addDefinedName` |
 | Promote a range to an Excel Table | `addExcelTable` |
-| AutoFilter on a header row (no table styling) | `addAutoFilter` |
+| AutoFilter on a header row (no table styling) | `setAutoFilter` + `makeAutoFilter` |
 | Dropdown data validation | `makeDataValidation` + `addDataValidation` |
 | A column the recipient fills in | `applyBuiltinStyle` + `addDataValidation` |
 | Heat-map (3-color scale) | `makeCfRule` + `addConditionalFormatting` |
@@ -315,10 +317,39 @@ setCellNumberFormat(wb, setCell(ws, 1, 1, new Date()), FORMAT_DATE_DATETIME);
 ### Add a formula (with cached value)
 
 ```ts
-import { setFormula } from '@office-kit/xlsx/cell';
-import { ensureCell } from '@office-kit/xlsx/worksheet';
+import { makeArrayFormula, makeFormula } from '@office-kit/xlsx/cell';
+import { setCell } from '@office-kit/xlsx/worksheet';
 
-setFormula(ensureCell(ws, 3, 1), 'SUM(A1:A2)', { cachedValue: 42 });
+setCell(ws, 3, 1, makeFormula('SUM(A1:A2)', { cachedValue: 42 }));
+
+// Same shape for the other <f> kinds: makeArrayFormula, makeSharedFormula,
+// makeDataTableFormula. A leading `=` is stripped from all of them.
+setCell(ws, 1, 3, makeArrayFormula('C1:C3', 'TRANSPOSE(A1:A3)'));
+```
+
+### Recalculate the workbook on open
+
+```ts
+import { setFullCalcOnLoad } from '@office-kit/xlsx/workbook';
+
+// Excel, LibreOffice and Sheets otherwise trust the cached values in the file.
+// Set this when you wrote formulas with no cached value, or cached ones that
+// may be stale. Viewers that never calculate ignore it and show the cache, so
+// supply a cachedValue where you can as well.
+setFullCalcOnLoad(wb, true);
+```
+
+### Assert on a workbook you just generated
+
+```ts
+import { fromArrayBuffer, loadWorkbook } from '@office-kit/xlsx/io';
+import { getSheet } from '@office-kit/xlsx/workbook';
+import { getRangeValues } from '@office-kit/xlsx/worksheet';
+
+// fromArrayBuffer takes a Uint8Array directly, so no Buffer and no temp file.
+const wb = await loadWorkbook(fromArrayBuffer(bytes));
+const sheet = getSheet(wb, 'Leverage'); // already narrowed to Worksheet
+if (sheet) console.log(getRangeValues(sheet, 'A1:B3'));
 ```
 
 ### Make a cell clickable
@@ -352,8 +383,13 @@ addDefinedName(wb, { name: 'Totals', value: 'Q1!$A$1:$A$10,Q2!$A$1:$A$10' });
 ### Promote a range to an Excel Table
 
 ```ts
-import { addExcelTable } from '@office-kit/xlsx/worksheet';
+import { addExcelTable, writeRange } from '@office-kit/xlsx/worksheet';
 
+// Write the header row first: addExcelTable checks the definition against the
+// sheet (column count against the range width, room for the header and totals rows,
+// unique names, each header cell holding its column's name as text), because
+// Excel repairs the file (dropping the table) when the two disagree.
+writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);
 addExcelTable(wb, ws, {
   name: 'Items',
   ref: 'A1:C4',
@@ -365,9 +401,9 @@ addExcelTable(wb, ws, {
 ### AutoFilter on a header row (no table styling)
 
 ```ts
-import { addAutoFilter } from '@office-kit/xlsx/worksheet';
+import { makeAutoFilter, setAutoFilter } from '@office-kit/xlsx/worksheet';
 
-addAutoFilter(ws, 'A1:C1');
+setAutoFilter(ws, makeAutoFilter({ ref: 'A1:C1' }));
 ```
 
 ### Dropdown data validation
@@ -396,7 +432,7 @@ for (let row = 2; row <= 20; row++) {
 }
 addDataValidation(
   ws,
-  makeDataValidation({ type: 'decimal', operator: 'between', sqref: 'C2:C20', formula1: '0', formula2: '10' }),
+  makeDataValidation({ type: 'decimal', operator: 'between', sqref: 'C2:C20', formula1: '0', formula2: '10', showErrorMessage: true, errorStyle: 'stop' }),
 );
 ```
 

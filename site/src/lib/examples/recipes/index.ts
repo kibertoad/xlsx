@@ -18,6 +18,7 @@ import hyperlinks from './hyperlinks.ts?raw';
 import mergeAndFreeze from './merge-and-freeze.ts?raw';
 import multiSheet from './multi-sheet.ts?raw';
 import browserFileInput from './browser-file-input.ts?raw';
+import assertGeneratedWorkbook from './assert-generated-workbook.ts?raw';
 
 import basicReadWrite from '../basic-read-write.ts?raw';
 import nodeFs from '../node-fs.ts?raw';
@@ -83,7 +84,7 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'Add several worksheets, define names that span them, and reference them in a formula.',
         path: 'site/src/lib/examples/recipes/multi-sheet.ts',
         source: multiSheet,
-        relatedApi: ['addWorksheet', 'addDefinedName', 'ensureCell', 'setFormula'],
+        relatedApi: ['addWorksheet', 'addDefinedName', 'makeFormula'],
       },
       {
         slug: 'node-fs-helpers',
@@ -135,16 +136,25 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
       },
       {
         slug: 'formulas',
-        title: 'Add a formula (with cached value)',
+        title: 'Formulas in a generated workbook',
         teaser:
-          'Pass `cachedValue` so Excel renders the result before forcing a full recalc on open.',
+          'Cache the values you can compute, and set `fullCalcOnLoad` for the ones you cannot.',
         path: 'site/src/lib/examples/recipes/formulas.ts',
         source: formulas,
         notes: [
-          'Cached values are optional — Excel will recalc anyway when the file opens, but cached values keep the file viewable in tools that don\'t recalc.',
-          'For shared and array formulas, use `setSharedFormula` / `setArrayFormula` from `@office-kit/xlsx/cell` on the Cell returned by `ensureCell`.',
+          'A `cachedValue` is the only thing a viewer that never calculates (Quick Look, Outlook and SharePoint previews, most thumbnailers) can show, so supply one wherever the producer can compute it. Excel, LibreOffice and Google Sheets compute an uncached formula on open regardless.',
+          '`setFullCalcOnLoad(wb, true)` asks a calculating app to recompute the whole workbook on open instead of trusting the cache. That is what you want when this library wrote formulas it cannot evaluate, or when the cached values may be stale; it does nothing for the viewers above, which is why both matter.',
+          '`makeFormula` builds the value for a `setCell` write, so placing a formula is one call that composes with the `styleId` argument. `makeArrayFormula`, `makeSharedFormula` and `makeDataTableFormula` cover the other `<f>` kinds, and `setFormula` and friends apply the same values to a cell you already hold.',
+          'A leading `=` is stripped, so `\'=SUM(A1:A3)\'` and `\'SUM(A1:A3)\'` are interchangeable. OOXML stores `<f>` without it, and Excel calls a file that has one damaged.',
+          'Every sheet a formula names has to exist in the workbook, or the reference resolves to `#REF!`.',
         ],
-        relatedApi: ['ensureCell', 'setFormula', 'setArrayFormula', 'setSharedFormula'],
+        relatedApi: [
+          'makeFormula',
+          'makeArrayFormula',
+          'makeSharedFormula',
+          'setFormula',
+          'setFullCalcOnLoad',
+        ],
       },
       {
         slug: 'merge-and-freeze',
@@ -177,9 +187,10 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         source: tablesWithFilter,
         notes: [
           'Pass `style` for one-arg style selection or `styleInfo` for full control over banded rows / columns.',
-          'For just a filter without table styling, use `addAutoFilter(ws, "A1:C4")`.',
+          'Write the header row first: `addExcelTable` checks the definition against the sheet, because Excel repairs a file where the two disagree by dropping the table. The column count has to match the range width, the ref has to contain the header and totals rows, column names have to be unique, and every header cell has to hold its column name as text. Pass `headerRowCount: 0` for a genuinely header-less table.',
+          'For just a filter without table styling, use `setAutoFilter(ws, makeAutoFilter({ ref: "A1:C4" }))`.',
         ],
-        relatedApi: ['addExcelTable', 'addAutoFilter'],
+        relatedApi: ['addExcelTable', 'setAutoFilter', 'makeAutoFilter'],
       },
       {
         slug: 'dropdown-validation',
@@ -248,6 +259,25 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         path: 'site/src/lib/examples/recipes/insert-image.ts',
         source: insertImage,
         relatedApi: ['loadImage', 'addImageAt', 'makeOneCellAnchor'],
+      },
+    ],
+  },
+  {
+    title: 'Generating files you have to trust',
+    recipes: [
+      {
+        slug: 'assert-generated-workbook',
+        title: 'Assert on a workbook you just generated',
+        teaser:
+          'Load the bytes back and read them with the same API you wrote them with.',
+        path: 'site/src/lib/examples/recipes/assert-generated-workbook.ts',
+        source: assertGeneratedWorkbook,
+        notes: [
+          '`fromArrayBuffer` accepts a `Uint8Array` as well as an `ArrayBuffer`, so a renderer\'s output goes straight into `loadWorkbook` with no copy and no temp file.',
+          '`getSheet(wb, title)` narrows past the worksheet / chartsheet union, so there is no `kind === "worksheet"` check to write.',
+          '`addWorksheet` already validates the title (31-character limit, `[]:*?/\\` and the reserved name `History`), so a test of your own for those is testing this library.',
+        ],
+        relatedApi: ['loadWorkbook', 'fromArrayBuffer', 'getSheet', 'getRangeValues', 'iterCells'],
       },
     ],
   },
