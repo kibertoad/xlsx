@@ -28,6 +28,7 @@ describe('README — full lib read+edit+write', () => {
     expect(typeof io.loadWorkbook).toBe('function');
     expect(typeof io.workbookToBytes).toBe('function');
     expect(typeof worksheet.setCell).toBe('function');
+    expect(typeof worksheet.ensureCell).toBe('function');
     expect(typeof workbook.createWorkbook).toBe('function');
     expect(typeof workbook.addWorksheet).toBe('function');
 
@@ -35,6 +36,9 @@ describe('README — full lib read+edit+write', () => {
     const wb = workbook.createWorkbook();
     const ws = workbook.addWorksheet(wb, 'Sheet1');
     worksheet.setCell(ws, 1, 1, 'Hello from @office-kit/xlsx');
+    // README recommends ensureCell for the get-or-create case openpyxl spells
+    // ws.cell(row=r, column=c).
+    expect(worksheet.ensureCell(ws, 1, 1).value).toBe('Hello from @office-kit/xlsx');
     const bytes = await io.workbookToBytes(wb);
     const wb2 = await io.loadWorkbook(node.fromBuffer(bytes));
     const ref0 = wb2.sheets[0];

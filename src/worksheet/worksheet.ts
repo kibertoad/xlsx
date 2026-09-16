@@ -6,8 +6,7 @@
 // workbook's `jsonReplacer`. Worksheets are mutable for hot-path performance.
 
 import type { CellValue } from '../cell/cell.js';
-import { type Cell, cellValueAsString, makeCell, setArrayFormula, setFormula } from '../cell/cell.js';
-import { type InlineFont, makeRichText, type TextRun } from '../cell/rich-text.js';
+import { type Cell, cellValueAsString, makeCell } from '../cell/cell.js';
 import type { Drawing } from '../drawing/drawing.js';
 import { type Color, makeColor } from '../styles/colors.js';
 import {
@@ -39,6 +38,7 @@ import type { SortState } from './sort-state.js';
 import type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
 import { type Hyperlink, makeHyperlink } from './hyperlinks.js';
 import type { TableDefinition } from './table.js';
+import { validateTableAgainstSheet } from './table-validate.js';
 import { freezePaneRef, makeFreezePane, makeSheetView, type SheetView } from './views.js';
 
 export interface Worksheet {
@@ -290,10 +290,17 @@ export function getCell(ws: Worksheet, row: number, col: number): Cell | undefin
 }
 
 /**
- * Create or update a Cell at (row, col). Existing cells keep their styleId /
- * hyperlinkId / commentId unless explicitly overridden.
+ * Write a Cell at (row, col), creating it when the coordinate is empty.
+ * `value` always lands on the cell, so an existing value is replaced. Use
+ * {@link ensureCell} to reach a cell without writing to it. An existing cell
+ * keeps its styleId / hyperlinkId / commentId unless `styleId` is passed.
+ *
+ * `null` is the explicit empty value: it clears the value and leaves the cell
+ * in the sheet with its fill, border and number format, the way Excel's
+ * Delete key does. {@link deleteCell} drops the cell entirely, formatting
+ * included, and {@link clearRange} does the same across a rectangle.
  */
-export function setCell(ws: Worksheet, row: number, col: number, value: CellValue = null, styleId?: number): Cell {
+export function setCell(ws: Worksheet, row: number, col: number, value: CellValue, styleId?: number): Cell {
   let rowMap = ws.rows.get(row);
   let cell = rowMap?.get(col);
   if (cell === undefined) {
@@ -311,6 +318,23 @@ export function setCell(ws: Worksheet, row: number, col: number, value: CellValu
   }
   if (row > ws._appendRowCursor) ws._appendRowCursor = row;
   return cell;
+}
+
+/**
+ * Get the Cell at (row, col), allocating an empty one when the coordinate is
+ * not populated yet. An existing cell is returned untouched, value and all,
+ * which makes this the way to reach a cell you are about to style or attach a
+ * formula to.
+ *
+ * {@link mergeCells} drops the cells underneath a merge; reaching one of those
+ * coordinates allocates it again, and the written `<sheetData>` then carries a
+ * blank `<c>` under the merge. A merged block's value lives on its top-left
+ * cell, so address that coordinate when the block is what you mean.
+ */
+export function ensureCell(ws: Worksheet, row: number, col: number): Cell {
+  const existing = ws.rows.get(row)?.get(col);
+  if (existing !== undefined) return existing;
+  return setCell(ws, row, col, null);
 }
 
 /** Delete a single cell from the sheet. Empty rows are pruned. */
@@ -854,78 +878,46 @@ export function* getCellsInRange(ws: Worksheet, range: string): IterableIterator
   }
 }
 
-/**
- * Set a cell's value to a rich-text run array. Accepts either a pre-built
- * `RichText` (frozen array of TextRun) or a fresh `Array<{ text, font? }>`
- * shape — `makeRichText` normalises and freezes the runs in either case.
- * Returns the cell.
- */
-export function setCellRichText(
-  ws: Worksheet,
-  row: number,
-  col: number,
-  runs: ReadonlyArray<TextRun | { text: string; font?: InlineFont }>,
-  styleId?: number,
-): Cell {
-  return setCell(ws, row, col, { kind: 'rich-text', runs: makeRichText(runs) }, styleId);
-}
+// Stricter than `coordinateToTuple`: these wrappers take a bare "A1", with no
+// `$` absolute markers and no surrounding whitespace.
+const PLAIN_COORD_RE = /^([A-Za-z]{1,3})([1-9][0-9]*)$/;
+
+const plainCoordToRowCol = (coord: string): { row: number; col: number } | undefined => {
+  const m = PLAIN_COORD_RE.exec(coord);
+  if (m === null || m[1] === undefined || m[2] === undefined) return undefined;
+  return { row: Number.parseInt(m[2], 10), col: columnIndexFromLetter(m[1]) };
+};
 
 /**
- * Set a cell's value to a normal Excel formula. Combines `setCell` with
- * `setFormula`. The leading `=` is stripped if present so callers can pass
- * `'=A1+1'` or `'A1+1'` interchangeably.
+ * A1-addressed {@link setCell}: resolves `coord` to a numeric (row, col) and
+ * writes `value` there. Throws `OpenXmlSchemaError` when `coord` is not a
+ * plain A1 reference.
  */
-export function setCellFormula(
-  ws: Worksheet,
-  row: number,
-  col: number,
-  formula: string,
-  opts?: { cachedValue?: number | string | boolean; styleId?: number },
-): Cell {
-  const expr = formula.startsWith('=') ? formula.slice(1) : formula;
-  const cell = setCell(ws, row, col, undefined, opts?.styleId);
-  setFormula(cell, expr, opts?.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : undefined);
-  return cell;
-}
-
-/**
- * Set a cell's value to an array (CSE) formula spanning `ref`. Lands the
- * formula on the top-left cell of the range — Excel reads the `ref` attribute
- * to know how far the result spreads. Equivalent to `setCell` +
- * `setArrayFormula`. Leading `=` is stripped.
- */
-export function setCellArrayFormula(
-  ws: Worksheet,
-  row: number,
-  col: number,
-  ref: string,
-  formula: string,
-  opts?: { cachedValue?: number | string | boolean; styleId?: number },
-): Cell {
-  const expr = formula.startsWith('=') ? formula.slice(1) : formula;
-  const cell = setCell(ws, row, col, undefined, opts?.styleId);
-  setArrayFormula(cell, ref, expr, opts?.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : undefined);
-  return cell;
-}
-
-/** Resolve an "A1" coordinate to a numeric (col, row) pair on the sheet. */
-export function setCellByCoord(ws: Worksheet, coord: string, value?: CellValue, styleId?: number): Cell {
-  const m = /^([A-Za-z]{1,3})([1-9][0-9]*)$/.exec(coord);
-  if (m === null || m[1] === undefined || m[2] === undefined) {
+export function setCellByCoord(ws: Worksheet, coord: string, value: CellValue, styleId?: number): Cell {
+  const rc = plainCoordToRowCol(coord);
+  if (rc === undefined) {
     throw new OpenXmlSchemaError(`setCellByCoord: invalid coordinate "${coord}"`);
   }
-  const col = columnIndexFromLetter(m[1]);
-  const row = Number.parseInt(m[2], 10);
-  return setCell(ws, row, col, value, styleId);
+  return setCell(ws, rc.row, rc.col, value, styleId);
 }
 
 /** Convenience getter accepting an "A1" coordinate. */
 export function getCellByCoord(ws: Worksheet, coord: string): Cell | undefined {
-  const m = /^([A-Za-z]{1,3})([1-9][0-9]*)$/.exec(coord);
-  if (m === null || m[1] === undefined || m[2] === undefined) return undefined;
-  const col = columnIndexFromLetter(m[1]);
-  const row = Number.parseInt(m[2], 10);
-  return getCell(ws, row, col);
+  const rc = plainCoordToRowCol(coord);
+  if (rc === undefined) return undefined;
+  return getCell(ws, rc.row, rc.col);
+}
+
+/**
+ * A1-addressed {@link ensureCell}. Throws `OpenXmlSchemaError` when `coord` is
+ * not a plain A1 reference.
+ */
+export function ensureCellByCoord(ws: Worksheet, coord: string): Cell {
+  const rc = plainCoordToRowCol(coord);
+  if (rc === undefined) {
+    throw new OpenXmlSchemaError(`ensureCellByCoord: invalid coordinate "${coord}"`);
+  }
+  return ensureCell(ws, rc.row, rc.col);
 }
 
 // ---- merged cells ---------------------------------------------------------
@@ -1255,9 +1247,7 @@ export function applyToRange(
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
-      let cell = ws.rows.get(r)?.get(c);
-      if (!cell) cell = setCell(ws, r, c);
-      visit(cell, r, c);
+      visit(ensureCell(ws, r, c), r, c);
     }
   }
 }
@@ -2067,8 +2057,16 @@ export function getAutoFilter(ws: Worksheet): AutoFilter | undefined {
 
 // ---- tables --------------------------------------------------------------
 
-/** Append a table. The id and displayName must be workbook-unique — the caller is responsible. */
+/**
+ * Append a table, rejecting one whose geometry or column names disagree with
+ * the cells under it: the column count has to match the width of `ref`, `ref`
+ * has to contain the header and totals rows, column names have
+ * to be unique and non-empty, and every header cell has to hold its column's
+ * name as text. The id and displayName must be workbook-unique, and stay the
+ * caller's responsibility: neither is visible from a single sheet.
+ */
 export function addTable(ws: Worksheet, table: TableDefinition): TableDefinition {
+  validateTableAgainstSheet(ws, table);
   ws.tables.push(table);
   return table;
 }

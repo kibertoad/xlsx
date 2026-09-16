@@ -19,6 +19,8 @@ describe('migrate-from-openpyxl — public API smoke', () => {
     const worksheet = await import('../../src/worksheet/index.js');
     const cell = await import('../../src/cell/index.js');
     expect(typeof worksheet.setCell).toBe('function');
+    expect(typeof worksheet.ensureCell).toBe('function');
+    expect(typeof worksheet.ensureCellByCoord).toBe('function');
     expect(typeof worksheet.setCellByCoord).toBe('function');
     expect(typeof worksheet.iterRows).toBe('function');
     expect(typeof cell.setFormula).toBe('function');
@@ -26,6 +28,15 @@ describe('migrate-from-openpyxl — public API smoke', () => {
     expect(typeof cell.makeRichText).toBe('function');
     expect(typeof cell.makeTextRun).toBe('function');
     expect(typeof cell.makeDurationValue).toBe('function');
+
+    // The no-value row of the guide's table: openpyxl's ws.cell(row=r, column=c)
+    // hands back the cell as it stands, and so does ensureCell.
+    const workbook = await import('../../src/workbook/index.js');
+    const wb = workbook.createWorkbook();
+    const ws = workbook.addWorksheet(wb, 'Cells');
+    worksheet.setCell(ws, 1, 1, 42);
+    expect(worksheet.ensureCell(ws, 1, 1).value).toBe(42);
+    expect(worksheet.ensureCell(ws, 9, 9).value).toBeNull();
   });
 
   it('Styles — setCellFont / setCellFill / setCellNumberFormat with (wb, cell, …) signature', async () => {

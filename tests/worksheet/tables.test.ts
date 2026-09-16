@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { fromBuffer } from '../../src/io/node.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { workbookToBytes } from '../../src/io/save.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import { makeAutoFilter, makeFilterColumn } from '../../src/worksheet/auto-filter.js';
 import { makeTableColumn, makeTableDefinition } from '../../src/worksheet/table.js';
-import { addTable, getTable, removeTable, setCell, type Worksheet } from '../../src/worksheet/worksheet.js';
+import { addTable, getTable, removeTable, setCell, type Worksheet, writeRange } from '../../src/worksheet/worksheet.js';
 
 const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined): Worksheet => {
   if (!ws) throw new Error('expected sheet');
@@ -18,6 +19,7 @@ describe('addTable / getTable / removeTable', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'T');
     expect(ws.tables.length).toBe(0);
+    writeRange(ws, 'A1', [['Region', 'Quarter', 'Total']]);
     addTable(
       ws,
       makeTableDefinition({
@@ -34,10 +36,37 @@ describe('addTable / getTable / removeTable', () => {
     expect(getTable(ws, 'Sales')?.columns.length).toBe(3);
   });
 
+  it('rejects a definition that disagrees with the cells under it', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'T');
+    writeRange(ws, 'A1', [['Region']]);
+    expect(() =>
+      addTable(
+        ws,
+        makeTableDefinition({
+          id: 1,
+          displayName: 'Sales',
+          ref: 'A1:A2',
+          columns: [makeTableColumn({ id: 1, name: 'Area' })],
+        }),
+      ),
+    ).toThrow(OpenXmlSchemaError);
+    expect(ws.tables).toHaveLength(0);
+  });
+
   it('removeTable returns true on hit, false on miss', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'T');
-    addTable(ws, makeTableDefinition({ id: 1, displayName: 'X', ref: 'A1:A2' }));
+    setCell(ws, 1, 1, 'x');
+    addTable(
+      ws,
+      makeTableDefinition({
+        id: 1,
+        displayName: 'X',
+        ref: 'A1:A2',
+        columns: [makeTableColumn({ id: 1, name: 'x' })],
+      }),
+    );
     expect(removeTable(ws, 'X')).toBe(true);
     expect(removeTable(ws, 'X')).toBe(false);
     expect(ws.tables.length).toBe(0);
@@ -84,6 +113,9 @@ describe('table round-trip through saveWorkbook → loadWorkbook', () => {
     const wb = createWorkbook();
     const wsA = addWorksheet(wb, 'A');
     const wsB = addWorksheet(wb, 'B');
+    writeRange(wsA, 'A1', [['x', 'y']]);
+    writeRange(wsA, 'D1', [['p', 'q']]);
+    writeRange(wsB, 'A1', [['v']]);
     addTable(
       wsA,
       makeTableDefinition({
@@ -126,6 +158,7 @@ describe('table round-trip through saveWorkbook → loadWorkbook', () => {
   it('preserves headerRowCount + totalsRowCount + totalsRowShown', async () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'T');
+    writeRange(ws, 'A1', [['a', 'b']]);
     addTable(
       ws,
       makeTableDefinition({
