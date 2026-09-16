@@ -2,7 +2,7 @@
 '@office-kit/xlsx': minor
 ---
 
-feat: `addExcelTable` now rejects a table that disagrees with the sheet under it
+feat!: `addExcelTable` now rejects a table that disagrees with the sheet under it
 
 A table whose `columns` count did not match the width of its `ref`, or whose header
 cells did not hold the column names it declared, produced a workbook Excel treats as
