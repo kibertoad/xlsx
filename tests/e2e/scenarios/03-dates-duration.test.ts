@@ -37,17 +37,16 @@ const buildDateBook = (date1904: boolean) => {
     applyNumberFormat: true,
   });
 
-  const labels = ['Date 1', 'Date 2', 'Date 3', 'Mid-day', 'Now-ish'];
-  const dates = [
-    new Date(Date.UTC(2024, 0, 1)),
-    new Date(Date.UTC(2024, 5, 15)),
-    new Date(Date.UTC(2024, 11, 31)),
-    new Date(Date.UTC(2024, 0, 1, 12, 30)),
-    new Date(Date.UTC(2026, 4, 5, 9, 0)),
+  const dateRows: Array<[label: string, date: Date]> = [
+    ['Date 1', new Date(Date.UTC(2024, 0, 1))],
+    ['Date 2', new Date(Date.UTC(2024, 5, 15))],
+    ['Date 3', new Date(Date.UTC(2024, 11, 31))],
+    ['Mid-day', new Date(Date.UTC(2024, 0, 1, 12, 30))],
+    ['Now-ish', new Date(Date.UTC(2026, 4, 5, 9, 0))],
   ];
-  for (let i = 0; i < dates.length; i++) {
-    setCell(ws, i + 1, 1, labels[i]);
-    setCell(ws, i + 1, 2, dates[i] as Date, dateXfId);
+  for (const [i, [label, date]] of dateRows.entries()) {
+    setCell(ws, i + 1, 1, label);
+    setCell(ws, i + 1, 2, date, dateXfId);
   }
 
   // Duration column.

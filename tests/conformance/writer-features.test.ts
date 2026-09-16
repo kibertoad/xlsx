@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { setFormula } from '../../src/cell/cell.js';
+import { makeRichText } from '../../src/cell/rich-text.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { makeColor } from '../../src/styles/colors.js';
 import { setCellBackgroundColor, setCellFont } from '../../src/styles/cell-style.js';
@@ -46,6 +47,7 @@ import {
   hideRow,
   mergeCells,
   setAutoFilter,
+  ensureCell,
   setCell,
   setColumnWidth,
   setComment,
@@ -87,9 +89,9 @@ describe('conformance: writer feature survey', () => {
       const w = ws(addWorksheet(wb, 'F'));
       setCell(w, 1, 1, 10);
       setCell(w, 1, 2, 20);
-      const f = setCell(w, 1, 3);
+      const f = ensureCell(w, 1, 3);
       setFormula(f, 'A1+B1', { cachedValue: 30 });
-      const f2 = setCell(w, 2, 3);
+      const f2 = ensureCell(w, 2, 3);
       setFormula(f2, 'SUM(A1:B1)', { cachedValue: 30 });
       await expectClean(wb);
     });
@@ -170,6 +172,19 @@ describe('conformance: writer feature survey', () => {
         columns: ['name', 'qty'],
         headerRowCount: 1,
       });
+      await expectClean(wb);
+    });
+
+    it('Excel table over a rich-text header row', async () => {
+      const wb = createWorkbook();
+      const w = ws(addWorksheet(wb, 'RT'));
+      setCell(w, 1, 1, { kind: 'rich-text', runs: makeRichText([{ text: 'S' }, { text: 'KU', font: { b: true } }]) });
+      setCell(w, 1, 2, 'qty');
+      setCell(w, 2, 1, 'A-001');
+      setCell(w, 2, 2, 3);
+      setCell(w, 3, 1, 'A-002');
+      setCell(w, 3, 2, 5);
+      addExcelTable(wb, w, { name: 'Rich', ref: 'A1:B3', columns: ['SKU', 'qty'] });
       await expectClean(wb);
     });
 
@@ -292,7 +307,7 @@ describe('conformance: writer feature survey', () => {
 
       const b = ws(addWorksheet(wb, 'Calc'));
       setCell(b, 1, 1, 'total');
-      const tot = setCell(b, 1, 2);
+      const tot = ensureCell(b, 1, 2);
       setFormula(tot, 'SUM(Data!B2:B4)', { cachedValue: 525 });
 
       const c = ws(addWorksheet(wb, 'Report'));

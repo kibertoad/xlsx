@@ -96,11 +96,8 @@ describe('iterValues — rectangular (#24)', () => {
 
     const wb2 = createWorkbook();
     const ws2 = addWorksheet(wb2, 'S2');
-    for (let r = 0; r < before.length; r++) {
-      const row = before[r];
-      if (!row) continue;
-      for (let c = 0; c < row.length; c++) {
-        const v = row[c];
+    for (const [r, row] of before.entries()) {
+      for (const [c, v] of row.entries()) {
         if (v !== null) setCell(ws2, r + 1, c + 1, v);
       }
     }

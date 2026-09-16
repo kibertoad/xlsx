@@ -11,9 +11,11 @@
 
 import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell.js';
 import type { Relationships } from '../packaging/relationships.js';
+import type { Stylesheet } from '../styles/stylesheet.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import { escapeCellString, escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { normalizeFormulaText } from '../utils/formula-text.js';
 import type { SharedStringsTable } from '../workbook/shared-strings.js';
 import { addSharedRichText, addSharedString } from '../workbook/shared-strings.js';
 import { MARKUP_COMPAT_NS, SHEET_MAIN_NS, X14_NS } from '../xml/namespaces.js';
@@ -45,6 +47,12 @@ const HYPERLINK_REL_TYPE = 'http://schemas.openxmlformats.org/officeDocument/200
 export interface WorksheetWriteContext {
   /** Accumulator the writer mutates as it emits string cells. */
   sharedStrings: SharedStringsTable;
+  /**
+   * Stylesheet the sheet's cells resolve their `styleId` against. Held live
+   * rather than as a count, because the write-only path grows the pool while
+   * rows stream out.
+   */
+  styles: Stylesheet;
   /**
    * Workbook epoch for `Date` / `{kind:'duration'}` cell serialisation. `true`
    * = Mac 1904 epoch; `false` (default) = Windows 1900 epoch. Modern Excel
@@ -135,7 +143,14 @@ function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
     parts.push(`<row r="${rowIdx}"${dimAttrs}>`);
     for (const colIdx of colKeys) {
       const cell = row.get(colIdx);
-      if (cell) parts.push(serializeCell(cell, ctx));
+      if (!cell) continue;
+      // styleId 0 emits no `s=` attribute at all, so it stays legal even on the
+      // empty pool an unstyled workbook carries.
+      if (cell.styleId !== 0 &&
+          (!Number.isInteger(cell.styleId) || cell.styleId < 0 || cell.styleId >= ctx.styles.cellXfs.length)) {
+        throw unknownStyleId(cell, ws.title, ctx.styles.cellXfs.length);
+      }
+      parts.push(serializeCell(cell, ctx));
     }
     parts.push('</row>');
   }
@@ -269,6 +284,21 @@ const serializeDimension = (ws: Worksheet): string => {
   return `<dimension ref="${ref}"/>`;
 };
 
+/**
+ * Excel resolves `<c s="n">` against `cellXfs`, and refuses to open a sheet
+ * whose `n` names no entry: the file loads with the repair dialog and the sheet
+ * is dropped. A `styleId` that leaves the pool it came from is the way to get
+ * there, most often an id from `registerCellStyle` applied to a cell in a
+ * different workbook, so refuse to emit rather than write a file Excel will
+ * reject.
+ */
+const unknownStyleId = (cell: Cell, sheetTitle: string, xfCount: number): OpenXmlSchemaError =>
+  new OpenXmlSchemaError(
+    `Cell ${getCoordinate(cell)} on sheet "${sheetTitle}" has styleId ${cell.styleId}, ` +
+      `outside this workbook's cellXfs pool [0, ${xfCount}). A styleId is an index into one ` +
+      `workbook's stylesheet; ids from registerCellStyle are valid only for the workbook that produced them.`,
+  );
+
 const colLetters = (n: number): string => {
   let m = n;
   let out = '';
@@ -369,7 +399,9 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   if (f.del2) fAttrs.push('del2="1"');
   if (f.aca) fAttrs.push('aca="1"');
   if (f.ca) fAttrs.push('ca="1"');
-  // Pass the formula text through verbatim, including any `_xlfn.` /
+  // A leading `=` never belongs in `<f>`: the `make*` constructors strip it,
+  // and a hand-built `FormulaValue` literal reaches the writer without passing
+  // one. Everything else goes through verbatim, including any `_xlfn.` /
   // `_xlfn._xlws.` future-function prefix the reader preserved. The prefix is
   // part of the stored function name (`_xlfn.XLOOKUP`, `_xlfn.LET`, …) and
   // Excel accepts it in an ordinary cell with no metadata — it is *not*
@@ -380,7 +412,11 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   // dynamic array. We never synthesise a prefix here — we only echo what the
   // source contained — so we can't emit a form Excel didn't itself author.
   const fAttrStr = fAttrs.length > 0 ? ` ${fAttrs.join(' ')}` : '';
-  const formulaText = escapeXmlText(escapeCellString(f.formula));
+  const normalized = normalizeFormulaText(f.formula);
+  if ((f.t === 'normal' || f.t === 'array') && normalized.length === 0) {
+    throw new OpenXmlSchemaError(`worksheet: ${f.t} formula must not be empty at ${ref}`);
+  }
+  const formulaText = escapeXmlText(escapeCellString(normalized));
   const fEl = formulaText.length > 0 ? `<f${fAttrStr}>${formulaText}</f>` : `<f${fAttrStr}/>`;
 
   let valueAttr = '';
@@ -571,7 +607,7 @@ const serializeCfRule = (rule: ConditionalFormattingRule): string => {
   if (rule.timePeriod !== undefined) attrs += ` timePeriod="${rule.timePeriod}"`;
 
   const inner: string[] = [];
-  for (const f of rule.formulas) inner.push(`<formula>${escapeXmlText(f)}</formula>`);
+  for (const f of rule.formulas) inner.push(`<formula>${escapeXmlText(normalizeFormulaText(f))}</formula>`);
   if (rule.innerXml) inner.push(rule.innerXml);
   if (inner.length === 0) return `<cfRule${attrs}/>`;
   return `<cfRule${attrs}>${inner.join('')}</cfRule>`;
@@ -599,8 +635,8 @@ const serializeDataValidation = (dv: DataValidation): string => {
   attrs += ` sqref="${escapeXmlAttr(multiCellRangeToString(dv.sqref))}"`;
 
   const formulas: string[] = [];
-  if (dv.formula1 !== undefined) formulas.push(`<formula1>${escapeXmlText(dv.formula1)}</formula1>`);
-  if (dv.formula2 !== undefined) formulas.push(`<formula2>${escapeXmlText(dv.formula2)}</formula2>`);
+  if (dv.formula1 !== undefined) formulas.push(`<formula1>${escapeXmlText(normalizeFormulaText(dv.formula1))}</formula1>`);
+  if (dv.formula2 !== undefined) formulas.push(`<formula2>${escapeXmlText(normalizeFormulaText(dv.formula2))}</formula2>`);
   if (formulas.length === 0) return `<dataValidation${attrs}/>`;
   return `<dataValidation${attrs}>${formulas.join('')}</dataValidation>`;
 };

@@ -14,22 +14,14 @@ import type { XlsxSink } from '../io/sink.js';
 import { addDefault, addOverride, makeManifest, manifestToBytes } from '../packaging/manifest.js';
 import { makeRelationships, relsToBytes } from '../packaging/relationships.js';
 import {
-  addBorder,
   addCellXf,
-  addFill,
-  addFont,
-  addNumFmt,
-  type CellXf,
+  buildXfPatch,
+  type CellStyleSpec,
   defaultCellXf,
   makeStylesheet,
   type Stylesheet,
 } from '../styles/stylesheet.js';
 import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
-import type { Alignment } from '../styles/alignment.js';
-import type { Border } from '../styles/borders.js';
-import type { Fill } from '../styles/fills.js';
-import type { Font } from '../styles/fonts.js';
-import type { Protection } from '../styles/protection.js';
 import { escapeXmlAttr } from '../utils/escape.js';
 import { OpenXmlIoError } from '../utils/exceptions.js';
 import { utf8ByteLength } from '../utils/utf8.js';
@@ -60,14 +52,12 @@ export interface WriteOnlyOptions {
   estimatedMaxRow?: number;
 }
 
-export interface WriteOnlyStyle {
-  font?: Font;
-  fill?: Fill;
-  border?: Border;
-  alignment?: Alignment;
-  numberFormat?: string;
-  protection?: Protection;
-}
+/**
+ * A cell's look on the write-only path. Identical to the modelled writer's
+ * {@link CellStyleSpec}: the two writers resolve a spec to an xf through the
+ * same builder, so an axis added to one is honoured by both.
+ */
+export type WriteOnlyStyle = CellStyleSpec;
 
 export type WriteOnlyRowItem = CellValue | { value: CellValue; style?: WriteOnlyStyle };
 
@@ -105,32 +95,13 @@ const validateTitle = (title: string, taken: Set<string>): void => {
   }
 };
 
-/** Allocate a CellXf id for a style spec. Mirrors cell-style.ts but works directly on the pool. */
-const allocateXfId = (ss: Stylesheet, style: WriteOnlyStyle): number => {
-  // `xfId` is intentionally omitted: leaving it undefined skips the
-  // cellStyleXfs bounds check and matches what Excel emits when there is no
-  // parent style.
-  let xf: CellXf = { fontId: 0, fillId: 0, borderId: 0, numFmtId: 0 };
-  if (style.font !== undefined) {
-    xf = { ...xf, fontId: addFont(ss, style.font), applyFont: true };
-  }
-  if (style.fill !== undefined) {
-    xf = { ...xf, fillId: addFill(ss, style.fill), applyFill: true };
-  }
-  if (style.border !== undefined) {
-    xf = { ...xf, borderId: addBorder(ss, style.border), applyBorder: true };
-  }
-  if (style.numberFormat !== undefined) {
-    xf = { ...xf, numFmtId: addNumFmt(ss, style.numberFormat), applyNumberFormat: true };
-  }
-  if (style.alignment !== undefined) {
-    xf = { ...xf, alignment: style.alignment, applyAlignment: true };
-  }
-  if (style.protection !== undefined) {
-    xf = { ...xf, protection: style.protection, applyProtection: true };
-  }
-  return addCellXf(ss, xf);
-};
+/**
+ * Allocate a CellXf id for a style spec. `defaultCellXf` omits `xfId`, which
+ * skips the cellStyleXfs bounds check and matches what Excel emits when there
+ * is no parent style.
+ */
+const allocateXfId = (ss: Stylesheet, style: WriteOnlyStyle): number =>
+  addCellXf(ss, { ...defaultCellXf(), ...buildXfPatch(ss, style) });
 
 interface WorkbookState {
   styles: Stylesheet;
@@ -174,7 +145,7 @@ const makeWriteOnlyWorksheet = (state: WorkbookState, title: string, sheetId: nu
   let closed = false;
   let headerFlushed = false;
   const columnWidths = new Map<number, number>();
-  const dummyCtx = { sharedStrings: state.sst, rels: makeRelationships() };
+  const dummyCtx = { sharedStrings: state.sst, styles: state.styles, rels: makeRelationships() };
   const encoder = new TextEncoder();
   const stream = state.writer.addStreamingEntry(`xl/worksheets/sheet${sheetId}.xml`);
   let pendingText = '';
