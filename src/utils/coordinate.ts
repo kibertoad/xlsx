@@ -96,6 +96,9 @@ export interface CellRangeBoundaries {
  * `"A:A"`, `"1:1"`) or already-computed 1-based bounds. Code that walks rows
  * and columns as integers passes the bounds directly instead of formatting a
  * string for the callee to parse straight back.
+ *
+ * Two spellings of one parameter, deliberately, rather than a second function
+ * per helper: each capability keeps a single canonical path through the API.
  */
 export type RangeRef = string | CellRangeBoundaries;
 

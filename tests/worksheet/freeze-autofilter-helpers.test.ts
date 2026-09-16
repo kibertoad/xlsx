@@ -52,16 +52,22 @@ describe('freezeRows / freezeColumns / setFreezePanes', () => {
     expect(getFreezePanes(ws)).toBe('D3');
   });
 
-  it('setFreezePanes accepts a zero on either axis; A1 and negatives throw', () => {
+  it('setFreezePanes accepts a zero on either axis; negatives and fractions throw', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
     setFreezePanes(ws, { rows: 2, cols: 0 });
     expect(getFreezePanes(ws)).toBe('A3');
     setFreezePanes(ws, { rows: 0, cols: 2 });
     expect(getFreezePanes(ws)).toBe('C1');
-    expect(() => setFreezePanes(ws, { rows: 0, cols: 0 })).toThrow(OpenXmlSchemaError);
     expect(() => setFreezePanes(ws, { rows: -1, cols: 1 })).toThrow(OpenXmlSchemaError);
     expect(() => setFreezePanes(ws, { rows: 1, cols: 1.5 })).toThrow(OpenXmlSchemaError);
+  });
+
+  it('both spellings of "nothing to freeze" fail the same way', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    expect(() => setFreezePanes(ws, 'A1')).toThrow(/not a valid freeze ref/);
+    expect(() => setFreezePanes(ws, { rows: 0, cols: 0 })).toThrow(/not a valid freeze ref/);
   });
 
   it('unfreezePanes drops the freeze', () => {

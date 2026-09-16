@@ -47,18 +47,15 @@ export function makeCellRange(minRow: number, minCol: number, maxRow: number, ma
 
 /**
  * Resolve a {@link RangeRef} to numeric bounds: A1 expressions go through
- * {@link rangeBoundaries}, pre-computed bounds pass through. Inverted bounds
- * are normalised either way, so `{ minRow: 5, maxRow: 1 }` behaves like
- * `"A5:A1"` rather than iterating zero rows.
+ * {@link rangeBoundaries}, pre-computed bounds through {@link makeCellRange}.
+ * Both paths validate against the grid and normalise inverted bounds, so
+ * `{ minRow: 5, maxRow: 1 }` behaves like `"A5:A1"` rather than iterating zero
+ * rows, and a fractional or off-grid bound throws here instead of half-way
+ * through the caller's loop.
  */
 export function parseRange(input: RangeRef): CellRange {
   if (typeof input === 'string') return rangeBoundaries(input);
-  return {
-    minRow: Math.min(input.minRow, input.maxRow),
-    minCol: Math.min(input.minCol, input.maxCol),
-    maxRow: Math.max(input.minRow, input.maxRow),
-    maxCol: Math.max(input.minCol, input.maxCol),
-  };
+  return makeCellRange(input.minRow, input.minCol, input.maxRow, input.maxCol);
 }
 
 /** Format a CellRange back into the canonical OOXML string. */

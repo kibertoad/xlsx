@@ -11,13 +11,19 @@ import {
   setRangeNumberFormat,
   setRangeStyle,
 } from '../../src/styles/cell-style.js';
+import { MAX_COL, MAX_ROW } from '../../src/utils/coordinate.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   applyToRange,
   clearRange,
+  copyRange,
   getCell,
+  getMergedCells,
   getRangeAddress,
   getRangeValues,
+  mergeCells,
+  moveRange,
   setCell,
   setRangeValues,
   writeRange,
@@ -91,5 +97,93 @@ describe('numeric bounds as a range ref', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'Quarter 1');
     expect(getRangeAddress(ws, bounds)).toBe("'Quarter 1'!B2:C3");
+  });
+
+  it('copyRange / moveRange take bounds on both sides', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const target = { minRow: 6, minCol: 2, maxRow: 7, maxCol: 3 };
+    setRangeValues(ws, bounds, [
+      [1, 2],
+      [3, 4],
+    ]);
+    expect(copyRange(ws, bounds, target)).toBe(4);
+    expect(getRangeValues(ws, target)).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+    expect(moveRange(ws, bounds, { minRow: 10, minCol: 2, maxRow: 11, maxCol: 3 })).toBe(4);
+    expect(getRangeValues(ws, bounds)).toEqual([
+      [null, null],
+      [null, null],
+    ]);
+  });
+});
+
+// The A1 parser rejects "A0", a fractional row, and anything past the grid
+// ceiling. Numeric bounds reach the same helpers, so they have to fail the same
+// way rather than iterate a region Excel cannot express.
+describe('numeric bounds are validated, not trusted', () => {
+  const invalid = [
+    { minRow: 0, minCol: 0, maxRow: 0, maxCol: 0 },
+    { minRow: 1.5, minCol: 1, maxRow: 3.5, maxCol: 3 },
+    { minRow: Number.NaN, minCol: 1, maxRow: 3, maxCol: 3 },
+    { minRow: 1, minCol: 1, maxRow: MAX_ROW + 1, maxCol: 3 },
+    { minRow: 1, minCol: 1, maxRow: 3, maxCol: MAX_COL + 1 },
+    { minRow: 1, minCol: 1, maxRow: 1e15, maxCol: 3 },
+  ];
+
+  it('every range consumer throws instead of silently doing nothing', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    for (const bad of invalid) {
+      expect(() => clearRange(ws, bad)).toThrow(OpenXmlSchemaError);
+      expect(() => getRangeValues(ws, bad)).toThrow(OpenXmlSchemaError);
+      expect(() => applyToRange(ws, bad, () => {})).toThrow(OpenXmlSchemaError);
+      expect(() => setRangeNumberFormat(wb, ws, bad, '#,##0')).toThrow(OpenXmlSchemaError);
+      expect(() => getRangeAddress(ws, bad)).toThrow(OpenXmlSchemaError);
+    }
+    expect(ws.rows.size).toBe(0);
+  });
+
+  it('writeRange checks a numeric anchor even when every value is skipped', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    expect(() => writeRange(ws, { row: 0, col: -3 }, [[null]])).toThrow(OpenXmlSchemaError);
+    expect(() => writeRange(ws, { row: 1, col: 1.5 }, [['a']])).toThrow(OpenXmlSchemaError);
+    expect(ws.rows.size).toBe(0);
+  });
+});
+
+describe('bounds define the region, not just its corner', () => {
+  it('setRangeValues drops values past the range instead of writing outside it', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const oneCell = { minRow: 1, minCol: 1, maxRow: 1, maxCol: 1 };
+    setRangeValues(ws, oneCell, [
+      [1, 2, 3],
+      [4, 5, 6],
+    ]);
+    expect(getRangeValues(ws, oneCell)).toEqual([[1]]);
+    expect(getCell(ws, 1, 2)).toBeUndefined();
+    expect(getCell(ws, 2, 1)).toBeUndefined();
+  });
+
+  it('mergeCells normalises the bounds and keeps its own copy', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const inverted = { minRow: 5, minCol: 3, maxRow: 1, maxCol: 1 };
+    expect(mergeCells(ws, inverted)).toEqual({ minRow: 1, minCol: 1, maxRow: 5, maxCol: 3 });
+    inverted.maxRow = 500;
+    expect(getMergedCells(ws)[0]).toEqual({ minRow: 1, minCol: 1, maxRow: 5, maxCol: 3 });
+  });
+
+  it('getRangeAddress names the region the other helpers operate on', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Quarter 1');
+    const inverted = { minRow: 5, minCol: 1, maxRow: 1, maxCol: 1 };
+    setCell(ws, 3, 1, 'inside A1:A5');
+    expect(getRangeAddress(ws, inverted)).toBe("'Quarter 1'!A1:A5");
+    expect(clearRange(ws, inverted)).toBe(1);
   });
 });

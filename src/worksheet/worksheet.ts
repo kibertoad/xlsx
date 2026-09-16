@@ -42,7 +42,7 @@ import type { SortState } from './sort-state.js';
 import type { WebPublishItem, WorksheetCustomProperty } from './web-publish.js';
 import { type Hyperlink, makeHyperlink } from './hyperlinks.js';
 import type { TableDefinition } from './table.js';
-import { freezePaneRef, makeFreezePane, makeSheetView, type SheetView } from './views.js';
+import { type FreezeCounts, freezePaneRef, makeFreezePane, makeSheetView, type SheetView } from './views.js';
 
 export interface Worksheet {
   title: string;
@@ -417,8 +417,12 @@ export function writeRange(
   values: ReadonlyArray<ReadonlyArray<CellValue | undefined>>,
 ): { minRow: number; maxRow: number; minCol: number; maxCol: number } | undefined {
   if (values.length === 0) return undefined;
-  const { col: startCol, row: startRow } =
-    typeof startRef === 'string' ? coordinateToTuple(startRef) : startRef;
+  const anchor = typeof startRef === 'string' ? coordinateToTuple(startRef) : startRef;
+  // A numeric anchor skips the A1 parser, so nothing has grid-checked it yet.
+  // Without this an off-grid anchor surfaces only once setCell reaches a
+  // non-skipped value, with part of the block already written.
+  if (typeof startRef !== 'string') validateRowCol(anchor.row, anchor.col);
+  const { col: startCol, row: startRow } = anchor;
   let maxRow = startRow;
   let maxCol = startCol;
   for (let i = 0; i < values.length; i++) {
@@ -626,12 +630,12 @@ export function getCellAddress(ws: Worksheet, c: Cell): string {
  * Sheet-qualified A1 range address — `'Sheet1!A1:B5'` for plain titles,
  * `'\'Quarter 1\'!A1:B5'` for titles needing quoting. Pass any A1-style range
  * string (single cell `'A1'`, rectangle `'A1:B5'`, row span `'1:5'`, column
- * span `'A:E'`), and numeric bounds are formatted as a rectangle; the helper
- * does no validation on an A1 `range` itself; that is the caller's
- * responsibility.
+ * span `'A:E'`), which is forwarded verbatim without validation, or numeric
+ * bounds, which are validated and normalised into a rectangle so the address
+ * names the region the other range helpers would operate on.
  */
 export function getRangeAddress(ws: Worksheet, range: RangeRef): string {
-  const ref = typeof range === 'string' ? range : boundariesToRangeString(range);
+  const ref = typeof range === 'string' ? range : boundariesToRangeString(parseRange(range));
   return formatSheetQualifiedRef(ws.title, ref);
 }
 
@@ -904,18 +908,19 @@ export function getCellByCoord(ws: Worksheet, coord: string): Cell | undefined {
 
 // ---- merged cells ---------------------------------------------------------
 
-const toCellRange = (refOrRange: string | CellRange): CellRange =>
-  typeof refOrRange === 'string' ? parseRange(refOrRange) : refOrRange;
-
 /**
  * Merge a range. The top-left cell keeps its value; every other cell in the
  * range is dropped from `ws.rows` so the on-wire `<sheetData>` won't carry
  * phantom cells underneath the merge. Mirrors openpyxl's
  * `MergedCellRange.format()`. Idempotent for an identical range, throws when
  * the range overlaps an existing merge.
+ *
+ * The registered range is a validated, normalised copy of `refOrRange`, so
+ * mutating a bounds object afterwards can't rewrite a merge that is already on
+ * the sheet.
  */
-export function mergeCells(ws: Worksheet, refOrRange: string | CellRange): CellRange {
-  const range = toCellRange(refOrRange);
+export function mergeCells(ws: Worksheet, refOrRange: RangeRef): CellRange {
+  const range = parseRange(refOrRange);
   for (const existing of ws.mergedCells) {
     if (rangeToString(existing) === rangeToString(range)) return existing;
     if (rangesOverlap(existing, range)) {
@@ -938,8 +943,8 @@ export function mergeCells(ws: Worksheet, refOrRange: string | CellRange): CellR
 }
 
 /** Drop a previously-merged range. No-op if the range isn't registered. */
-export function unmergeCells(ws: Worksheet, refOrRange: string | CellRange): boolean {
-  const target = rangeToString(toCellRange(refOrRange));
+export function unmergeCells(ws: Worksheet, refOrRange: RangeRef): boolean {
+  const target = rangeToString(parseRange(refOrRange));
   const idx = ws.mergedCells.findIndex((r) => rangeToString(r) === target);
   if (idx < 0) return false;
   ws.mergedCells.splice(idx, 1);
@@ -1017,10 +1022,7 @@ const ensurePrimaryView = (ws: Worksheet): SheetView => {
  * Pass `undefined` to clear any existing freeze. Targets the workbook's primary
  * SheetView (`ws.views[0]`); creates one if absent.
  */
-export function setFreezePanes(
-  ws: Worksheet,
-  topLeft: string | { rows: number; cols: number } | undefined,
-): void {
+export function setFreezePanes(ws: Worksheet, topLeft: string | FreezeCounts | undefined): void {
   if (topLeft === undefined) {
     if (ws.views[0]) delete ws.views[0].pane;
     return;
@@ -1030,16 +1032,18 @@ export function setFreezePanes(
   view.pane = makeFreezePane(ref);
 }
 
-/** Translate freeze counts to the A1 ref of the first unfrozen cell. */
-const freezeCountsToRef = ({ rows, cols }: { rows: number; cols: number }): string => {
+/**
+ * Translate freeze counts to the A1 ref of the first unfrozen cell. Zero on
+ * both axes composes to `"A1"`, rejected by {@link makeFreezePane} as the
+ * no-op freeze, so that condition has one message in one place however it was
+ * spelled.
+ */
+const freezeCountsToRef = ({ rows, cols }: FreezeCounts): string => {
   if (!Number.isInteger(rows) || rows < 0) {
     throw new OpenXmlSchemaError(`setFreezePanes: rows must be a non-negative integer; got ${rows}`);
   }
   if (!Number.isInteger(cols) || cols < 0) {
     throw new OpenXmlSchemaError(`setFreezePanes: cols must be a non-negative integer; got ${cols}`);
-  }
-  if (rows === 0 && cols === 0) {
-    throw new OpenXmlSchemaError('setFreezePanes: rows and cols cannot both be 0; pass undefined to unfreeze');
   }
   return `${columnLetterFromIndex(cols + 1)}${rows + 1}`;
 };
@@ -1052,26 +1056,28 @@ export function getFreezePanes(ws: Worksheet): string | undefined {
 }
 
 /**
- * Freeze the top `count` rows. Equivalent to `setFreezePanes(ws, "A${count +
- * 1}")` — Excel's "Freeze Top Row" is `freezeRows(ws, 1)`.
+ * Freeze the top `count` rows. Equivalent to `setFreezePanes(ws, { rows: count,
+ * cols: 0 })`, and Excel's "Freeze Top Row" is `freezeRows(ws, 1)`. Rejects 0,
+ * which the counts form accepts: {@link unfreezePanes} is how a freeze is
+ * cleared.
  */
 export function freezeRows(ws: Worksheet, count: number): void {
   if (!Number.isInteger(count) || count < 1) {
     throw new OpenXmlSchemaError(`freezeRows: count must be a positive integer; got ${count}`);
   }
-  setFreezePanes(ws, `A${count + 1}`);
+  setFreezePanes(ws, { rows: count, cols: 0 });
 }
 
 /**
- * Freeze the leftmost `count` columns. Equivalent to `setFreezePanes(ws,
- * "${columnLetter(count + 1)}1")` — Excel's "Freeze First Column" is
- * `freezeColumns(ws, 1)`.
+ * Freeze the leftmost `count` columns. Equivalent to `setFreezePanes(ws, {
+ * rows: 0, cols: count })`, and Excel's "Freeze First Column" is
+ * `freezeColumns(ws, 1)`. Rejects 0 for the same reason as {@link freezeRows}.
  */
 export function freezeColumns(ws: Worksheet, count: number): void {
   if (!Number.isInteger(count) || count < 1) {
     throw new OpenXmlSchemaError(`freezeColumns: count must be a positive integer; got ${count}`);
   }
-  setFreezePanes(ws, `${columnLetterFromIndex(count + 1)}1`);
+  setFreezePanes(ws, { rows: 0, cols: count });
 }
 
 /** Drop the freeze pane on the primary view. */
@@ -1208,17 +1214,25 @@ export function setSelectedRange(ws: Worksheet, sqref: string): void {
  * down starting at the top-left of `range`; subsequent rows follow. `null` /
  * `undefined` entries skip the cell. Useful for dropping a header + data block
  * in one call.
+ *
+ * Values past the range's bottom or right edge are dropped rather than written
+ * outside it, the way {@link copyRange} clips to its target extent. Use
+ * {@link writeRange} for the unbounded form, which takes an anchor and grows to
+ * fit the array.
  */
 export function setRangeValues(
   ws: Worksheet,
   range: RangeRef,
   rows: ReadonlyArray<ReadonlyArray<CellValue | null | undefined>>,
 ): void {
-  const { minRow, minCol } = parseRange(range);
-  for (let i = 0; i < rows.length; i++) {
+  const { minRow, maxRow, minCol, maxCol } = parseRange(range);
+  const height = Math.min(rows.length, maxRow - minRow + 1);
+  const width = maxCol - minCol + 1;
+  for (let i = 0; i < height; i++) {
     const row = rows[i];
     if (!row) continue;
-    for (let j = 0; j < row.length; j++) {
+    const rowWidth = Math.min(row.length, width);
+    for (let j = 0; j < rowWidth; j++) {
       const v = row[j];
       if (v === null || v === undefined) continue;
       setCell(ws, minRow + i, minCol + j, v);
@@ -1281,8 +1295,8 @@ export function getRangeValues(ws: Worksheet, range: RangeRef): (CellValue | nul
  */
 export function copyRange(
   ws: Worksheet,
-  source: string,
-  target: string,
+  source: RangeRef,
+  target: RangeRef,
   opts: { targetWs?: Worksheet } = {},
 ): number {
   const dest = opts.targetWs ?? ws;
@@ -1329,8 +1343,8 @@ export function copyRange(
  */
 export function moveRange(
   ws: Worksheet,
-  source: string,
-  target: string,
+  source: RangeRef,
+  target: RangeRef,
   opts: { targetWs?: Worksheet } = {},
 ): number {
   const dest = opts.targetWs ?? ws;
