@@ -26,8 +26,12 @@ import { applyZip64EntryCountPatch } from './zip64-patch.js';
 
 const ZIP32_MAX_ENTRIES = 0xffff;
 
-/** Deflate effort: 0 stores the bytes uncompressed, 9 is slowest and smallest. */
+/** Deflate effort: 0 skips compression, 9 is the slowest and smallest. */
 export type CompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+
+/** ZIP's DOS date field cannot express a year outside this range. */
+const MIN_ZIP_YEAR = 1980;
+const MAX_ZIP_YEAR = 2099;
 
 export interface ZipWriterOptions {
   /**
@@ -36,6 +40,11 @@ export interface ZipWriterOptions {
    * defaults each entry to the wall clock and two archives built from
    * identical input differ in bytes. Pin this to get reproducible output for
    * golden-file tests or content-addressed caching.
+   *
+   * Recorded as the date's UTC wall time, to a two-second resolution, with the
+   * year required to fall in 1980-2099. The DOS field carries no timezone, so
+   * writing local components would leave the bytes depending on the writer's
+   * `TZ`, which is the opposite of what pinning a stamp is for.
    */
   mtime?: Date;
   /** Deflate level handed to fflate. Defaults to fflate's own 6. */
@@ -106,14 +115,50 @@ export interface StreamingEntryWriter {
  * (`toFile`, `toWritable`) forward each chunk to disk / the wrapped writable
  * without ever holding the full archive resident. Either kind plugs in here.
  */
+/**
+ * fflate reads `mtime` with local-time getters, so the same pinned Date lands
+ * in different header bytes in each timezone. Offsetting by the zone puts the
+ * date's UTC wall time in the field on every machine, which is the whole point
+ * of pinning it.
+ */
+const toZipStamp = (mtime: Date): Date => {
+  const ms = mtime.getTime();
+  if (Number.isNaN(ms)) {
+    throw new OpenXmlIoError('createZipWriter: mtime is an invalid Date');
+  }
+  const year = mtime.getUTCFullYear();
+  if (year < MIN_ZIP_YEAR || year > MAX_ZIP_YEAR) {
+    throw new OpenXmlIoError(
+      `createZipWriter: mtime ${mtime.toISOString()} is outside the range a ZIP timestamp can hold (${MIN_ZIP_YEAR}-${MAX_ZIP_YEAR})`,
+    );
+  }
+  return new Date(ms + mtime.getTimezoneOffset() * 60_000);
+};
+
+/**
+ * fflate looks the level up in a table and falls back to 6 for anything off
+ * the end, so an out-of-range level would quietly produce default output. The
+ * union type catches that for TypeScript callers; this catches it for the rest.
+ */
+const validateCompressionLevel = (level: number): void => {
+  if (!Number.isInteger(level) || level < 0 || level > 9) {
+    throw new OpenXmlIoError(`createZipWriter: compressionLevel must be an integer in [0, 9]; got ${level}`);
+  }
+};
+
 export function createZipWriter(sink: XlsxSink, opts: ZipWriterOptions = {}): ZipWriter {
+  // Both options are checked before the sink is opened: a bad one otherwise
+  // surfaces from fflate half-way through the first entry, by which time a file
+  // sink holds a partial archive.
+  if (opts.compressionLevel !== undefined) validateCompressionLevel(opts.compressionLevel);
+  const stamp = opts.mtime === undefined ? undefined : toZipStamp(opts.mtime);
   const writer = sink.toBytes();
   const deflateOpts = opts.compressionLevel === undefined ? undefined : { level: opts.compressionLevel };
   // ZipDeflate's constructor only accepts compression options, so mtime is set
   // on the entry afterwards; fflate reads the field when it emits the headers.
   const newEntry = (path: string, compress: boolean): ZipDeflate | ZipPassThrough => {
     const file = compress ? new ZipDeflate(path, deflateOpts) : new ZipPassThrough(path);
-    if (opts.mtime !== undefined) file.mtime = opts.mtime;
+    if (stamp !== undefined) file.mtime = stamp;
     return file;
   };
   let finalised: Promise<Uint8Array> | undefined;

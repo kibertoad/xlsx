@@ -91,11 +91,14 @@ export interface SaveOptions {
    * Last-modified timestamp for every ZIP entry. Left unset, fflate stamps the
    * wall clock into each local header and central-directory record, so saving
    * the same workbook twice produces different bytes. Pin it and the output is
-   * byte-identical for identical input, which is what golden-file tests and
-   * content-addressed caches need.
+   * byte-identical for identical input on any machine, which is what
+   * golden-file tests and content-addressed caches need.
+   *
+   * Recorded as the date's UTC wall time, to ZIP's two-second resolution; the
+   * year has to fall in 1980-2099, which is all the DOS field can hold.
    */
   mtime?: Date;
-  /** Deflate level, 0 (store) to 9 (smallest). Defaults to fflate's own 6. */
+  /** Deflate level, 0 (no compression) to 9 (smallest). Defaults to fflate's own 6. */
   compressionLevel?: CompressionLevel;
 }
 

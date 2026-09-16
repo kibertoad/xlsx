@@ -3,6 +3,9 @@
 // Two things in an xlsx move on their own: the per-entry ZIP timestamp and the
 // core properties. Pin both and the same payload always renders the same bytes,
 // which is what a golden-file test or a content-addressed cache needs.
+//
+// The ZIP stamp holds the date's UTC wall time to a two-second resolution, and
+// its year has to be in 1980-2099, so the bytes are the same on every machine.
 
 import { workbookToBytes } from '@office-kit/xlsx/io';
 import { addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook';

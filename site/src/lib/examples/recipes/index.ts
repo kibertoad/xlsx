@@ -306,7 +306,8 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         source: deterministicBytes,
         notes: [
           'ZIP has no "no timestamp" encoding: each entry carries a DOS mtime, and without `mtime` it comes from the wall clock. That alone makes two renders of the same payload differ.',
-          '`createWriteOnlyWorkbook` takes the same option, as does `compressionLevel` (0 stores, 9 is smallest) on both paths.',
+          '`createWriteOnlyWorkbook` takes the same option, as does `compressionLevel` (0 skips compression, 9 is smallest) on both paths.',
+          'The stamp is recorded as the date’s UTC wall time, to a two-second resolution, so the bytes do not change with the machine’s timezone. Its year has to fall in 1980-2099, which is all a ZIP date field holds: `new Date(0)` is rejected.',
           'Core properties are the other moving part. Set `created` / `modified` from your payload, not from `new Date()`.',
         ],
         relatedApi: ['workbookToBytes', 'saveWorkbook', 'createWriteOnlyWorkbook'],

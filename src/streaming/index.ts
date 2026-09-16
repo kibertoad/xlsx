@@ -19,3 +19,6 @@ export {
   type WriteOnlyWorkbook,
   type WriteOnlyWorksheet,
 } from './write-only.js';
+
+// Type of a WriteOnlyOptions field; see the note in src/io/index.ts.
+export type { CompressionLevel } from '../zip/writer.js';

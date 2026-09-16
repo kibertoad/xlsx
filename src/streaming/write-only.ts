@@ -53,10 +53,11 @@ export interface WriteOnlyOptions {
   /**
    * Last-modified timestamp for every ZIP entry. Same reproducibility story as
    * `SaveOptions.mtime`: unset, fflate stamps the wall clock per entry and two
-   * runs over identical rows differ in bytes.
+   * runs over identical rows differ in bytes. Recorded as the date's UTC wall
+   * time, to a two-second resolution, and the year has to fall in 1980-2099.
    */
   mtime?: Date;
-  /** Deflate level, 0 (store) to 9 (smallest). Defaults to fflate's own 6. */
+  /** Deflate level, 0 (no compression) to 9 (smallest). Defaults to fflate's own 6. */
   compressionLevel?: CompressionLevel;
 }
 

@@ -277,6 +277,8 @@ import { workbookToBytes } from '@office-kit/xlsx/io';
 
 // Without `mtime`, every ZIP entry carries the wall clock and two renders of
 // the same payload differ. Set the core properties from your payload too.
+// The stamp records the date in UTC (year 1980-2099), so the bytes match on
+// any machine.
 wb.properties = { created: payload.generatedAt, modified: payload.generatedAt };
 const bytes = await workbookToBytes(wb, { mtime: new Date(payload.generatedAt) });
 ```
