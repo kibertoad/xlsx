@@ -424,7 +424,7 @@ import {
 // Write the header row first. Both entry points check the definition against
 // the sheet, because Excel repairs the file (dropping the table) when the two
 // disagree: the column count has to match the range width, the ref has to
-// leave at least one data row under the header and totals rows, names have to
+// leave at least room for the header and totals rows and totals rows, names have to
 // be unique, and every header cell has to hold its column's name as text.
 // headerRowCount: 0 skips the header check for a header-less table.
 writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);

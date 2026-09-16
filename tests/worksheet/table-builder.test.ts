@@ -180,13 +180,25 @@ describe('addExcelTable', () => {
     );
   });
 
-  it('rejects a ref with no room for a data row', () => {
+  it('accepts and round-trips a header-only table with no data rows', async () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
     writeRange(ws, 'A1', [['SKU', 'Qty']]);
-    expect(() => addExcelTable(wb, ws, { name: 't', ref: 'A1:B1', columns: ['SKU', 'Qty'] })).toThrow(
-      /is 1 row\(s\) tall, which leaves no data row/,
-    );
+    addExcelTable(wb, ws, { name: 't', ref: 'A1:B1', columns: ['SKU', 'Qty'] });
+    const loaded = await loadWorkbook(fromBuffer(await workbookToBytes(wb)));
+    expect(expectSheet(loaded.sheets[0]?.sheet).tables[0]?.ref).toBe('A1:B1');
+  });
+
+  it.each(['headerRowCount', 'totalsRowCount'] as const)('rejects invalid %s before attachment', (field) => {
+    for (const count of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 32]) {
+      const wb = createWorkbook();
+      const ws = addWorksheet(wb, 'A');
+      writeRange(ws, 'A1', [['SKU', 'Qty']]);
+      expect(() => addExcelTable(wb, ws, {
+        name: 't', ref: 'A1:B5', columns: ['SKU', 'Qty'], [field]: count,
+      })).toThrow(OpenXmlSchemaError);
+      expect(ws.tables).toHaveLength(0);
+    }
   });
 
   it('counts the totals row against the ref height', () => {
@@ -196,11 +208,11 @@ describe('addExcelTable', () => {
     expect(() =>
       addExcelTable(wb, ws, {
         name: 't',
-        ref: 'A1:B2',
+        ref: 'A1:B1',
         columns: ['SKU', 'Qty'],
         totalsRowCount: 1,
       }),
-    ).toThrow(/leaves no data row/);
+    ).toThrow(/cannot contain/);
   });
 
   it('rejects a whole-row ref rather than reading it as 16384 columns', () => {

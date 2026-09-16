@@ -2039,7 +2039,7 @@ export function getAutoFilter(ws: Worksheet): AutoFilter | undefined {
 /**
  * Append a table, rejecting one whose geometry or column names disagree with
  * the cells under it: the column count has to match the width of `ref`, `ref`
- * has to leave a data row under the header and totals rows, column names have
+ * has to contain the header and totals rows, column names have
  * to be unique and non-empty, and every header cell has to hold its column's
  * name as text. The id and displayName must be workbook-unique, and stay the
  * caller's responsibility: neither is visible from a single sheet.

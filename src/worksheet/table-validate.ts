@@ -83,10 +83,16 @@ export const validateTableAgainstSheet = (ws: Worksheet, table: TableDefinition)
   }
   const headerRows = table.headerRowCount ?? 1;
   const totalsRows = table.totalsRowCount ?? 0;
+  for (const field of ['headerRowCount', 'totalsRowCount'] as const) {
+    const count = table[field];
+    if (count !== undefined && (!Number.isInteger(count) || count < 0 || count > 0xffff_ffff)) {
+      throw new OpenXmlSchemaError(`${where}: ${field} must be an unsigned 32-bit integer, got ${count}`);
+    }
+  }
   const height = bounds.maxRow - bounds.minRow + 1;
-  if (height <= headerRows + totalsRows) {
+  if (height < headerRows + totalsRows) {
     throw new OpenXmlSchemaError(
-      `${where}: ref "${table.ref}" is ${height} row(s) tall, which leaves no data row under` +
+      `${where}: ref "${table.ref}" is ${height} row(s) tall, which cannot contain` +
         ` ${headerRows} header row(s) and ${totalsRows} totals row(s)`,
     );
   }

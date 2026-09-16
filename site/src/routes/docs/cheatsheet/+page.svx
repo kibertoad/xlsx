@@ -321,7 +321,7 @@ addDefinedName(wb, { name: 'Totals', value: 'Q1!$A$1:$A$10,Q2!$A$1:$A$10' });
 import { addExcelTable, writeRange } from '@office-kit/xlsx/worksheet';
 
 // Write the header row first: addExcelTable checks the definition against the
-// sheet (column count against the range width, one data row under the header,
+// sheet (column count against the range width, room for the header and totals rows,
 // unique names, each header cell holding its column's name as text), because
 // Excel repairs the file (dropping the table) when the two disagree.
 writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);
