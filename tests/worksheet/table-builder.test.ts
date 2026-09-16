@@ -9,7 +9,7 @@ import { setFormula } from '../../src/cell/cell.js';
 import { makeRichText } from '../../src/cell/rich-text.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addExcelTable } from '../../src/worksheet/table.js';
-import { setCell, type Worksheet, writeRange } from '../../src/worksheet/worksheet.js';
+import { ensureCell, setCell, type Worksheet, writeRange } from '../../src/worksheet/worksheet.js';
 
 const expectSheet = (
   ws: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined,
@@ -127,7 +127,7 @@ describe('addExcelTable', () => {
   it('accepts a formula header whose cached value spells the column name', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
-    setFormula(setCell(ws, 1, 1), 'CONCATENATE("S","KU")', { cachedValue: 'SKU' });
+    setFormula(ensureCell(ws, 1, 1), 'CONCATENATE("S","KU")', { cachedValue: 'SKU' });
     setCell(ws, 1, 2, 'Qty');
     const t = addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', 'Qty'] });
     expect(t.columns.map((c) => c.name)).toEqual(['SKU', 'Qty']);
@@ -147,7 +147,7 @@ describe('addExcelTable', () => {
   it('tells an uncalculated formula header apart from an empty one', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
-    setFormula(setCell(ws, 1, 1), 'CONCATENATE("S","KU")');
+    setFormula(ensureCell(ws, 1, 1), 'CONCATENATE("S","KU")');
     setCell(ws, 1, 2, 'Qty');
     expect(() =>
       addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', 'Qty'] }),

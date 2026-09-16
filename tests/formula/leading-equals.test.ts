@@ -32,6 +32,7 @@ import { worksheetToBytes } from '../../src/worksheet/writer.js';
 import {
   addConditionalFormatting,
   addDataValidation,
+  ensureCell,
   getCell,
   makeWorksheet,
   setCell,
@@ -66,10 +67,10 @@ describe('formula values normalise a leading =', () => {
   it('strips it in every in-place setter', () => {
     const ws = makeWorksheet('Sheet1');
 
-    setFormula(setCell(ws, 1, 1), '=A2+B2');
-    setArrayFormula(setCell(ws, 2, 1), 'A2:A4', '=TRANSPOSE(B1:D1)');
-    setSharedFormula(setCell(ws, 3, 1), 0, '=A1*2');
-    setDataTableFormula(setCell(ws, 4, 1), '=TABLE(B1,C1)', { ref: 'A4:A6' });
+    setFormula(ensureCell(ws, 1, 1), '=A2+B2');
+    setArrayFormula(ensureCell(ws, 2, 1), 'A2:A4', '=TRANSPOSE(B1:D1)');
+    setSharedFormula(ensureCell(ws, 3, 1), 0, '=A1*2');
+    setDataTableFormula(ensureCell(ws, 4, 1), '=TABLE(B1,C1)', { ref: 'A4:A6' });
 
     expect(formulaAt(ws, 1, 1).formula).toBe('A2+B2');
     expect(formulaAt(ws, 2, 1).formula).toBe('TRANSPOSE(B1:D1)');
@@ -105,7 +106,7 @@ describe('<f> never carries a leading =', () => {
   it('drops it from a hand-built FormulaValue that skipped the constructors', () => {
     const ws = makeWorksheet('Sheet1');
     setCell(ws, 1, 1, { kind: 'formula', t: 'normal', formula: '=SUM(B1:B3)' });
-    setCellValue(setCell(ws, 2, 1), { kind: 'formula', t: 'array', formula: '=ROW(A1:A2)', ref: 'A2:A3' });
+    setCellValue(ensureCell(ws, 2, 1), { kind: 'formula', t: 'array', formula: '=ROW(A1:A2)', ref: 'A2:A3' });
 
     const xml = sheetText(ws);
     expect(xml).toContain('<f>SUM(B1:B3)</f>');

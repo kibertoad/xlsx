@@ -43,6 +43,9 @@ for every export see <a href="{base}/api">API reference</a>.
 | Build a small workbook → `Buffer` (Node) | `createWorkbook` + `addWorksheet` + `setCell` + `workbookToBuffer` |
 | Edit one cell of an existing file (Node) | `loadWorkbook` + `fromFile` + `setCell` + `saveWorkbook` + `toFile` |
 | Append rows to a worksheet | `appendRow` (or `appendRows`) |
+| Reach a cell without overwriting its value | `ensureCell` |
+| Empty a cell but keep its formatting | `setCell` with `null` |
+| Remove a cell, formatting included | `deleteCell` (or `clearRange`) |
 | Assert on a workbook you just generated | `loadWorkbook` + `fromArrayBuffer` + `getSheet` |
 
 ### Stream-write (huge sheets)
@@ -71,6 +74,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Promote a range to an Excel Table | `addExcelTable` |
 | AutoFilter on a header row (no table styling) | `setAutoFilter` + `makeAutoFilter` |
 | Dropdown data validation | `makeDataValidation` + `addDataValidation` |
+| A column the recipient fills in | `applyBuiltinStyle` + `addDataValidation` |
 | Heat-map (3-color scale) | `makeCfRule` + `addConditionalFormatting` |
 
 ### Drawings
@@ -231,6 +235,37 @@ appendRows(ws, [
 ]);
 ```
 
+### Reach a cell without overwriting its value
+
+```ts
+import { setFormula } from '@office-kit/xlsx/cell';
+import { ensureCell } from '@office-kit/xlsx/worksheet';
+
+// setCell always writes its value argument, so `setCell(ws, 4, 1, null)` over a
+// populated cell blanks it. ensureCell allocates only when the cell is missing.
+setFormula(ensureCell(ws, 4, 1), 'SUM(A1:A3)');
+```
+
+### Empty a cell but keep its formatting
+
+```ts
+import { setCell } from '@office-kit/xlsx/worksheet';
+
+// `null` is a CellValue, so this is the explicit "no value here" write. The
+// cell stays in the sheet and keeps its fill, border and number format, the
+// same as pressing Delete in Excel.
+setCell(ws, 4, 1, null);
+```
+
+### Remove a cell, formatting included
+
+```ts
+import { clearRange, deleteCell } from '@office-kit/xlsx/worksheet';
+
+deleteCell(ws, 4, 1); // the cell is gone, not blank
+clearRange(ws, 'A4:H20'); // same across a rectangle, returns the count removed
+```
+
 ### Stream-write millions of rows to a file
 
 ```ts
@@ -383,6 +418,21 @@ addDataValidation(
     sqref: 'B2:B100',
     formula1: '"red,green,blue"',
   }),
+);
+```
+
+### A column the recipient fills in
+
+```ts
+import { applyBuiltinStyle } from '@office-kit/xlsx/styles';
+import { addDataValidation, ensureCell, makeDataValidation } from '@office-kit/xlsx/worksheet';
+
+for (let row = 2; row <= 20; row++) {
+  applyBuiltinStyle(wb, ensureCell(ws, row, 3), 'Input');
+}
+addDataValidation(
+  ws,
+  makeDataValidation({ type: 'decimal', operator: 'between', sqref: 'C2:C20', formula1: '0', formula2: '10', showErrorMessage: true, errorStyle: 'stop' }),
 );
 ```
 
