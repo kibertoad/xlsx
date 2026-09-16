@@ -66,7 +66,8 @@ for every export see <a href="{base}/api">API reference</a>.
 | Add a formula (with cached value) | `setCell` + `makeFormula` |
 | Recalculate the workbook on open | `setFullCalcOnLoad` |
 | Make a cell clickable | `setHyperlink` |
-| Merge cells + freeze the header row | `mergeCells` + `makeFreezePane` + `makeSheetView` |
+| Merge cells + freeze the header row | `mergeCells` + `setFreezePanes` |
+| Build `$B$5` / `$A$4:$H$20` from numbers | `tupleToCoordinate` + `boundariesToRangeString` |
 
 ### Worksheet structure
 
@@ -394,10 +395,28 @@ setHyperlink(ws, 'A1', { target: 'https://example.com', display: 'Open' });
 ### Merge cells + freeze the header row
 
 ```ts
-import { makeFreezePane, makeSheetView, mergeCells } from '@office-kit/xlsx/worksheet';
+import { mergeCells, setFreezePanes } from '@office-kit/xlsx/worksheet';
 
 mergeCells(ws, 'A1:C1');
-ws.views.push(makeSheetView({ pane: makeFreezePane('A2') }));
+setFreezePanes(ws, { rows: 1, cols: 0 }); // or setFreezePanes(ws, 'A2')
+```
+
+### Build `$B$5` / `$A$4:$H$20` from numbers
+
+```ts
+import { boundariesToRangeString, tupleToCoordinate } from '@office-kit/xlsx/utils';
+
+const rate = tupleToCoordinate(2, 5, { absoluteCol: true, absoluteRow: true }); // '$B$5'
+const data = boundariesToRangeString({ minRow: 4, minCol: 1, maxRow: 20, maxCol: 8 }); // 'A4:H20'
+```
+
+Range-taking helpers also accept those bounds directly, so there is no need to
+format a string the callee parses straight back:
+
+```ts
+import { setRangeBorderBox } from '@office-kit/xlsx/styles';
+
+setRangeBorderBox(wb, ws, { minRow: 4, minCol: 1, maxRow: 20, maxCol: 8 }, { style: 'thin' });
 ```
 
 ### Multiple sheets + a defined name

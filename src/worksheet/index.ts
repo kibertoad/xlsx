@@ -33,7 +33,6 @@ export {
   expandColumnGroup,
   expandRowGroup,
   findCells,
-  freezePanes,
   getAutoFilter,
   getCell,
   getCellByCoord,
@@ -126,6 +125,7 @@ export {
 export type { ColumnDimension, RowDimension } from './dimensions.js';
 export { makeColumnDimension, makeRowDimension } from './dimensions.js';
 export type {
+  FreezeCounts,
   Pane,
   PaneState,
   PaneType,

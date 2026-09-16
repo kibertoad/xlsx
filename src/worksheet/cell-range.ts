@@ -13,6 +13,7 @@ import {
   MAX_COL,
   MAX_ROW,
   rangeBoundaries,
+  type RangeRef,
   tupleToCoordinate,
 } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
@@ -44,9 +45,17 @@ export function makeCellRange(minRow: number, minCol: number, maxRow: number, ma
   };
 }
 
-/** Parse a range expression — wraps {@link rangeBoundaries}. */
-export function parseRange(input: string): CellRange {
-  return rangeBoundaries(input);
+/**
+ * Resolve a {@link RangeRef} to numeric bounds: A1 expressions go through
+ * {@link rangeBoundaries}, pre-computed bounds through {@link makeCellRange}.
+ * Both paths validate against the grid and normalise inverted bounds, so
+ * `{ minRow: 5, maxRow: 1 }` behaves like `"A5:A1"` rather than iterating zero
+ * rows, and a fractional or off-grid bound throws here instead of half-way
+ * through the caller's loop.
+ */
+export function parseRange(input: RangeRef): CellRange {
+  if (typeof input === 'string') return rangeBoundaries(input);
+  return makeCellRange(input.minRow, input.minCol, input.maxRow, input.maxCol);
 }
 
 /** Format a CellRange back into the canonical OOXML string. */

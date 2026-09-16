@@ -68,6 +68,12 @@ export function makeSheetView(opts: Partial<SheetView> = {}): SheetView {
   };
 }
 
+/** How many rows / columns a freeze holds in place, counted from the top-left. */
+export interface FreezeCounts {
+  rows: number;
+  cols: number;
+}
+
 /**
  * Build a frozen Pane from a top-left coordinate. Per Excel semantics:
  * - "B2" → freeze 1 row + 1 col → xSplit=1, ySplit=1, activePane='bottomRight'
