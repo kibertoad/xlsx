@@ -7,12 +7,9 @@
 // autoFilter; sortState / totals row formulas / calculated column formulas /
 // xml extlst are reserved for later.
 
-import { cellValueAsString } from '../cell/cell.js';
-import { rangeBoundaries, tupleToCoordinate } from '../utils/coordinate.js';
-import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { Workbook } from '../workbook/workbook.js';
 import type { AutoFilter } from './auto-filter.js';
-import type { Worksheet } from './worksheet.js';
+import { addTable, type Worksheet } from './worksheet.js';
 
 export interface TableColumn {
   /** 1-based column id (per-table). */
@@ -102,54 +99,13 @@ const nextTableId = (wb: Workbook): number => {
 };
 
 /**
- * Reject a table whose declared columns disagree with the sheet underneath it.
- * Excel treats either mismatch as a damaged file and "repairs" it by dropping
- * the table, which surfaces as silent data loss a long way from the call that
- * caused it, so it is a boundary error here instead.
- */
-const validateTableAgainstSheet = (
-  ws: Worksheet,
-  ref: string,
-  columns: ReadonlyArray<TableColumn>,
-  headerRowCount: number,
-): void => {
-  const bounds = rangeBoundaries(ref);
-  const width = bounds.maxCol - bounds.minCol + 1;
-  if (columns.length !== width) {
-    throw new OpenXmlSchemaError(
-      `addExcelTable: ref "${ref}" spans ${width} column(s) but ${columns.length} column(s) were supplied`,
-    );
-  }
-  if (headerRowCount === 0) return;
-  const headerRow = ws.rows.get(bounds.minRow);
-  for (let i = 0; i < columns.length; i++) {
-    const expected = columns[i]?.name;
-    if (expected === undefined) continue;
-    const col = bounds.minCol + i;
-    // Compare rendered text, not the raw CellValue: Excel matches a table
-    // column against what the header cell displays, so a rich-text or numeric
-    // header spelling the right name is valid and must not be rejected.
-    const actual = cellValueAsString(headerRow?.get(col)?.value ?? null);
-    if (actual === expected) continue;
-    const held = actual === '' ? 'is empty' : `holds "${actual}"`;
-    throw new OpenXmlSchemaError(
-      `addExcelTable: header cell ${tupleToCoordinate(col, bounds.minRow)} ${held}` +
-        ` but column ${i + 1} is named "${expected}".` +
-        ' Write the header row before adding the table, or pass headerRowCount: 0' +
-        ' for a header-less table.',
-    );
-  }
-};
-
-/**
  * High-level wrapper that builds a TableDefinition + pushes it onto `ws.tables`
  * in one call. Auto-assigns the workbook-unique `id`, derives `displayName`
  * from the supplied `name`, and constructs `TableColumn` records (1-based ids)
  * from a string-array shorthand.
  *
- * Validates `ref` against the sheet: the column count has to match the range
- * width, and unless `headerRowCount` is 0 every header cell has to already
- * hold its column's name.
+ * Goes through {@link addTable}, so the definition is checked against the sheet
+ * before it lands. Pass `headerRowCount: 0` for a genuinely header-less table.
  */
 export const addExcelTable = (
   wb: Workbook,
@@ -170,7 +126,6 @@ export const addExcelTable = (
   const cols: TableColumn[] = opts.columns.map((c, i): TableColumn =>
     typeof c === 'string' ? { id: i + 1, name: c } : c,
   );
-  validateTableAgainstSheet(ws, opts.ref, cols, opts.headerRowCount ?? 1);
   const styleInfo: TableStyleInfo | undefined =
     opts.styleInfo ??
     (opts.style !== undefined ? { name: opts.style, showRowStripes: true, showColumnStripes: false } : undefined);
@@ -186,6 +141,5 @@ export const addExcelTable = (
     ...(styleInfo ? { styleInfo } : {}),
     ...(opts.autoFilter ? { autoFilter: opts.autoFilter } : {}),
   });
-  ws.tables.push(def);
-  return def;
+  return addTable(ws, def);
 };

@@ -5,6 +5,7 @@ import { fromBuffer } from '../../src/io/node.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { setFormula } from '../../src/cell/cell.js';
 import { makeRichText } from '../../src/cell/rich-text.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addExcelTable } from '../../src/worksheet/table.js';
@@ -111,15 +112,46 @@ describe('addExcelTable', () => {
     expect(() =>
       addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['x', 'y'] }),
     ).toThrow(/header cell B1 holds "WRONG" but column 2 is named "y"/);
+    expect(ws.tables).toHaveLength(0);
   });
 
-  it('accepts a rich-text header whose text matches the column name', () => {
+  it('accepts a rich-text header whose runs spell the column name', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
     setCell(ws, 1, 1, { kind: 'rich-text', runs: makeRichText([{ text: 'S' }, { text: 'KU' }]) });
+    setCell(ws, 1, 2, 'Qty');
+    const t = addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', 'Qty'] });
+    expect(t.columns.map((c) => c.name)).toEqual(['SKU', 'Qty']);
+  });
+
+  it('accepts a formula header whose cached value spells the column name', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setFormula(setCell(ws, 1, 1), 'CONCATENATE("S","KU")', { cachedValue: 'SKU' });
+    setCell(ws, 1, 2, 'Qty');
+    const t = addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', 'Qty'] });
+    expect(t.columns.map((c) => c.name)).toEqual(['SKU', 'Qty']);
+  });
+
+  it('rejects a numeric header, which Excel does not keep as header text', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setCell(ws, 1, 1, 'SKU');
     setCell(ws, 1, 2, 2024);
-    const t = addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', '2024'] });
-    expect(t.columns).toHaveLength(2);
+    expect(() =>
+      addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', '2024'] }),
+    ).toThrow(/header cell B1 holds the number 2024 .*has to hold text/s);
+    expect(ws.tables).toHaveLength(0);
+  });
+
+  it('tells an uncalculated formula header apart from an empty one', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setFormula(setCell(ws, 1, 1), 'CONCATENATE("S","KU")');
+    setCell(ws, 1, 2, 'Qty');
+    expect(() =>
+      addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', 'Qty'] }),
+    ).toThrow(/header cell A1 holds a formula with no cached value/);
   });
 
   it('rejects a missing header row, naming the escape hatch', () => {
@@ -127,7 +159,56 @@ describe('addExcelTable', () => {
     const ws = addWorksheet(wb, 'A');
     expect(() =>
       addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['x', 'y'] }),
-    ).toThrow(/headerRowCount: 0/);
+    ).toThrow(/header cell A1 is empty .*headerRowCount: 0/s);
+    expect(ws.tables).toHaveLength(0);
+  });
+
+  it('rejects an unnamed column instead of writing name="" for Excel to repair', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    expect(() => addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['', ''] })).toThrow(
+      /column 1 has no name/,
+    );
+  });
+
+  it('rejects duplicate column names, down to a case-only difference', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    writeRange(ws, 'A1', [['x', 'X']]);
+    expect(() => addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['x', 'X'] })).toThrow(
+      /column 2 repeats the name "X"/,
+    );
+  });
+
+  it('rejects a ref with no room for a data row', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    writeRange(ws, 'A1', [['SKU', 'Qty']]);
+    expect(() => addExcelTable(wb, ws, { name: 't', ref: 'A1:B1', columns: ['SKU', 'Qty'] })).toThrow(
+      /is 1 row\(s\) tall, which leaves no data row/,
+    );
+  });
+
+  it('counts the totals row against the ref height', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    writeRange(ws, 'A1', [['SKU', 'Qty']]);
+    expect(() =>
+      addExcelTable(wb, ws, {
+        name: 't',
+        ref: 'A1:B2',
+        columns: ['SKU', 'Qty'],
+        totalsRowCount: 1,
+      }),
+    ).toThrow(/leaves no data row/);
+  });
+
+  it('rejects a whole-row ref rather than reading it as 16384 columns', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    expect(() => addExcelTable(wb, ws, { name: 't', ref: '1:1', columns: ['x'] })).toThrow(
+      /ref "1:1" is not a cell range/,
+    );
   });
 
   it('skips the header check for a header-less table', () => {

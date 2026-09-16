@@ -61,7 +61,6 @@ describe('getWorkbookStats', () => {
   it('counts tables + definedNames + customProperties', () => {
     const wb = createWorkbook();
     const a = addWorksheet(wb, 'A');
-    setCell(a, 1, 1, 'h');
     writeRange(a, 'A1', [['c1', 'c2']]);
     addExcelTable(wb, a, { name: 'Tbl', ref: 'A1:B2', columns: ['c1', 'c2'] });
     addDefinedName(wb, { name: 'Wb', value: '$A$1' });
