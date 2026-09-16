@@ -28,6 +28,7 @@ export {
   countCellsByKind,
   deleteCell,
   ensureCell,
+  ensureCellByCoord,
   expandColumnGroup,
   expandRowGroup,
   findCells,

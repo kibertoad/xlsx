@@ -289,18 +289,14 @@ export function getCell(ws: Worksheet, row: number, col: number): Cell | undefin
 }
 
 /**
- * Write a Cell at (row, col). `value` always lands on the cell, so an existing
- * value is replaced. Existing cells keep their styleId / hyperlinkId /
- * commentId unless explicitly overridden.
+ * Write a Cell at (row, col), creating it when the coordinate is empty.
+ * `value` always lands on the cell, so an existing value is replaced. Use
+ * {@link ensureCell} to reach a cell without writing to it. An existing cell
+ * keeps its styleId / hyperlinkId / commentId unless `styleId` is passed.
  *
- * `value` is mandatory on purpose. A three-argument form reads like "reach the
- * cell at (row, col)" and silently wipes what is there, which is how a styling
- * pass over already-populated rows erases the formulas it walks over. Use
- * {@link ensureCell} for the reach-a-cell case.
- *
- * To empty a cell, pick the meaning you want. `null` clears the value and
- * leaves the cell in the sheet with its formatting, which is what Excel's
- * Delete key does; {@link deleteCell} drops the cell entirely, formatting
+ * `null` is the explicit empty value: it clears the value and leaves the cell
+ * in the sheet with its fill, border and number format, the way Excel's
+ * Delete key does. {@link deleteCell} drops the cell entirely, formatting
  * included, and {@link clearRange} does the same across a rectangle.
  */
 export function setCell(ws: Worksheet, row: number, col: number, value: CellValue, styleId?: number): Cell {
@@ -326,8 +322,13 @@ export function setCell(ws: Worksheet, row: number, col: number, value: CellValu
 /**
  * Get the Cell at (row, col), allocating an empty one when the coordinate is
  * not populated yet. An existing cell is returned untouched, value and all,
- * which makes this the safe way to reach a cell you are about to style or
- * attach a formula to.
+ * which makes this the way to reach a cell you are about to style or attach a
+ * formula to.
+ *
+ * {@link mergeCells} drops the cells underneath a merge; reaching one of those
+ * coordinates allocates it again, and the written `<sheetData>` then carries a
+ * blank `<c>` under the merge. A merged block's value lives on its top-left
+ * cell, so address that coordinate when the block is what you mean.
  */
 export function ensureCell(ws: Worksheet, row: number, col: number): Cell {
   const existing = ws.rows.get(row)?.get(col);
@@ -844,27 +845,46 @@ export function* getCellsInRange(ws: Worksheet, range: string): IterableIterator
   }
 }
 
+// Stricter than `coordinateToTuple`: these wrappers take a bare "A1", with no
+// `$` absolute markers and no surrounding whitespace.
+const PLAIN_COORD_RE = /^([A-Za-z]{1,3})([1-9][0-9]*)$/;
+
+const plainCoordToRowCol = (coord: string): { row: number; col: number } | undefined => {
+  const m = PLAIN_COORD_RE.exec(coord);
+  if (m === null || m[1] === undefined || m[2] === undefined) return undefined;
+  return { row: Number.parseInt(m[2], 10), col: columnIndexFromLetter(m[1]) };
+};
+
 /**
- * A1-addressed {@link setCell}. `value` is mandatory for the same reason it is
- * there: the no-value form silently blanks whatever the cell held.
+ * A1-addressed {@link setCell}: resolves `coord` to a numeric (row, col) and
+ * writes `value` there. Throws `OpenXmlSchemaError` when `coord` is not a
+ * plain A1 reference.
  */
 export function setCellByCoord(ws: Worksheet, coord: string, value: CellValue, styleId?: number): Cell {
-  const m = /^([A-Za-z]{1,3})([1-9][0-9]*)$/.exec(coord);
-  if (m === null || m[1] === undefined || m[2] === undefined) {
+  const rc = plainCoordToRowCol(coord);
+  if (rc === undefined) {
     throw new OpenXmlSchemaError(`setCellByCoord: invalid coordinate "${coord}"`);
   }
-  const col = columnIndexFromLetter(m[1]);
-  const row = Number.parseInt(m[2], 10);
-  return setCell(ws, row, col, value, styleId);
+  return setCell(ws, rc.row, rc.col, value, styleId);
 }
 
 /** Convenience getter accepting an "A1" coordinate. */
 export function getCellByCoord(ws: Worksheet, coord: string): Cell | undefined {
-  const m = /^([A-Za-z]{1,3})([1-9][0-9]*)$/.exec(coord);
-  if (m === null || m[1] === undefined || m[2] === undefined) return undefined;
-  const col = columnIndexFromLetter(m[1]);
-  const row = Number.parseInt(m[2], 10);
-  return getCell(ws, row, col);
+  const rc = plainCoordToRowCol(coord);
+  if (rc === undefined) return undefined;
+  return getCell(ws, rc.row, rc.col);
+}
+
+/**
+ * A1-addressed {@link ensureCell}. Throws `OpenXmlSchemaError` when `coord` is
+ * not a plain A1 reference.
+ */
+export function ensureCellByCoord(ws: Worksheet, coord: string): Cell {
+  const rc = plainCoordToRowCol(coord);
+  if (rc === undefined) {
+    throw new OpenXmlSchemaError(`ensureCellByCoord: invalid coordinate "${coord}"`);
+  }
+  return ensureCell(ws, rc.row, rc.col);
 }
 
 // ---- merged cells ---------------------------------------------------------

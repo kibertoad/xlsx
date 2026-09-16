@@ -9,8 +9,18 @@ import { fromBuffer } from '../../src/io/node.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { getCellFill, setCellBackgroundColor } from '../../src/styles/cell-style.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
+import { makeSharedStrings } from '../../src/workbook/shared-strings.js';
 import { addWorksheet, createWorkbook, getSheet } from '../../src/workbook/workbook.js';
-import { deleteCell, ensureCell, getCell, setCell } from '../../src/worksheet/worksheet.js';
+import { worksheetToBytes } from '../../src/worksheet/writer.js';
+import {
+  deleteCell,
+  ensureCell,
+  ensureCellByCoord,
+  getCell,
+  mergeCells,
+  setCell,
+} from '../../src/worksheet/worksheet.js';
 
 describe('ensureCell', () => {
   it('allocates a blank cell at an unpopulated coordinate', () => {
@@ -47,6 +57,42 @@ describe('ensureCell', () => {
     const ws = addWorksheet(wb, 'A');
     ensureCell(ws, 5, 1);
     expect(ws._appendRowCursor).toBe(5);
+  });
+});
+
+describe('ensureCell under a merge', () => {
+  it('re-adds a cell mergeCells dropped, so address the top-left coordinate instead', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'M');
+    setCell(ws, 1, 1, 'title');
+    mergeCells(ws, 'A1:C1');
+    expect(getCell(ws, 1, 2)).toBeUndefined();
+
+    ensureCell(ws, 1, 2);
+    const out = new TextDecoder().decode(worksheetToBytes(ws, { sharedStrings: makeSharedStrings() }));
+    expect(out).toContain('<c r="B1"/>');
+    expect(getCell(ws, 1, 1)?.value).toBe('title');
+  });
+});
+
+describe('ensureCellByCoord', () => {
+  it('allocates at an empty coordinate and hands back a populated one untouched', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const blank = ensureCellByCoord(ws, 'B3');
+    expect([blank.row, blank.col, blank.value]).toEqual([3, 2, null]);
+
+    setCell(ws, 5, 1, 'keep me', 4);
+    const existing = ensureCellByCoord(ws, 'A5');
+    expect(existing.value).toBe('keep me');
+    expect(existing.styleId).toBe(4);
+  });
+
+  it('rejects what setCellByCoord rejects: absolute markers and out-of-range rows', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    expect(() => ensureCellByCoord(ws, '$A$1')).toThrow(OpenXmlSchemaError);
+    expect(() => ensureCellByCoord(ws, 'A0')).toThrow(/invalid coordinate/);
   });
 });
 
