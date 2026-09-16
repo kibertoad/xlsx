@@ -15,7 +15,7 @@ import {
   registerCellStyle,
 } from '@office-kit/xlsx/styles';
 import { addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook';
-import { appendRow, setCell, setColumnWidths, setFreezePanes } from '@office-kit/xlsx/worksheet';
+import { appendRow, appendRows, setCell, setColumnWidths, setFreezePanes } from '@office-kit/xlsx/worksheet';
 
 const wb = createWorkbook();
 const ws = addWorksheet(wb, 'Leverage');
@@ -44,8 +44,7 @@ const rows: ReadonlyArray<readonly [string, number, number, number]> = [
   ['de', 71_579, 52_310, 19_269],
   ['fr', 12_004, 9_880, 2_124],
 ];
-const dataStyles = [TEXT, INT, INT, INT];
-for (const row of rows) appendRow(ws, [...row], { styleIds: dataStyles });
+appendRows(ws, rows, { styleIds: [TEXT, INT, INT, INT] });
 
 setColumnWidths(ws, [18, 14, 14, 14]);
 

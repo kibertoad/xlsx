@@ -56,7 +56,6 @@ for every export see <a href="{base}/api">API reference</a>.
 |------|-----------|
 | Bold + font size + fill on a header cell | `setBold` + `setFontSize` + `setCellBackgroundColor` |
 | Change several font fields, keeping the rest | `patchCellFont` |
-| A muted note (small, italic, grey) | `patchCellFont` |
 | Build a style once, apply it on every write | `registerCellStyle` + `setCell` (or `appendRow`) |
 | Number format: currency / percent | `setCellAsCurrency` + `setCellAsPercent` |
 | Number format: date | `setCellNumberFormat` + `FORMAT_DATE_DATETIME` |
@@ -270,33 +269,24 @@ import { setCell } from '@office-kit/xlsx/worksheet';
 // setCellFont(wb, c, makeFont({ bold: true })) would drop the workbook default
 // (Calibri 11); patchCellFont merges over whatever the cell already had.
 patchCellFont(wb, setCell(ws, 1, 1, 'Title'), { bold: true, size: 13 });
-```
 
-### A muted note (small, italic, grey)
-
-```ts
-import { makeColor, patchCellFont } from '@office-kit/xlsx/styles';
-import { setCell } from '@office-kit/xlsx/worksheet';
-
-patchCellFont(wb, setCell(ws, 2, 1, 'Counts exclude locked segments.'), {
-  italic: true,
-  size: 9,
-  color: makeColor({ rgb: 'FF767676' }),
-});
+// A field set to undefined is removed rather than kept.
+patchCellFont(wb, setCell(ws, 2, 1, 'Subtitle'), { bold: undefined, size: 9 });
 ```
 
 ### Build a style once, apply it on every write
 
 ```ts
 import { makeBorder, makeSide, registerCellStyle } from '@office-kit/xlsx/styles';
-import { appendRow } from '@office-kit/xlsx/worksheet';
+import { appendRows } from '@office-kit/xlsx/worksheet';
 
 const thin = makeSide({ style: 'thin' });
 const box = makeBorder({ left: thin, right: thin, top: thin, bottom: thin });
 const TEXT = registerCellStyle(wb, { border: box });
 const INT = registerCellStyle(wb, { border: box, numberFormat: '#,##0' });
 
-appendRow(ws, ['de', 71_579], { styleIds: [TEXT, INT] });
+// styleIds are column-indexed, and appendRows reuses them for every row.
+appendRows(ws, [['de', 71_579], ['fr', 12_004]], { styleIds: [TEXT, INT] });
 ```
 
 ### Number format: currency / percent

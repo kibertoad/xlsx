@@ -108,9 +108,14 @@ openpyxl, so the `Font` you pass has to be complete. `patchCellFont(wb, cell,
 everything it does not mention.
 
 To format a whole report, register each look once and let the write carry it:
-`registerCellStyle(wb, spec)` returns a `styleId` that `setCell` and
-`appendRow` accept, which replaces the per-cell styling loop openpyxl
-encourages.
+`registerCellStyle(wb, spec)` returns a `styleId` that `setCell` takes as its
+last argument and `appendRow` / `appendRows` take inside `{ styleIds: [...] }`.
+That replaces the per-cell styling loop openpyxl encourages:
+
+```ts
+const INT = registerCellStyle(wb, { numberFormat: '#,##0' });
+appendRows(ws, rows, { styleIds: [undefined, INT, INT] });
+```
 
 The pool dedups; assigning the same `Font` twice yields the same fontId.
 Every style primitive has a `make*` constructor — `makeFont`,

@@ -355,11 +355,17 @@ export function clearAllCells(ws: Worksheet): number {
 
 export interface AppendRowOptions {
   /**
-   * Style ids to apply per column, positionally aligned with `values`. A
-   * column carrying a style id is written even when its value is empty, so a
-   * bordered-but-blank input column survives the append. Build the ids once
-   * with `registerCellStyle` from `@office-kit/xlsx/styles` and reuse them for
-   * every row.
+   * Style ids to apply per column, positionally aligned with `values`. Build
+   * the ids once with `registerCellStyle` from `@office-kit/xlsx/styles` and
+   * reuse them for every row.
+   *
+   * A column carrying a style id is written even when its value is empty, so a
+   * bordered-but-blank input column survives the append. Ids past the end of
+   * `values` therefore materialise styled blank cells, widening the sheet: a
+   * 4-value row with 5 ids occupies 5 columns, and `getMaxCol`, the
+   * `<dimension>` ref and `iterRows` all see the fifth. For ragged rows that
+   * should stop at their own last value, trim the array per row:
+   * `{ styleIds: columnStyles.slice(0, values.length) }`.
    */
   styleIds?: ReadonlyArray<number | undefined>;
 }
@@ -392,11 +398,17 @@ export function appendRow(
 
 /**
  * Bulk version of {@link appendRow}: append a 2D array of values one row at a
- * time. Returns `{firstRow, lastRow}` — both 1-based, inclusive. An empty input
- * returns `{firstRow, lastRow: firstRow - 1}` so callers can detect the no-op
- * without throwing.
+ * time. Returns `{firstRow, lastRow}`, both 1-based and inclusive. An empty
+ * input returns `{firstRow, lastRow: firstRow - 1}` so callers can detect the
+ * no-op without throwing.
  *
  * Common usage: `appendRows(ws, csvParsedRows)` for fast import.
+ *
+ * `opts` is column-indexed, not row-indexed: the same
+ * {@link AppendRowOptions.styleIds} apply to every row, which is the point when
+ * a column has one format down the whole table. Rows shorter than `styleIds`
+ * still get the trailing styled blanks described there, so trim per row when
+ * the input is ragged.
  */
 export function appendRows(
   ws: Worksheet,

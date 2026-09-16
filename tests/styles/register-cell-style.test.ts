@@ -14,8 +14,16 @@ import {
   setCellStyle,
 } from '../../src/styles/cell-style.js';
 import { makeFont } from '../../src/styles/fonts.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addWorksheet, createWorkbook, getSheet } from '../../src/workbook/workbook.js';
-import { appendRow, getCell, setCell, type Worksheet } from '../../src/worksheet/worksheet.js';
+import {
+  appendRow,
+  appendRows,
+  getCell,
+  getMaxCol,
+  setCell,
+  type Worksheet,
+} from '../../src/worksheet/worksheet.js';
 
 const THIN = makeBorder({
   left: makeSide({ style: 'thin' }),
@@ -89,5 +97,68 @@ describe('registerCellStyle', () => {
     const sheet = sheetOrThrow(getSheet(reloaded, 'Data'));
     expect(getCellNumberFormat(reloaded, cellOrThrow(getCell(sheet, 1, 2)))).toBe('#,##0');
     expect(getCellBorder(reloaded, cellOrThrow(getCell(sheet, 1, 3))).top?.style).toBe('thin');
+  });
+
+  it('resolves an axis the spec omits to pool slot 0, whatever the workbook put there', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    // Nothing in ECMA-376 reserves fonts[0] for a neutral font, so a workbook
+    // from another producer can arrive with anything in the slot. This is that
+    // workbook after loadWorkbook.
+    wb.styles.fonts[0] = makeFont({ name: 'Georgia', size: 14, bold: true });
+
+    const c = setCell(ws, 1, 1, 1234, registerCellStyle(wb, { numberFormat: '#,##0' }));
+
+    expect(getCellNumberFormat(wb, c)).toBe('#,##0');
+    expect(getCellFont(wb, c).bold).toBe(true);
+  });
+
+  it('refuses to save an id that belongs to another workbook', async () => {
+    const source = createWorkbook();
+    const id = registerCellStyle(source, { numberFormat: '#,##0', border: THIN });
+
+    const target = createWorkbook();
+    const ws = addWorksheet(target, 'Report');
+    setCell(ws, 1, 1, 1234, id);
+
+    // Excel drops the sheet behind a repair dialog when `s=` names no xf, so
+    // the write has to fail instead of producing the file.
+    await expect(workbookToBytes(target)).rejects.toThrow(OpenXmlSchemaError);
+    await expect(workbookToBytes(target)).rejects.toThrow(/Cell A1 on sheet "Report" has styleId 1/);
+  });
+});
+
+describe('appendRow styleIds', () => {
+  it('applies the same column ids to every row of appendRows', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    const intId = registerCellStyle(wb, { numberFormat: '#,##0' });
+
+    appendRows(
+      ws,
+      [
+        ['de', 71_579],
+        ['fr', 12_004],
+      ],
+      { styleIds: [undefined, intId] },
+    );
+
+    expect(getCell(ws, 1, 2)?.styleId).toBe(intId);
+    expect(getCell(ws, 2, 2)?.styleId).toBe(intId);
+  });
+
+  it('widens the sheet when the ids outrun the values, and stops when they are trimmed', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Wide');
+    const inputId = registerCellStyle(wb, { border: THIN });
+    const columnStyles = [undefined, undefined, inputId];
+
+    appendRow(ws, ['de', 71_579], { styleIds: columnStyles });
+    expect(getMaxCol(ws)).toBe(3);
+    expect(getCell(ws, 1, 3)?.value).toBeNull();
+
+    const trimmed = addWorksheet(wb, 'Narrow');
+    appendRow(trimmed, ['de', 71_579], { styleIds: columnStyles.slice(0, 2) });
+    expect(getMaxCol(trimmed)).toBe(2);
   });
 });

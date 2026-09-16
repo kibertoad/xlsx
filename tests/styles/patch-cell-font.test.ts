@@ -1,7 +1,7 @@
 // Tests for patchCellFont, the merge path the single-field setters are built on.
 
 import { describe, expect, it } from 'vitest';
-import { getCellFont, patchCellFont, setCellFont } from '../../src/styles/cell-style.js';
+import { getCellFont, patchCellFont, setCellFont, setUnderline } from '../../src/styles/cell-style.js';
 import { DEFAULT_FONT, makeFont } from '../../src/styles/fonts.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import { setCell } from '../../src/worksheet/worksheet.js';
@@ -48,5 +48,35 @@ describe('patchCellFont', () => {
     const before = getCellFont(wb, c);
     patchCellFont(wb, c, {});
     expect(getCellFont(wb, c)).toEqual(before);
+  });
+
+  it('drops a field set to undefined while keeping the ones left out', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const c = setCell(ws, 1, 1, 'Note');
+    patchCellFont(wb, c, { italic: true, size: 9 });
+
+    patchCellFont(wb, c, { size: undefined });
+
+    const font = getCellFont(wb, c);
+    expect(font.size).toBeUndefined();
+    expect(font.italic).toBe(true);
+    expect(font.name).toBe(DEFAULT_FONT.name);
+  });
+
+  it('is the path setUnderline clears through, so turning it off keeps the rest', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const c = setCell(ws, 1, 1, 'Link');
+    patchCellFont(wb, c, { bold: true });
+    setUnderline(wb, c);
+    expect(getCellFont(wb, c).underline).toBe('single');
+
+    setUnderline(wb, c, false);
+
+    const font = getCellFont(wb, c);
+    expect(font.underline).toBeUndefined();
+    expect(font.bold).toBe(true);
+    expect(font.name).toBe(DEFAULT_FONT.name);
   });
 });

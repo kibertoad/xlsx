@@ -7,7 +7,6 @@ export type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignm
 export { alignmentToCss, makeAlignment } from './alignment.js';
 export type { Border, Side, SideStyle } from './borders.js';
 export { borderToCss, makeBorder, makeSide } from './borders.js';
-export type { CellStyleSpec } from './cell-style.js';
 export {
   alignCellHorizontal,
   alignCellVertical,
@@ -86,11 +85,11 @@ export {
 } from './colors.js';
 export type { Fill, GradientFill, GradientFillType, GradientStop, PatternFill, PatternType } from './fills.js';
 export { fillToCss, makeFill, makeGradientFill, makeGradientStop, makePatternFill } from './fills.js';
-export type { Font, FontScheme, UnderlineStyle, VertAlign } from './fonts.js';
+export type { Font, FontPatch, FontScheme, UnderlineStyle, VertAlign } from './fonts.js';
 export { DEFAULT_FONT, fontToCss, makeFont } from './fonts.js';
 export type { Protection } from './protection.js';
 export { makeProtection } from './protection.js';
-export type { CellXf, Stylesheet } from './stylesheet.js';
+export type { CellStyleSpec, CellXf, Stylesheet } from './stylesheet.js';
 export {
   addBorder,
   addCellStyleXf,

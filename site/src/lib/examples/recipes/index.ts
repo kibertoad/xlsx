@@ -130,7 +130,7 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
         notes: [
           'A `styleId` is a complete style, not a patch: an axis you leave out of the spec renders as the workbook default even if the target cell had something there.',
           'Equal specs dedup to one xf, so reusing three ids across a thousand rows costs three records.',
-          '`appendRow`\'s `styleIds` are positional. A column with an id is written even when its value is empty, which is how a bordered-but-blank input column survives the append.',
+          '`styleIds` are column-indexed, and `appendRows` reuses them for every row. A column with an id is written even when its value is empty, which is how a bordered-but-blank input column survives the append; it also means ids past a row\'s last value widen the sheet.',
         ],
         relatedApi: ['registerCellStyle', 'setCell', 'appendRow', 'patchCellFont'],
       },
