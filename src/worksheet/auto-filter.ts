@@ -5,7 +5,9 @@
 // spreadsheets. customFilters / top10 / dynamicFilter / colorFilter /
 // iconFilter / SortState are reserved for later iterations.
 
+import type { RangeRef } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { parseRange, rangeToString } from './cell-range.js';
 
 export type FilterColumn = {
   kind: 'filters';
@@ -17,14 +19,27 @@ export type FilterColumn = {
 };
 
 export interface AutoFilter {
-  /** Excel range the filter covers (`"A1:E100"`). */
+  /** Excel range the filter covers (`"A1:E100"`), as stored on the wire. */
   ref: string;
   filterColumns: FilterColumn[];
 }
 
-export function makeAutoFilter(opts: { ref: string; filterColumns?: FilterColumn[] }): AutoFilter {
-  return { ref: opts.ref, filterColumns: opts.filterColumns ?? [] };
+/**
+ * `ref` takes numeric bounds as well as an A1 string, matching the range-taking
+ * helpers elsewhere. A string is validated and then stored as written, since
+ * `"A:E"` is a legal filter ref that normalising would expand to the full grid.
+ */
+export function makeAutoFilter(opts: { ref: RangeRef; filterColumns?: FilterColumn[] }): AutoFilter {
+  return { ref: resolveFilterRef(opts.ref), filterColumns: opts.filterColumns ?? [] };
 }
+
+const resolveFilterRef = (ref: RangeRef): string => {
+  if (typeof ref !== 'string') return rangeToString(parseRange(ref));
+  // Parse to validate, then keep the caller's spelling: "A:E" is a legal filter
+  // ref and the normalised form would name all 1 048 576 rows of each column.
+  parseRange(ref);
+  return ref;
+};
 
 export function makeFilterColumn(opts: {
   colId: number;
@@ -44,7 +59,7 @@ export function makeFilterColumn(opts: {
 import type { Worksheet } from './worksheet.js';
 
 /** Add an AutoFilter dropdown header strip to the given range. */
-export const addAutoFilter = (ws: Worksheet, ref: string): AutoFilter => {
+export const addAutoFilter = (ws: Worksheet, ref: RangeRef): AutoFilter => {
   ws.autoFilter = makeAutoFilter({ ref });
   return ws.autoFilter;
 };

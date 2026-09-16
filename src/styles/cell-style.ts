@@ -312,11 +312,14 @@ export function registerCellStyle(wb: Workbook, spec: CellStyleSpec): number {
  * patch over whatever each cell already carried.
  */
 export function setRangeStyle(wb: Workbook, ws: Worksheet, range: RangeRef, spec: CellStyleSpec): void {
+  // Resolve the range before building the patch: buildXfPatch registers fonts,
+  // fills, borders and number formats on the workbook, and a range rejected
+  // after that would leave those records behind for the next save to write out.
+  const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   const patch = buildXfPatch(wb.styles, spec);
   if (Object.keys(patch).length === 0) return;
   reserveDefaultXfSlot(wb);
 
-  const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   // Pre-register the xf for each existing cell — Excel dedupes by value, so the
   // inner xf-pool ends up the same shape for cells already carrying part of the
   // patch as for blanks.
@@ -435,8 +438,8 @@ export function setRangeProtection(
  * are materialised so the alignment patch is observable on round-trip.
  */
 export function setRangeWrapText(wb: Workbook, ws: Worksheet, range: RangeRef, on = true): void {
-  reserveDefaultXfSlot(wb);
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
+  reserveDefaultXfSlot(wb);
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
       const cell = ensureCell(ws, r, c);
@@ -466,8 +469,8 @@ export function setRangeAlignment(
   alignment: Partial<Alignment>,
   mode: 'merge' | 'replace' = 'merge',
 ): void {
-  reserveDefaultXfSlot(wb);
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
+  reserveDefaultXfSlot(wb);
   if (mode === 'replace') {
     setRangeStyle(wb, ws, range, { alignment: makeAlignment(alignment) });
     return;

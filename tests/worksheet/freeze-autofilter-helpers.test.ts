@@ -11,6 +11,7 @@ import {
   addAutoFilterColumn,
   removeAutoFilter,
 } from '../../src/worksheet/auto-filter.js';
+import { MAX_COL, MAX_ROW } from '../../src/utils/coordinate.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import {
   freezeColumns,
@@ -70,6 +71,29 @@ describe('freezeRows / freezeColumns / setFreezePanes', () => {
     expect(() => setFreezePanes(ws, { rows: 0, cols: 0 })).toThrow(/not a valid freeze ref/);
   });
 
+  it('counts past the grid are rejected without naming internals', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    // A freeze needs one unfrozen row and column left over, so the ceiling is
+    // one below the grid's. The message has to name the count, not the
+    // coordinate the count was translated into.
+    expect(() => setFreezePanes(ws, { rows: 0, cols: MAX_COL })).toThrow(/cols must be an integer in \[0, 16383\]/);
+    expect(() => setFreezePanes(ws, { rows: MAX_ROW, cols: 0 })).toThrow(/rows must be an integer in \[0, 1048575\]/);
+    setFreezePanes(ws, { rows: MAX_ROW - 1, cols: MAX_COL - 1 });
+    expect(getFreezePanes(ws)).toBe('XFD1048576');
+  });
+
+  it('a rejected freeze leaves no sheetView behind', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    expect(ws.views).toEqual([]);
+    expect(() => setFreezePanes(ws, { rows: 0, cols: 0 })).toThrow(OpenXmlSchemaError);
+    expect(() => setFreezePanes(ws, 'A1')).toThrow(OpenXmlSchemaError);
+    expect(() => setFreezePanes(ws, { rows: 1, cols: 1.5 })).toThrow(OpenXmlSchemaError);
+    // A <sheetViews> block for a call that threw would be saved to the sheet.
+    expect(ws.views).toEqual([]);
+  });
+
   it('unfreezePanes drops the freeze', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
@@ -106,6 +130,16 @@ describe('addAutoFilter / addAutoFilterColumn / removeAutoFilter', () => {
     expect(af.ref).toBe('A1:E10');
     expect(af.filterColumns).toEqual([]);
     expect(ws.autoFilter?.ref).toBe('A1:E10');
+  });
+
+  it('addAutoFilter takes numeric bounds and rejects a malformed string', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'F');
+    expect(addAutoFilter(ws, { minRow: 1, minCol: 1, maxRow: 10, maxCol: 5 }).ref).toBe('A1:E10');
+    // A column span survives as written; normalising would name every row.
+    expect(addAutoFilter(ws, 'A:E').ref).toBe('A:E');
+    expect(() => addAutoFilter(ws, 'not a range')).toThrow(OpenXmlSchemaError);
+    expect(ws.autoFilter?.ref).toBe('A:E');
   });
 
   it('addAutoFilterColumn appends a value-list filter', () => {

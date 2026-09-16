@@ -68,6 +68,7 @@ for every export see <a href="{base}/api">API reference</a>.
 | Make a cell clickable | `setHyperlink` |
 | Merge cells + freeze the header row | `mergeCells` + `setFreezePanes` |
 | Build `$B$5` / `$A$4:$H$20` from numbers | `tupleToCoordinate` + `boundariesToRangeString` |
+| Address a range from integer bounds | any range helper with `{ minRow, minCol, maxRow, maxCol }` |
 
 ### Worksheet structure
 

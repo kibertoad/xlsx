@@ -35,7 +35,7 @@ export function makeDefinedName(opts: Partial<DefinedName> & { name: string; val
 
 // ---- Workbook ergonomic helpers -----------------------------------------
 
-import { type CellRangeBoundaries, parseSheetRange } from '../utils/coordinate.js';
+import { type CellRangeBoundaries, parseSheetRange, type RangeRef } from '../utils/coordinate.js';
 import type { Worksheet } from '../worksheet/worksheet.js';
 import { getRangeAddress } from '../worksheet/worksheet.js';
 import type { Workbook } from './workbook.js';
@@ -83,13 +83,18 @@ export const addDefinedName = (
  * (Excel's per-scope-uniqueness rule).
  *
  * Throws when `localToSheet: true` is set but the worksheet isn't on
- * `wb.sheets` — that would be a stale Worksheet reference.
+ * `wb.sheets`: that would be a stale Worksheet reference.
+ *
+ * `range` takes numeric bounds as well as an A1 string. Excel writes defined
+ * names in the absolute form, which survives a fill or an insert; pass
+ * `boundariesToRangeString(b, { absoluteCol: true, absoluteRow: true })` from
+ * `@office-kit/xlsx/utils` when the name has to pin its cells that way.
  */
 export const addDefinedNameForRange = (
   wb: Workbook,
   name: string,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   opts: { localToSheet?: boolean; hidden?: boolean; comment?: string } = {},
 ): DefinedName => {
   const value = getRangeAddress(ws, range);

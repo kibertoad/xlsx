@@ -135,7 +135,11 @@ export function coordinateToTuple(coord: string): CellCoordinateNumeric {
   return { col: columnIndexFromLetter(c.column), row: c.row };
 }
 
-/** `$` placement for a composed A1 reference. */
+/**
+ * `$` placement for a composed A1 reference. Left optional rather than
+ * defaulted to `{}`: both composers below run once per cell on a streaming
+ * read or write, so omitting the argument must not allocate one.
+ */
 export interface AbsoluteRefOptions {
   /** Prefix the column letter with `$` so it survives a fill-across. */
   absoluteCol?: boolean;
@@ -149,12 +153,12 @@ export interface AbsoluteRefOptions {
  * tracking integer coordinates never have to concatenate a column letter
  * themselves.
  */
-export function tupleToCoordinate(col: number, row: number, opts: AbsoluteRefOptions = {}): string {
+export function tupleToCoordinate(col: number, row: number, opts?: AbsoluteRefOptions): string {
   if (!Number.isInteger(row) || row < 1 || row > MAX_ROW) {
     throw new OpenXmlSchemaError(`tupleToCoordinate: row ${row} out of range`);
   }
-  const colMarker = opts.absoluteCol === true ? '$' : '';
-  const rowMarker = opts.absoluteRow === true ? '$' : '';
+  const colMarker = opts?.absoluteCol === true ? '$' : '';
+  const rowMarker = opts?.absoluteRow === true ? '$' : '';
   return `${colMarker}${columnLetterFromIndex(col)}${rowMarker}${row}`;
 }
 
@@ -321,7 +325,7 @@ export function rangeBoundaries(range: string): CellRangeBoundaries {
  * to {@link tupleToCoordinate}, so `{ absoluteCol: true, absoluteRow: true }`
  * yields the `"$A$4:$H$20"` form a formula or defined name wants.
  */
-export function boundariesToRangeString(b: CellRangeBoundaries, opts: AbsoluteRefOptions = {}): string {
+export function boundariesToRangeString(b: CellRangeBoundaries, opts?: AbsoluteRefOptions): string {
   const tl = tupleToCoordinate(b.minCol, b.minRow, opts);
   if (b.minCol === b.maxCol && b.minRow === b.maxRow) return tl;
   const br = tupleToCoordinate(b.maxCol, b.maxRow, opts);

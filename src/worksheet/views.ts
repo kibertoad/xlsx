@@ -7,7 +7,13 @@
 // an "A1"-style top-left ref. Per-pane multi-selection blocks aren't widespread
 // in real-world fixtures, so stage-1 stores a single Selection.
 
-import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate.js';
+import {
+  type CellCoordinateNumeric,
+  coordinateToTuple,
+  MAX_COL,
+  MAX_ROW,
+  tupleToCoordinate,
+} from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 
 export type PaneType = 'bottomRight' | 'topRight' | 'bottomLeft' | 'topLeft';
@@ -75,16 +81,48 @@ export interface FreezeCounts {
 }
 
 /**
- * Build a frozen Pane from a top-left coordinate. Per Excel semantics:
- * - "B2" → freeze 1 row + 1 col → xSplit=1, ySplit=1, activePane='bottomRight'
- * - "A2" → freeze 1 row only → ySplit=1, activePane='bottomLeft'
- * - "B1" → freeze 1 col only → xSplit=1, activePane='topRight'
- * - "A1" → no freeze; throws (caller should clear `ws.views[].pane`).
+ * A freeze holds everything above and left of the first unfrozen cell, so the
+ * counts and that cell are one number apart on each axis. Counted rather than
+ * addressed, the ceiling is one below the grid's: freezing all 1 048 576 rows
+ * would leave no unfrozen cell to name.
  */
-export function makeFreezePane(topLeftRef: string): Pane {
-  const { col, row } = coordinateToTuple(topLeftRef);
+const freezeCountsToTuple = ({ rows, cols }: FreezeCounts): CellCoordinateNumeric => {
+  if (!Number.isInteger(rows) || rows < 0 || rows > MAX_ROW - 1) {
+    throw new OpenXmlSchemaError(`freeze panes: rows must be an integer in [0, ${MAX_ROW - 1}]; got ${rows}`);
+  }
+  if (!Number.isInteger(cols) || cols < 0 || cols > MAX_COL - 1) {
+    throw new OpenXmlSchemaError(`freeze panes: cols must be an integer in [0, ${MAX_COL - 1}]; got ${cols}`);
+  }
+  return { col: cols + 1, row: rows + 1 };
+};
+
+/**
+ * Build a frozen Pane from the first unfrozen cell, named either by its A1 ref
+ * or by the counts of frozen rows / columns. Per Excel semantics:
+ * - "B2" / `{ rows: 1, cols: 1 }` → xSplit=1, ySplit=1, activePane='bottomRight'
+ * - "A2" / `{ rows: 1, cols: 0 }` → ySplit=1, activePane='bottomLeft'
+ * - "B1" / `{ rows: 0, cols: 1 }` → xSplit=1, activePane='topRight'
+ * - "A1" / `{ rows: 0, cols: 0 }` → no freeze; throws (clear the pane instead).
+ *
+ * Both spellings land here so the counts → ref arithmetic sits next to its
+ * inverse, {@link freezePaneRef}, and one message covers each rejection
+ * however the caller spelled it.
+ */
+export function makeFreezePane(topLeft: string | FreezeCounts): Pane {
+  let ref: string;
+  let col: number;
+  let row: number;
+  if (typeof topLeft === 'string') {
+    ref = topLeft;
+    ({ col, row } = coordinateToTuple(topLeft));
+  } else {
+    ({ col, row } = freezeCountsToTuple(topLeft));
+    ref = tupleToCoordinate(col, row);
+  }
   if (col === 1 && row === 1) {
-    throw new OpenXmlSchemaError('makeFreezePane: "A1" is not a valid freeze ref (no rows or columns to freeze)');
+    throw new OpenXmlSchemaError(
+      'freeze panes: "A1" is not a valid freeze ref (no rows or columns to freeze); pass undefined to clear an existing freeze',
+    );
   }
   const xSplit = col - 1;
   const ySplit = row - 1;
@@ -94,7 +132,7 @@ export function makeFreezePane(topLeftRef: string): Pane {
   else activePane = 'topRight';
   const pane: Pane = {
     state: 'frozen',
-    topLeftCell: topLeftRef,
+    topLeftCell: ref,
     activePane,
   };
   if (xSplit > 0) pane.xSplit = xSplit;

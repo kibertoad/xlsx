@@ -1,6 +1,7 @@
 // Tests for addDefinedNameForRange — sheet-qualified DefinedName builder.
 
 import { describe, expect, it } from 'vitest';
+import { boundariesToRangeString } from '../../src/utils/coordinate.js';
 import { addDefinedNameForRange } from '../../src/workbook/defined-names.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 
@@ -13,6 +14,15 @@ describe('addDefinedNameForRange', () => {
     expect(dn.value).toBe('Data!A1:B5');
     expect(dn.scope).toBeUndefined();
     expect(wb.definedNames.length).toBe(1);
+  });
+
+  it('takes numeric bounds, and the absolute form Excel writes', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    const b = { minRow: 4, minCol: 1, maxRow: 20, maxCol: 8 };
+    expect(addDefinedNameForRange(wb, 'Relative', ws, b).value).toBe('Data!A4:H20');
+    const absolute = boundariesToRangeString(b, { absoluteCol: true, absoluteRow: true });
+    expect(addDefinedNameForRange(wb, 'Absolute', ws, absolute).value).toBe('Data!$A$4:$H$20');
   });
 
   it('quotes the sheet name when needed', () => {
