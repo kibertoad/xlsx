@@ -146,6 +146,12 @@ function applyXfPatch(wb: Workbook, c: Cell, patch: Partial<CellXf>): void {
   c.styleId = addCellXf(wb.styles, next);
 }
 
+/**
+ * Replace the cell's font outright. `font` has to be complete: anything it
+ * omits is omitted from the `<font>` record too, and each viewer then falls
+ * back to its own default rather than the workbook's. Reach for {@link
+ * patchCellFont} unless you really mean "this font and nothing inherited".
+ */
 export function setCellFont(wb: Workbook, c: Cell, font: Font): void {
   const fontId = addFont(wb.styles, font);
   applyXfPatch(wb, c, { fontId, applyFont: true });
@@ -267,44 +273,63 @@ export function cloneCellStyle(
  * cell in `range`. The xf is registered once per style shape, so a 1000-cell
  * range allocates one xf — much faster than looping `setCellStyle` per cell.
  */
-export function setRangeStyle(
-  wb: Workbook,
-  ws: Worksheet,
-  range: string,
-  opts: {
-    font?: Font;
-    fill?: Fill;
-    border?: Border;
-    alignment?: Alignment;
-    protection?: Protection;
-    numberFormat?: string;
-  },
-): void {
+export interface CellStyleSpec {
+  font?: Font;
+  fill?: Fill;
+  border?: Border;
+  alignment?: Alignment;
+  protection?: Protection;
+  numberFormat?: string;
+}
+
+/** Resolve a style spec to the CellXf fields it sets, registering each component in its pool. */
+const buildXfPatch = (wb: Workbook, spec: CellStyleSpec): { -readonly [K in keyof CellXf]?: CellXf[K] } => {
   const patch: { -readonly [K in keyof CellXf]?: CellXf[K] } = {};
-  if (opts.font !== undefined) {
-    patch.fontId = addFont(wb.styles, opts.font);
+  if (spec.font !== undefined) {
+    patch.fontId = addFont(wb.styles, spec.font);
     patch.applyFont = true;
   }
-  if (opts.fill !== undefined) {
-    patch.fillId = addFill(wb.styles, opts.fill);
+  if (spec.fill !== undefined) {
+    patch.fillId = addFill(wb.styles, spec.fill);
     patch.applyFill = true;
   }
-  if (opts.border !== undefined) {
-    patch.borderId = addBorder(wb.styles, opts.border);
+  if (spec.border !== undefined) {
+    patch.borderId = addBorder(wb.styles, spec.border);
     patch.applyBorder = true;
   }
-  if (opts.alignment !== undefined) {
-    patch.alignment = opts.alignment;
+  if (spec.alignment !== undefined) {
+    patch.alignment = spec.alignment;
     patch.applyAlignment = true;
   }
-  if (opts.protection !== undefined) {
-    patch.protection = opts.protection;
+  if (spec.protection !== undefined) {
+    patch.protection = spec.protection;
     patch.applyProtection = true;
   }
-  if (opts.numberFormat !== undefined) {
-    patch.numFmtId = addNumFmt(wb.styles, opts.numberFormat);
+  if (spec.numberFormat !== undefined) {
+    patch.numFmtId = addNumFmt(wb.styles, spec.numberFormat);
     patch.applyNumberFormat = true;
   }
+  return patch;
+};
+
+/**
+ * Register a style and return its `styleId`, ready to pass to `setCell`,
+ * `setCellByCoord` or `appendRow`. Build each distinct look once and let the
+ * write carry the formatting, instead of running a styling pass over every cell
+ * afterwards.
+ *
+ * The id names a **complete** style, not a patch: it starts from the workbook
+ * default, so an axis missing from `spec` renders as the default even when the
+ * target cell previously had something there. {@link setCellStyle} is the
+ * patch-an-existing-cell counterpart.
+ */
+export function registerCellStyle(wb: Workbook, spec: CellStyleSpec): number {
+  reserveDefaultXfSlot(wb);
+  return addCellXf(wb.styles, { ...defaultCellXf(), ...buildXfPatch(wb, spec) });
+}
+
+export function setRangeStyle(wb: Workbook, ws: Worksheet, range: string, spec: CellStyleSpec): void {
+  const patch = buildXfPatch(wb, spec);
   if (Object.keys(patch).length === 0) return;
   reserveDefaultXfSlot(wb);
 
@@ -323,48 +348,14 @@ export function setRangeStyle(
 }
 
 /**
- * Combined cell-style setter. Each axis is independent — pass any subset and
- * the corresponding `applyXxx` flags get set on the underlying CellXf. Avoids
+ * Combined cell-style setter, patching the cell's existing xf. Each axis is
+ * independent, so pass any subset and the corresponding `applyXxx` flags get set
+ * on the underlying CellXf. Avoids
  * 5+ separate stylesheet round-trips when a caller wants to style a single cell
  * across multiple axes (Excel dedupes the resulting xf record on every call).
  */
-export function setCellStyle(
-  wb: Workbook,
-  c: Cell,
-  opts: {
-    font?: Font;
-    fill?: Fill;
-    border?: Border;
-    alignment?: Alignment;
-    protection?: Protection;
-    numberFormat?: string;
-  },
-): void {
-  const patch: { -readonly [K in keyof CellXf]?: CellXf[K] } = {};
-  if (opts.font !== undefined) {
-    patch.fontId = addFont(wb.styles, opts.font);
-    patch.applyFont = true;
-  }
-  if (opts.fill !== undefined) {
-    patch.fillId = addFill(wb.styles, opts.fill);
-    patch.applyFill = true;
-  }
-  if (opts.border !== undefined) {
-    patch.borderId = addBorder(wb.styles, opts.border);
-    patch.applyBorder = true;
-  }
-  if (opts.alignment !== undefined) {
-    patch.alignment = opts.alignment;
-    patch.applyAlignment = true;
-  }
-  if (opts.protection !== undefined) {
-    patch.protection = opts.protection;
-    patch.applyProtection = true;
-  }
-  if (opts.numberFormat !== undefined) {
-    patch.numFmtId = addNumFmt(wb.styles, opts.numberFormat);
-    patch.applyNumberFormat = true;
-  }
+export function setCellStyle(wb: Workbook, c: Cell, spec: CellStyleSpec): void {
+  const patch = buildXfPatch(wb, spec);
   if (Object.keys(patch).length === 0) return;
   applyXfPatch(wb, c, patch as Partial<CellXf>);
 }
@@ -404,7 +395,12 @@ export function setRangeBackgroundColor(
   });
 }
 
-/** Range-level shortcut for `setCellFont` (full Font replacement). */
+/**
+ * Range-level shortcut for `setCellFont`. Replaces the whole Font on every cell
+ * in the range; there is no range-level merge, so build the complete font you
+ * want rather than passing `makeFont({ bold: true })` and losing the workbook
+ * default.
+ */
 export function setRangeFont(
   wb: Workbook,
   ws: Worksheet,
@@ -509,19 +505,33 @@ export function setRangeAlignment(
 
 const mergeFont = (current: Font, patch: Partial<Font>): Font => makeFont({ ...current, ...patch });
 
+/**
+ * Merge `patch` over the cell's current font, so the fields left out keep the
+ * value they already had (the workbook default, on an unstyled cell). This is
+ * the way to change several font fields at once: `setCellFont(wb, c,
+ * makeFont({ bold: true }))` is a legal call that registers a font carrying no
+ * name and no size, and Excel, LibreOffice and Sheets each substitute a
+ * different one.
+ *
+ * The single-field setters below are this function with one field filled in.
+ */
+export function patchCellFont(wb: Workbook, c: Cell, patch: Partial<Font>): void {
+  setCellFont(wb, c, mergeFont(getCellFont(wb, c), patch));
+}
+
 /** Toggle bold on a cell. Preserves other font fields. */
 export function setBold(wb: Workbook, c: Cell, on = true): void {
-  setCellFont(wb, c, mergeFont(getCellFont(wb, c), { bold: on }));
+  patchCellFont(wb, c, { bold: on });
 }
 
 /** Toggle italic on a cell. */
 export function setItalic(wb: Workbook, c: Cell, on = true): void {
-  setCellFont(wb, c, mergeFont(getCellFont(wb, c), { italic: on }));
+  patchCellFont(wb, c, { italic: on });
 }
 
 /** Toggle strike-through on a cell. */
 export function setStrikethrough(wb: Workbook, c: Cell, on = true): void {
-  setCellFont(wb, c, mergeFont(getCellFont(wb, c), { strike: on }));
+  patchCellFont(wb, c, { strike: on });
 }
 
 /**
@@ -549,12 +559,12 @@ export function setUnderline(
 
 /** Set the font size in points (e.g. 14). Preserves other fields. */
 export function setFontSize(wb: Workbook, c: Cell, size: number): void {
-  setCellFont(wb, c, mergeFont(getCellFont(wb, c), { size }));
+  patchCellFont(wb, c, { size });
 }
 
 /** Set the font family name (e.g. "Arial"). Preserves other fields. */
 export function setFontName(wb: Workbook, c: Cell, name: string): void {
-  setCellFont(wb, c, mergeFont(getCellFont(wb, c), { name }));
+  patchCellFont(wb, c, { name });
 }
 
 /**
@@ -563,7 +573,7 @@ export function setFontName(wb: Workbook, c: Cell, name: string): void {
  */
 export function setFontColor(wb: Workbook, c: Cell, color: string | Partial<Color>): void {
   const colorObj = typeof color === 'string' ? makeColor({ rgb: color }) : makeColor(color);
-  setCellFont(wb, c, mergeFont(getCellFont(wb, c), { color: colorObj }));
+  patchCellFont(wb, c, { color: colorObj });
 }
 
 // ---- alignment presets --------------------------------------------------
@@ -706,7 +716,7 @@ export function formatAsHeader(
   const fillColorObj = typeof fillColor === 'string' ? makeColor({ rgb: fillColor }) : fillColor;
   const fontColorObj = typeof fontColor === 'string' ? makeColor({ rgb: fontColor }) : fontColor;
 
-  const styleOpts: Parameters<typeof setRangeStyle>[3] = {
+  const styleOpts: CellStyleSpec = {
     font: makeFont({ bold, color: fontColorObj }),
     fill: makePatternFill({ patternType: 'solid', fgColor: fillColorObj }),
   };

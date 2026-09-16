@@ -102,6 +102,16 @@ setCellBorder(wb, cell, makeBorder({ left: makeSide({ style: 'thin' }) }));
 setCellNumberFormat(wb, cell, '#,##0.00');
 ```
 
+`setCellFont` replaces the whole font, the way assigning `cell.font` does in
+openpyxl, so the `Font` you pass has to be complete. `patchCellFont(wb, cell,
+{ bold: true, size: 13 })` merges instead, keeping the workbook default for
+everything it does not mention.
+
+To format a whole report, register each look once and let the write carry it:
+`registerCellStyle(wb, spec)` returns a `styleId` that `setCell` and
+`appendRow` accept, which replaces the per-cell styling loop openpyxl
+encourages.
+
 The pool dedups; assigning the same `Font` twice yields the same fontId.
 Every style primitive has a `make*` constructor — `makeFont`,
 `makeBorder({ left: makeSide(...) })`, `makePatternFill`, `makeColor`,

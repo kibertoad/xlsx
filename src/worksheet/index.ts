@@ -5,6 +5,7 @@
 // phonetic / protected-ranges / properties / custom-sheet-views.
 
 export type {
+  AppendRowOptions,
   CellsByKindCounts,
   IterRowsOptions,
   Worksheet,

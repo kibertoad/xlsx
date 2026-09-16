@@ -353,17 +353,36 @@ export function clearAllCells(ws: Worksheet): number {
   return n;
 }
 
+export interface AppendRowOptions {
+  /**
+   * Style ids to apply per column, positionally aligned with `values`. A
+   * column carrying a style id is written even when its value is empty, so a
+   * bordered-but-blank input column survives the append. Build the ids once
+   * with `registerCellStyle` from `@office-kit/xlsx/styles` and reuse them for
+   * every row.
+   */
+  styleIds?: ReadonlyArray<number | undefined>;
+}
+
 /**
  * Append a row of values starting at the next empty row. Returns the row index
  * (1-based). Mirrors openpyxl's `Worksheet.append`. `null` / `undefined`
- * entries leave the cell empty.
+ * entries leave the cell empty unless `opts.styleIds` names a style for that
+ * column.
  */
-export function appendRow(ws: Worksheet, values: ReadonlyArray<CellValue | undefined>): number {
+export function appendRow(
+  ws: Worksheet,
+  values: ReadonlyArray<CellValue | undefined>,
+  opts: AppendRowOptions = {},
+): number {
   const row = ws._appendRowCursor + 1;
-  for (let i = 0; i < values.length; i++) {
+  const styleIds = opts.styleIds;
+  const width = styleIds === undefined ? values.length : Math.max(values.length, styleIds.length);
+  for (let i = 0; i < width; i++) {
     const value = values[i];
-    if (value === undefined || value === null) continue;
-    setCell(ws, row, i + 1, value);
+    const styleId = styleIds?.[i];
+    if ((value === undefined || value === null) && styleId === undefined) continue;
+    setCell(ws, row, i + 1, value ?? null, styleId);
   }
   // Even if every value is empty, advance the cursor so the next call doesn't
   // overwrite this row's would-be position.
@@ -382,6 +401,7 @@ export function appendRow(ws: Worksheet, values: ReadonlyArray<CellValue | undef
 export function appendRows(
   ws: Worksheet,
   rows: ReadonlyArray<ReadonlyArray<CellValue | undefined>>,
+  opts: AppendRowOptions = {},
 ): { firstRow: number; lastRow: number } {
   const firstRow = ws._appendRowCursor + 1;
   if (rows.length === 0) {
@@ -389,7 +409,7 @@ export function appendRows(
   }
   let lastRow = firstRow - 1;
   for (const row of rows) {
-    lastRow = appendRow(ws, row);
+    lastRow = appendRow(ws, row, opts);
   }
   return { firstRow, lastRow };
 }
