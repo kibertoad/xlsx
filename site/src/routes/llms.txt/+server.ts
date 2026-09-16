@@ -55,7 +55,7 @@ name, you know where to import it from.
 | \`@office-kit/xlsx/node\`        | Node-fs bridges: \`fromFile\`, \`fromFileSync\`, \`fromBuffer\`, \`fromReadable\`, \`toFile\`, \`toWritable\`, \`toBuffer\`, \`workbookToBuffer\` |
 | \`@office-kit/xlsx/streaming\`   | \`loadWorkbookStream\`, \`createWriteOnlyWorkbook\` + their type surface (\`ReadOnlyWorkbook\`, \`ReadOnlyWorksheet\`, \`ReadOnlyCell\`, \`IterRowsOptions\`, \`LoadWorkbookStreamOptions\`, \`WriteOnlyWorkbook\`, \`WriteOnlyWorksheet\`, \`WriteOnlyOptions\`, \`WriteOnlyRowItem\`, \`WriteOnlyStyle\`) |
 | \`@office-kit/xlsx/workbook\`    | \`createWorkbook\`, \`addWorksheet\`, \`addChartsheet\`, \`addDefinedName\`, \`makeWorkbookProtection\`, \`makeWorkbookView\` / \`makeCustomWorkbookView\`, \`makeCalcProperties\`, \`makeWorkbookProperties\`, \`makeFileVersion\`, \`makeFileSharing\`, \`makeFileRecoveryProperties\`, \`makeSmartTagProperties\` / \`makeSmartTagType\`, \`makeFunctionGroup\` / \`makeFunctionGroups\` |
-| \`@office-kit/xlsx/worksheet\`   | \`setCell\`, \`setCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`addAutoFilter\` / \`addAutoFilterColumn\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
+| \`@office-kit/xlsx/worksheet\`   | \`setCell\`, \`setCellByCoord\`, \`getCell\`, \`getCellByCoord\`, \`getCellsInRow\`, \`getCellsInColumn\`, \`getCellsInRange\`, \`appendRow\`, \`appendRows\`, \`iterRows\`, \`iterValues\`, \`getMaxRow\`, \`getMaxCol\`, \`mergeCells\` / \`unmergeCells\` / \`unmergeCellsAt\`, \`makeSheetView\` / \`makeFreezePane\` / \`freezePaneRef\`, \`setHyperlink\` / \`makeHyperlink\` / \`getCellHyperlink\`, \`addExcelTable\` / \`addTable\` / \`makeTableDefinition\` / \`makeTableColumn\`, \`setAutoFilter\` / \`getAutoFilter\` / \`makeAutoFilter\` / \`makeFilterColumn\`, \`makeDataValidation\` / \`addDataValidation\`, \`makeCfRule\` / \`makeConditionalFormatting\` / \`addConditionalFormatting\`, \`makeLegacyComment\` / \`getCellComment\`, \`makeColumnDimension\` / \`makeRowDimension\`, \`makeSheetProtection\` / \`makeProtectedRange\`, \`makeSortState\` / \`makeSortCondition\`, \`makeFormControl\` / \`makeOleObject\`, \`makeCustomSheetView\`, \`makeCellWatch\` / \`makeIgnoredError\`, \`makeSheetProperties\` |
 | \`@office-kit/xlsx/cell\`        | \`makeCell\`, \`getCoordinate\`, \`setCellValue\`, \`bindValue\`, \`setFormula\` / \`setSharedFormula\` / \`setArrayFormula\` / \`setDataTableFormula\`, \`makeErrorValue\` / \`makeDurationValue\`, \`makeRichText\` / \`makeTextRun\` / \`richTextToString\`, predicates (\`isFormulaCell\`, \`isRichTextCell\`, \`isEmptyCell\`, \`isMergedCell\`, \`isErrorCell\`, \`isFormulaValue\`, \`isRichTextValue\`, \`isErrorValue\`, \`isDurationValue\`), and value coercers (\`cellValueAsString\`, \`cellValueAsBoolean\`, \`cellValueAsDate\`, \`cellValueAsNumber\`, \`cellValueAsPrimitive\`); types \`Cell\`, \`CellValue\`, \`MergedCell\`, \`FormulaValue\`, \`RichText\`, \`TextRun\`, \`InlineFont\`, \`ExcelErrorCode\` |
 | \`@office-kit/xlsx/styles\`      | Per-cell: \`setBold\`, \`setFontSize\`, \`setFontName\`, \`setFontColor\`, \`setCellFont\`, \`setCellFill\`, \`setCellBorder\` / \`setCellBorderAll\`, \`setCellAlignment\` / \`centerCell\`, \`setCellProtection\`, \`setCellNumberFormat\`, \`setCellStyle\`, \`setCellBackgroundColor\`, \`setCellAsCurrency\`, \`setCellAsPercent\`, \`setCellAsDate\`, \`setCellAsNumber\`. Range-wide \`setRange*\` variants for the same axes. Built-in format constants \`FORMAT_GENERAL\`, \`FORMAT_TEXT\`, \`FORMAT_NUMBER\`, \`FORMAT_NUMBER_00\`, \`FORMAT_PERCENTAGE\`, \`FORMAT_PERCENTAGE_00\`, \`FORMAT_DATE_DATETIME\`, etc. Named-style + DXF (differential format) APIs |
 | \`@office-kit/xlsx/chart\`       | Legacy \`c:\` chart kinds — \`makeBarChart\`, \`makeLineChart\`, \`makeAreaChart\`, \`makePieChart\`, \`makeDoughnutChart\`, \`makeScatterChart\`, \`makeRadarChart\`, \`makeBubbleChart\`, \`makeStockChart\`, \`makeSurfaceChart\`, \`makeOfPieChart\`. Series builder \`makeBarSeries\`. Top-level wrapper \`makeChartSpace\`. Modern \`cx:\` chartex kinds — \`makeSunburstChart\`, \`makeTreemapChart\`, \`makeWaterfallChart\`, \`makeHistogramChart\`, \`makeParetoChart\`, \`makeFunnelChart\`, \`makeBoxWhiskerChart\`, \`makeRegionMapChart\` |
@@ -411,19 +411,22 @@ ws.views.push(makeSheetView({ pane: makeFreezePane('B2') }));   // freeze both
 
 \`\`\`ts
 import {
-  addExcelTable, writeRange, addAutoFilter,
+  addExcelTable, addTable, writeRange,
+  setAutoFilter, makeAutoFilter,
   makeDataValidation, addDataValidation,
   makeCfRule, makeConditionalFormatting, addConditionalFormatting,
 } from '@office-kit/xlsx/worksheet';
 
-// Excel Table — named range with banded styling and a filter dropdown on
+// Excel Table: a named range with banded styling and a filter dropdown on
 // every header. Use the higher-level addExcelTable; for full control,
-// makeTableDefinition + ws.tables.set(...).
+// makeTableDefinition + addTable(ws, def).
 //
-// Write the header row first: addExcelTable checks that each header cell holds
-// its column name and that the counts match the range width, because Excel
-// repairs the file (dropping the table) when they disagree. headerRowCount: 0
-// skips the check for a header-less table.
+// Write the header row first. Both entry points check the definition against
+// the sheet, because Excel repairs the file (dropping the table) when the two
+// disagree: the column count has to match the range width, the ref has to
+// leave at least one data row under the header and totals rows, names have to
+// be unique, and every header cell has to hold its column's name as text.
+// headerRowCount: 0 skips the header check for a header-less table.
 writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);
 addExcelTable(wb, ws, {
   name: 'Items',
@@ -433,7 +436,7 @@ addExcelTable(wb, ws, {
 });
 
 // Just an autoFilter (no banded styling)
-addAutoFilter(ws, 'A1:C1');
+setAutoFilter(ws, makeAutoFilter({ ref: 'A1:C1' }));
 
 // Dropdown data validation
 addDataValidation(ws, makeDataValidation({
@@ -596,7 +599,7 @@ externally first, then load the resulting plain xlsx.
 | Merge + freeze header | \`mergeCells\` + \`makeFreezePane\` + \`makeSheetView\` |
 | Defined name across sheets | \`addDefinedName\` |
 | Excel Table | \`addExcelTable\` |
-| AutoFilter only | \`addAutoFilter\` |
+| AutoFilter only | \`setAutoFilter\` + \`makeAutoFilter\` |
 | Dropdown validation | \`makeDataValidation\` + \`addDataValidation\` |
 | 3-color scale heat-map | \`makeCfRule\` + \`makeConditionalFormatting\` + \`addConditionalFormatting\` |
 | Image at cell | \`loadImage\` + \`addImageAt\` |

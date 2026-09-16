@@ -67,7 +67,7 @@ for every export see <a href="{base}/api">API reference</a>.
 |------|-----------|
 | Multiple sheets + a defined name | `addWorksheet` + `addDefinedName` |
 | Promote a range to an Excel Table | `addExcelTable` |
-| AutoFilter on a header row (no table styling) | `addAutoFilter` |
+| AutoFilter on a header row (no table styling) | `setAutoFilter` + `makeAutoFilter` |
 | Dropdown data validation | `makeDataValidation` + `addDataValidation` |
 | Heat-map (3-color scale) | `makeCfRule` + `addConditionalFormatting` |
 
@@ -320,9 +320,10 @@ addDefinedName(wb, { name: 'Totals', value: 'Q1!$A$1:$A$10,Q2!$A$1:$A$10' });
 ```ts
 import { addExcelTable, writeRange } from '@office-kit/xlsx/worksheet';
 
-// Write the header row first: addExcelTable checks that each header cell holds
-// its column name and that the counts match, because Excel repairs the file
-// (dropping the table) when they disagree.
+// Write the header row first: addExcelTable checks the definition against the
+// sheet (column count against the range width, one data row under the header,
+// unique names, each header cell holding its column's name as text), because
+// Excel repairs the file (dropping the table) when the two disagree.
 writeRange(ws, 'A1', [['SKU', 'Name', 'Price']]);
 addExcelTable(wb, ws, {
   name: 'Items',
@@ -335,9 +336,9 @@ addExcelTable(wb, ws, {
 ### AutoFilter on a header row (no table styling)
 
 ```ts
-import { addAutoFilter } from '@office-kit/xlsx/worksheet';
+import { makeAutoFilter, setAutoFilter } from '@office-kit/xlsx/worksheet';
 
-addAutoFilter(ws, 'A1:C1');
+setAutoFilter(ws, makeAutoFilter({ ref: 'A1:C1' }));
 ```
 
 ### Dropdown data validation
