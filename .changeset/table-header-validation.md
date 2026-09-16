@@ -11,7 +11,9 @@ filters and a broken structured reference in the delivered file, a long way from
 `addExcelTable` call that caused it.
 
 Both cases now throw `OpenXmlSchemaError` at the call, naming the offending header
-cell and what it holds. Write the header row before adding the table, or pass
+cell and what it holds. The header check compares rendered text rather than the raw
+cell value, matching how Excel pairs a column with its header, so a rich-text or
+numeric header cell spelling the right name is accepted. Write the header row before adding the table, or pass
 `headerRowCount: 0` for a genuinely header-less table.
 
 This can newly throw for code that previously appeared to work. Those are exactly the

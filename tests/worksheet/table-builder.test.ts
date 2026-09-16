@@ -5,6 +5,7 @@ import { fromBuffer } from '../../src/io/node.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { makeRichText } from '../../src/cell/rich-text.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addExcelTable } from '../../src/worksheet/table.js';
 import { setCell, type Worksheet, writeRange } from '../../src/worksheet/worksheet.js';
@@ -110,6 +111,15 @@ describe('addExcelTable', () => {
     expect(() =>
       addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['x', 'y'] }),
     ).toThrow(/header cell B1 holds "WRONG" but column 2 is named "y"/);
+  });
+
+  it('accepts a rich-text header whose text matches the column name', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setCell(ws, 1, 1, { kind: 'rich-text', runs: makeRichText([{ text: 'S' }, { text: 'KU' }]) });
+    setCell(ws, 1, 2, 2024);
+    const t = addExcelTable(wb, ws, { name: 't', ref: 'A1:B5', columns: ['SKU', '2024'] });
+    expect(t.columns).toHaveLength(2);
   });
 
   it('rejects a missing header row, naming the escape hatch', () => {

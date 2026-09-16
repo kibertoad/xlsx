@@ -7,6 +7,7 @@
 // autoFilter; sortState / totals row formulas / calculated column formulas /
 // xml extlst are reserved for later.
 
+import { cellValueAsString } from '../cell/cell.js';
 import { rangeBoundaries, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { Workbook } from '../workbook/workbook.js';
@@ -125,11 +126,15 @@ const validateTableAgainstSheet = (
     const expected = columns[i]?.name;
     if (expected === undefined) continue;
     const col = bounds.minCol + i;
-    const actual = headerRow?.get(col)?.value;
+    // Compare rendered text, not the raw CellValue: Excel matches a table
+    // column against what the header cell displays, so a rich-text or numeric
+    // header spelling the right name is valid and must not be rejected.
+    const actual = cellValueAsString(headerRow?.get(col)?.value ?? null);
     if (actual === expected) continue;
+    const held = actual === '' ? 'is empty' : `holds "${actual}"`;
     throw new OpenXmlSchemaError(
-      `addExcelTable: header cell ${tupleToCoordinate(col, bounds.minRow)} holds` +
-        ` ${JSON.stringify(actual ?? null)} but column ${i + 1} is named "${expected}".` +
+      `addExcelTable: header cell ${tupleToCoordinate(col, bounds.minRow)} ${held}` +
+        ` but column ${i + 1} is named "${expected}".` +
         ' Write the header row before adding the table, or pass headerRowCount: 0' +
         ' for a header-less table.',
     );
