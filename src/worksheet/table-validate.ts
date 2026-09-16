@@ -17,9 +17,10 @@ import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { TableDefinition } from './table.js';
 import type { Worksheet } from './worksheet.js';
 
-// A table ref carries two corners. `rangeBoundaries` also accepts the
+// A table ref carries two plain corners. `rangeBoundaries` also accepts the
 // whole-column ("A:C") and whole-row ("1:5") forms, which fill the missing axis
-// to the sheet maximum and would reach the width check as a 16384-column table.
+// to the sheet maximum and would reach the width check as a 16384-column table,
+// and `$` markers, which Excel never writes into `table/@ref`.
 const TWO_CORNER_REF_RE = /^[A-Za-z]{1,3}[1-9][0-9]*(:[A-Za-z]{1,3}[1-9][0-9]*)?$/;
 
 /** What a header cell offers up for the comparison against its column name. */
@@ -69,7 +70,7 @@ export const validateTableAgainstSheet = (ws: Worksheet, table: TableDefinition)
   const ref = table.ref.trim();
   if (!TWO_CORNER_REF_RE.test(ref)) {
     throw new OpenXmlSchemaError(
-      `${where}: ref "${table.ref}" is not a cell range; a table needs two corners, like "A1:C4"`,
+      `${where}: ref "${table.ref}" is not a plain two-corner cell range like "A1:C4"`,
     );
   }
   const bounds = rangeBoundaries(ref);

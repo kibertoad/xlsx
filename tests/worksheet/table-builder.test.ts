@@ -207,8 +207,17 @@ describe('addExcelTable', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
     expect(() => addExcelTable(wb, ws, { name: 't', ref: '1:1', columns: ['x'] })).toThrow(
-      /ref "1:1" is not a cell range/,
+      /ref "1:1" is not a plain two-corner cell range/,
     );
+  });
+
+  it('rejects a ref carrying $ markers, which Excel never writes into a table ref', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    writeRange(ws, 'A1', [['SKU', 'Qty']]);
+    expect(() =>
+      addExcelTable(wb, ws, { name: 't', ref: '$A$1:$B$5', columns: ['SKU', 'Qty'] }),
+    ).toThrow(/ref "\$A\$1:\$B\$5" is not a plain two-corner cell range/);
   });
 
   it('skips the header check for a header-less table', () => {
