@@ -57,10 +57,10 @@ for every export see <a href="{base}/api">API reference</a>.
 | Bold + font size + fill on a header cell | `setBold` + `setFontSize` + `setCellBackgroundColor` |
 | Number format: currency / percent | `setCellAsCurrency` + `setCellAsPercent` |
 | Number format: date | `setCellNumberFormat` + `FORMAT_DATE_DATETIME` |
-| Build `$B$5` / `$A$4:$H$20` from numbers | `tupleToCoordinate` + `boundariesToRangeString` |
 | Add a formula (with cached value) | `setCell` + `setFormula` |
 | Make a cell clickable | `setHyperlink` |
 | Merge cells + freeze the header row | `mergeCells` + `setFreezePanes` |
+| Build `$B$5` / `$A$4:$H$20` from numbers | `tupleToCoordinate` + `boundariesToRangeString` |
 
 ### Worksheet structure
 
@@ -68,7 +68,6 @@ for every export see <a href="{base}/api">API reference</a>.
 |------|-----------|
 | Multiple sheets + a defined name | `addWorksheet` + `addDefinedName` |
 | Promote a range to an Excel Table | `addExcelTable` |
-| Freeze the header row | `setFreezePanes` |
 | AutoFilter on a header row (no table styling) | `addAutoFilter` |
 | Dropdown data validation | `makeDataValidation` + `addDataValidation` |
 | Heat-map (3-color scale) | `makeCfRule` + `addConditionalFormatting` |
@@ -319,9 +318,9 @@ Range-taking helpers also accept those bounds directly, so there is no need to
 format a string the callee parses straight back:
 
 ```ts
-import { setRangeStyle } from '@office-kit/xlsx/styles';
+import { setRangeBorderBox } from '@office-kit/xlsx/styles';
 
-setRangeStyle(wb, ws, { minRow: 4, minCol: 1, maxRow: 20, maxCol: 8 }, { border: box });
+setRangeBorderBox(wb, ws, { minRow: 4, minCol: 1, maxRow: 20, maxCol: 8 }, { style: 'thin' });
 ```
 
 ### Multiple sheets + a defined name

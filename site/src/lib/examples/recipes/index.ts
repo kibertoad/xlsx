@@ -152,7 +152,7 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'Merge a title across columns, then freeze row 1 so it stays put while scrolling.',
         path: 'site/src/lib/examples/recipes/merge-and-freeze.ts',
         source: mergeAndFreeze,
-        relatedApi: ['mergeCells', 'makeFreezePane', 'makeSheetView'],
+        relatedApi: ['mergeCells', 'setFreezePanes'],
       },
       {
         slug: 'hyperlinks',

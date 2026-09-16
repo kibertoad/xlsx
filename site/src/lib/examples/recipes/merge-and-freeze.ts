@@ -5,12 +5,7 @@ import { saveWorkbook } from '@office-kit/xlsx/io';
 import { toFile } from '@office-kit/xlsx/node';
 import { centerCell, setBold } from '@office-kit/xlsx/styles';
 import { addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook';
-import {
-  makeFreezePane,
-  makeSheetView,
-  mergeCells,
-  setCell,
-} from '@office-kit/xlsx/worksheet';
+import { mergeCells, setCell, setFreezePanes } from '@office-kit/xlsx/worksheet';
 
 const wb = createWorkbook();
 const ws = addWorksheet(wb, 'Report');
@@ -20,6 +15,6 @@ setBold(wb, title);
 centerCell(wb, title);
 mergeCells(ws, 'A1:E1');
 
-ws.views.push(makeSheetView({ pane: makeFreezePane('A2') }));
+setFreezePanes(ws, { rows: 1, cols: 0 });
 
 await saveWorkbook(wb, toFile('merged-frozen.xlsx'));
