@@ -44,6 +44,8 @@ for every export see <a href="{base}/api">API reference</a>.
 | Edit one cell of an existing file (Node) | `loadWorkbook` + `fromFile` + `setCell` + `saveWorkbook` + `toFile` |
 | Append rows to a worksheet | `appendRow` (or `appendRows`) |
 | Reach a cell without overwriting its value | `ensureCell` |
+| Empty a cell but keep its formatting | `setCell` with `null` |
+| Remove a cell, formatting included | `deleteCell` (or `clearRange`) |
 
 ### Stream-write (huge sheets)
 
@@ -240,6 +242,26 @@ import { ensureCell } from '@office-kit/xlsx/worksheet';
 // setCell always writes its value argument, so `setCell(ws, 4, 1, null)` over a
 // populated cell blanks it. ensureCell allocates only when the cell is missing.
 setFormula(ensureCell(ws, 4, 1), 'SUM(A1:A3)');
+```
+
+### Empty a cell but keep its formatting
+
+```ts
+import { setCell } from '@office-kit/xlsx/worksheet';
+
+// `null` is a CellValue, so this is the explicit "no value here" write. The
+// cell stays in the sheet and keeps its fill, border and number format, the
+// same as pressing Delete in Excel.
+setCell(ws, 4, 1, null);
+```
+
+### Remove a cell, formatting included
+
+```ts
+import { clearRange, deleteCell } from '@office-kit/xlsx/worksheet';
+
+deleteCell(ws, 4, 1); // the cell is gone, not blank
+clearRange(ws, 'A4:H20'); // same across a rectangle, returns the count removed
 ```
 
 ### Stream-write millions of rows to a file

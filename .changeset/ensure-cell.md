@@ -20,7 +20,11 @@ open-coding it.
 Migration is mechanical, and the compiler points at every site:
 
 - `setCell(ws, r, c)` becomes `ensureCell(ws, r, c)`
-- to blank a cell on purpose, pass it: `setCell(ws, r, c, null)`
+- emptying a cell stays available and is now explicit. `null` is a `CellValue`,
+  so `setCell(ws, r, c, null)` clears the value and leaves the cell in the sheet
+  with its fill, border and number format, the way Excel's Delete key does.
+  `deleteCell` drops the cell outright and `clearRange` does the same across a
+  rectangle.
 
 Also removed: `setCellFormula`, `setCellArrayFormula` and `setCellRichText` in
 `src/worksheet/worksheet.ts`. They were dropped from the public subpaths in an earlier

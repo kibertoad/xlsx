@@ -290,13 +290,18 @@ export function getCell(ws: Worksheet, row: number, col: number): Cell | undefin
 
 /**
  * Write a Cell at (row, col). `value` always lands on the cell, so an existing
- * value is replaced; pass `null` to blank it deliberately. Existing cells keep
- * their styleId / hyperlinkId / commentId unless explicitly overridden.
+ * value is replaced. Existing cells keep their styleId / hyperlinkId /
+ * commentId unless explicitly overridden.
  *
  * `value` is mandatory on purpose. A three-argument form reads like "reach the
  * cell at (row, col)" and silently wipes what is there, which is how a styling
  * pass over already-populated rows erases the formulas it walks over. Use
  * {@link ensureCell} for the reach-a-cell case.
+ *
+ * To empty a cell, pick the meaning you want. `null` clears the value and
+ * leaves the cell in the sheet with its formatting, which is what Excel's
+ * Delete key does; {@link deleteCell} drops the cell entirely, formatting
+ * included, and {@link clearRange} does the same across a rectangle.
  */
 export function setCell(ws: Worksheet, row: number, col: number, value: CellValue, styleId?: number): Cell {
   let rowMap = ws.rows.get(row);
