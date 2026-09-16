@@ -38,7 +38,7 @@ import {
   addDataValidation,
   appendRow,
   appendRows,
-  freezePanes,
+  setFreezePanes,
   freezeRows,
   groupColumns,
   groupRows,
@@ -137,11 +137,11 @@ describe('conformance: writer feature survey', () => {
       await expectClean(wb);
     });
 
-    it('freezePanes both axes', async () => {
+    it('setFreezePanes both axes', async () => {
       const wb = createWorkbook();
       const w = ws(addWorksheet(wb, 'F'));
       setCell(w, 1, 1, 'tl');
-      freezePanes(w, 1, 1);
+      setFreezePanes(w, { rows: 1, cols: 1 });
       await expectClean(wb);
     });
   });

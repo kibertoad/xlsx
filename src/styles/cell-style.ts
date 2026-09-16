@@ -20,6 +20,7 @@
 import type { Cell } from '../cell/cell.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { Workbook } from '../workbook/workbook.js';
+import type { RangeRef } from '../utils/coordinate.js';
 import { parseRange } from '../worksheet/cell-range.js';
 import { setCell, type Worksheet } from '../worksheet/worksheet.js';
 import type { Alignment, HorizontalAlignment, VerticalAlignment } from './alignment.js';
@@ -205,7 +206,7 @@ export function clearCellStyle(_wb: Workbook, c: Cell): void {
  * yet are **not** materialised (no-op for sparse regions, unlike the styled
  * `setRange*` family which has to create cells to make the patch observable).
  */
-export function clearRangeStyle(wb: Workbook, ws: Worksheet, range: string): void {
+export function clearRangeStyle(wb: Workbook, ws: Worksheet, range: RangeRef): void {
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   for (let r = minRow; r <= maxRow; r++) {
     const row = ws.rows.get(r);
@@ -270,7 +271,7 @@ export function cloneCellStyle(
 export function setRangeStyle(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   opts: {
     font?: Font;
     fill?: Fill;
@@ -395,7 +396,7 @@ export function clearCellBackground(wb: Workbook, c: Cell): void {
 export function setRangeBackgroundColor(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   color: string | Partial<Color>,
 ): void {
   const colorObj = typeof color === 'string' ? makeColor({ rgb: color }) : makeColor(color);
@@ -408,7 +409,7 @@ export function setRangeBackgroundColor(
 export function setRangeFont(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   font: Font,
 ): void {
   setRangeStyle(wb, ws, range, { font });
@@ -422,7 +423,7 @@ export function setRangeFont(
 export function setRangeNumberFormat(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   formatCode: string,
 ): void {
   setRangeStyle(wb, ws, range, { numberFormat: formatCode });
@@ -440,7 +441,7 @@ export function setRangeNumberFormat(
 export function setRangeProtection(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   protection: Protection | Partial<Protection>,
 ): void {
   // Funnel partials through the Protection factory so frozen invariant holds.
@@ -456,7 +457,7 @@ export function setRangeProtection(
  * vertical / textRotation / indent are not touched). Empty cells in the range
  * are materialised so the alignment patch is observable on round-trip.
  */
-export function setRangeWrapText(wb: Workbook, ws: Worksheet, range: string, on = true): void {
+export function setRangeWrapText(wb: Workbook, ws: Worksheet, range: RangeRef, on = true): void {
   reserveDefaultXfSlot(wb);
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   for (let r = minRow; r <= maxRow; r++) {
@@ -485,7 +486,7 @@ export function setRangeWrapText(wb: Workbook, ws: Worksheet, range: string, on 
 export function setRangeAlignment(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   alignment: Partial<Alignment>,
   mode: 'merge' | 'replace' = 'merge',
 ): void {
@@ -688,7 +689,7 @@ export function setCellAsNumber(wb: Workbook, c: Cell, decimals = 0): void {
 export function formatAsHeader(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   opts: {
     fillColor?: string | Partial<Color>;
     fontColor?: string | Partial<Color>;
@@ -806,7 +807,7 @@ export function setCellBorderAll(
 export function setRangeBorderBox(
   wb: Workbook,
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   opts: { style: SideStyle; color?: string | Partial<Color>; inner?: SideStyle } = { style: 'thin' },
 ): void {
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);

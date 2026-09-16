@@ -30,7 +30,6 @@ export {
   expandColumnGroup,
   expandRowGroup,
   findCells,
-  freezePanes,
   getAutoFilter,
   getCell,
   getCellByCoord,

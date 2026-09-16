@@ -11,12 +11,15 @@ import { type InlineFont, makeRichText, type TextRun } from '../cell/rich-text.j
 import type { Drawing } from '../drawing/drawing.js';
 import { type Color, makeColor } from '../styles/colors.js';
 import {
+  boundariesToRangeString,
+  type CellCoordinateNumeric,
   columnIndexFromLetter,
   columnLetterFromIndex,
   coordinateToTuple,
   formatSheetQualifiedRef,
   MAX_COL,
   MAX_ROW,
+  type RangeRef,
   tupleToCoordinate,
 } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
@@ -326,7 +329,7 @@ export function deleteCell(ws: Worksheet, row: number, col: number): void {
  * removed. Row maps that go empty are pruned. Column / row dimensions, merges,
  * comments etc. are left untouched.
  */
-export function clearRange(ws: Worksheet, range: string): number {
+export function clearRange(ws: Worksheet, range: RangeRef): number {
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   let n = 0;
   for (let r = minRow; r <= maxRow; r++) {
@@ -410,11 +413,12 @@ export function appendRows(
  */
 export function writeRange(
   ws: Worksheet,
-  startRef: string,
+  startRef: string | CellCoordinateNumeric,
   values: ReadonlyArray<ReadonlyArray<CellValue | undefined>>,
 ): { minRow: number; maxRow: number; minCol: number; maxCol: number } | undefined {
   if (values.length === 0) return undefined;
-  const { col: startCol, row: startRow } = coordinateToTuple(startRef);
+  const { col: startCol, row: startRow } =
+    typeof startRef === 'string' ? coordinateToTuple(startRef) : startRef;
   let maxRow = startRow;
   let maxCol = startCol;
   for (let i = 0; i < values.length; i++) {
@@ -622,11 +626,13 @@ export function getCellAddress(ws: Worksheet, c: Cell): string {
  * Sheet-qualified A1 range address — `'Sheet1!A1:B5'` for plain titles,
  * `'\'Quarter 1\'!A1:B5'` for titles needing quoting. Pass any A1-style range
  * string (single cell `'A1'`, rectangle `'A1:B5'`, row span `'1:5'`, column
- * span `'A:E'`); the helper does no validation on `range` itself — that's the
- * caller's responsibility.
+ * span `'A:E'`), and numeric bounds are formatted as a rectangle; the helper
+ * does no validation on an A1 `range` itself; that is the caller's
+ * responsibility.
  */
-export function getRangeAddress(ws: Worksheet, range: string): string {
-  return formatSheetQualifiedRef(ws.title, range);
+export function getRangeAddress(ws: Worksheet, range: RangeRef): string {
+  const ref = typeof range === 'string' ? range : boundariesToRangeString(range);
+  return formatSheetQualifiedRef(ws.title, ref);
 }
 
 /**
@@ -786,7 +792,7 @@ export function replaceCellValues(
  */
 export function replaceInRange(
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   search: string | ((value: CellValue, cell: Cell) => boolean),
   replacement: CellValue,
 ): number {
@@ -810,7 +816,7 @@ export function replaceInRange(
  * applyToRange} when you need every coordinate visited regardless of
  * population.
  */
-export function* getCellsInRange(ws: Worksheet, range: string): IterableIterator<Cell> {
+export function* getCellsInRange(ws: Worksheet, range: RangeRef): IterableIterator<Cell> {
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   for (let r = minRow; r <= maxRow; r++) {
     const rowMap = ws.rows.get(r);
@@ -1005,18 +1011,38 @@ const ensurePrimaryView = (ws: Worksheet): SheetView => {
 };
 
 /**
- * Freeze rows / columns above + left of `topLeftRef` ("B2" → 1 row + 1 col).
+ * Freeze rows / columns above + left of the given top-left cell. Takes either
+ * the A1 ref of the first unfrozen cell (`"B2"` freezes 1 row + 1 column) or
+ * the counts directly (`{ rows: 1, cols: 0 }` freezes the header row alone).
  * Pass `undefined` to clear any existing freeze. Targets the workbook's primary
  * SheetView (`ws.views[0]`); creates one if absent.
  */
-export function setFreezePanes(ws: Worksheet, topLeftRef: string | undefined): void {
-  if (topLeftRef === undefined) {
+export function setFreezePanes(
+  ws: Worksheet,
+  topLeft: string | { rows: number; cols: number } | undefined,
+): void {
+  if (topLeft === undefined) {
     if (ws.views[0]) delete ws.views[0].pane;
     return;
   }
+  const ref = typeof topLeft === 'string' ? topLeft : freezeCountsToRef(topLeft);
   const view = ensurePrimaryView(ws);
-  view.pane = makeFreezePane(topLeftRef);
+  view.pane = makeFreezePane(ref);
 }
+
+/** Translate freeze counts to the A1 ref of the first unfrozen cell. */
+const freezeCountsToRef = ({ rows, cols }: { rows: number; cols: number }): string => {
+  if (!Number.isInteger(rows) || rows < 0) {
+    throw new OpenXmlSchemaError(`setFreezePanes: rows must be a non-negative integer; got ${rows}`);
+  }
+  if (!Number.isInteger(cols) || cols < 0) {
+    throw new OpenXmlSchemaError(`setFreezePanes: cols must be a non-negative integer; got ${cols}`);
+  }
+  if (rows === 0 && cols === 0) {
+    throw new OpenXmlSchemaError('setFreezePanes: rows and cols cannot both be 0; pass undefined to unfreeze');
+  }
+  return `${columnLetterFromIndex(cols + 1)}${rows + 1}`;
+};
 
 /** Inverse of {@link setFreezePanes}; returns the top-left ref or undefined when no freeze is active. */
 export function getFreezePanes(ws: Worksheet): string | undefined {
@@ -1048,17 +1074,6 @@ export function freezeColumns(ws: Worksheet, count: number): void {
   setFreezePanes(ws, `${columnLetterFromIndex(count + 1)}1`);
 }
 
-/** Freeze both top `rows` rows AND left `cols` columns. */
-export function freezePanes(ws: Worksheet, rows: number, cols: number): void {
-  if (!Number.isInteger(rows) || rows < 1) {
-    throw new OpenXmlSchemaError(`freezePanes: rows must be a positive integer; got ${rows}`);
-  }
-  if (!Number.isInteger(cols) || cols < 1) {
-    throw new OpenXmlSchemaError(`freezePanes: cols must be a positive integer; got ${cols}`);
-  }
-  setFreezePanes(ws, `${columnLetterFromIndex(cols + 1)}${rows + 1}`);
-}
-
 /** Drop the freeze pane on the primary view. */
 export const unfreezePanes = (ws: Worksheet): void => {
   setFreezePanes(ws, undefined);
@@ -1080,9 +1095,9 @@ export const freezeFirstColumn = (ws: Worksheet): void => freezeColumns(ws, 1);
 /**
  * Freeze both row 1 and column A so the header row + label column stay visible.
  * Equivalent to selecting B2 and "View → Freeze Panes". Shortcut for
- * `freezePanes(ws, 1, 1)`.
+ * `setFreezePanes(ws, { rows: 1, cols: 1 })`.
  */
-export const freezeFirstRowAndColumn = (ws: Worksheet): void => freezePanes(ws, 1, 1);
+export const freezeFirstRowAndColumn = (ws: Worksheet): void => setFreezePanes(ws, { rows: 1, cols: 1 });
 
 // ---- sheet view display helpers -------------------------------------------
 
@@ -1196,7 +1211,7 @@ export function setSelectedRange(ws: Worksheet, sqref: string): void {
  */
 export function setRangeValues(
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   rows: ReadonlyArray<ReadonlyArray<CellValue | null | undefined>>,
 ): void {
   const { minRow, minCol } = parseRange(range);
@@ -1217,7 +1232,7 @@ export function setRangeValues(
  */
 export function applyToRange(
   ws: Worksheet,
-  range: string,
+  range: RangeRef,
   visit: (cell: Cell, row: number, col: number) => void,
 ): void {
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
@@ -1235,7 +1250,7 @@ export function applyToRange(
  * `null`. The shape is `[maxRow - minRow + 1] × [maxCol - minCol + 1]`. Inverse
  * of {@link setRangeValues}.
  */
-export function getRangeValues(ws: Worksheet, range: string): (CellValue | null)[][] {
+export function getRangeValues(ws: Worksheet, range: RangeRef): (CellValue | null)[][] {
   const { minRow, maxRow, minCol, maxCol } = parseRange(range);
   const rowsOut: (CellValue | null)[][] = [];
   for (let r = minRow; r <= maxRow; r++) {
