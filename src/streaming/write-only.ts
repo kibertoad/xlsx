@@ -56,6 +56,8 @@ import { type CompressionLevel, createZipWriter, type ZipWriterOptions } from '.
 const escapeAttr = escapeXmlAttr;
 
 export interface WriteOnlyOptions {
+  /** Reserved — currently ignored (the buffered backend doesn't honour it). */
+  estimatedMaxRow?: number;
   /**
    * Last-modified timestamp for every ZIP entry. Same reproducibility story as
    * `SaveOptions.mtime`: unset, fflate stamps the wall clock per entry and two

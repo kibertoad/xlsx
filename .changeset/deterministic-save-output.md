@@ -16,7 +16,6 @@ input produces identical bytes.
 
 `SaveOptions.compressionLevel` was declared but documented as "Reserved" and never
 read; it now reaches fflate's deflate stream on both the buffered and the streaming
-writer, and is typed `0 | 1 | ... | 9` rather than `number`.
-
-`WriteOnlyOptions.estimatedMaxRow` is removed. It was also documented as reserved
-and was never read.
+writer, and is typed `0 | 1 | ... | 9` rather than `number`. That narrowing is the
+only breaking part of this change: `{ compressionLevel: someNumber }` no longer
+typechecks, though it never did anything either.
