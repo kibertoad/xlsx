@@ -92,6 +92,18 @@ const localName = (qname: string): string => {
   return i < 0 ? qname : qname.slice(i + 1);
 };
 
+/**
+ * `<v>` under `t="n"`. `Number.parseFloat` answers NaN for text and Infinity
+ * for an overflowing exponent; either would travel on as a cell value that no
+ * caller can use and that the writer refuses to emit. This reader drops
+ * unreadable values rather than throwing, as it does everywhere else.
+ */
+const parseNumericCellText = (raw: string | undefined): number | null => {
+  if (raw === undefined || raw === '') return null;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : null;
+};
+
 const decodeCellValue = (
   t: string,
   vText: string | undefined,
@@ -100,7 +112,7 @@ const decodeCellValue = (
 ): CellValue => {
   switch (t) {
     case 'n':
-      return vText !== undefined && vText !== '' ? Number.parseFloat(vText) : null;
+      return parseNumericCellText(vText);
     case 's': {
       if (vText === undefined) return null;
       const idx = Number.parseInt(vText, 10);
@@ -118,7 +130,7 @@ const decodeCellValue = (
     case 'inlineStr':
       return inlineText ?? '';
     default:
-      return vText !== undefined && vText !== '' ? Number.parseFloat(vText) : null;
+      return parseNumericCellText(vText);
   }
 };
 
