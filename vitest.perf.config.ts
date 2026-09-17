@@ -12,10 +12,7 @@ export default defineConfig({
     include: ['tests/perf/**/*.test.ts'],
     // Bench files run via `pnpm bench` (vitest bench), not the test runner.
     exclude: ['tests/perf/**/*.bench.ts', 'node_modules', 'dist', 'reference'],
-    // The retention gate forces a GC before sampling, so it needs
-    // `globalThis.gc`. Vitest spawns its workers with its own execArgv, so
-    // neither NODE_OPTIONS nor the parent's flags reach them: the flag has to
-    // be declared here or the gate has no way to tell retention from garbage.
+    // Heap and retention gates require a collected baseline in each worker.
     pool: 'forks',
     execArgv: ['--expose-gc'],
   },
