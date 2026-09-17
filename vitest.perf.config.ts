@@ -16,6 +16,9 @@ export default defineConfig({
     pool: 'forks',
     // CPU throughput and heap retention must not compete with other benchmarks.
     // Run every gate, but give each file an isolated measurement window.
+    // Keep that as `fileParallelism`, not `poolOptions.forks.singleFork`: the
+    // latter shares one process across files, so a heap gate's baseline picks
+    // up whatever the previous file left behind.
     fileParallelism: false,
     execArgv: ['--expose-gc'],
   },
