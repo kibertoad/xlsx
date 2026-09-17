@@ -6,6 +6,7 @@
 // drawing modules.
 
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { qname } from '../xml/namespaces.js';
 import { el, type XmlNode } from '../xml/tree.js';
 import type { AttrDef, ElementDef, Primitive, Schema } from './core.js';
@@ -31,11 +32,9 @@ const coerceFromString = (raw: string, kind: Primitive | 'enum', def: AttrDef): 
       return n;
     }
     case 'bool': {
-      // openpyxl accepts 'true'/'t'/'1' or 'false'/'f'/'0' (case-insensitive).
-      const v = raw.toLowerCase();
-      if (v === 'true' || v === 't' || v === '1') return true;
-      if (v === 'false' || v === 'f' || v === '0') return false;
-      throw new OpenXmlSchemaError(`expected a boolean, got "${raw}"`);
+      const v = parseXsdBoolean(raw);
+      if (v === undefined) throw new OpenXmlSchemaError(`expected a boolean, got "${raw}"`);
+      return v;
     }
     case 'enum': {
       if (!def.values?.includes(raw)) {

@@ -16,6 +16,7 @@ import { type ZipArchive, openZip } from '../zip/reader.js';
 import type { CellValue, ExcelErrorCode } from '../cell/cell.js';
 import { unescapeCellString } from '../utils/escape.js';
 import { ERROR_CODES } from '../utils/inference.js';
+import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
 import { parseXml } from '../xml/parser.js';
 import type { XlsxSource } from '../io/source.js';
@@ -88,7 +89,11 @@ const decodeCellValue = (
       return sst[idx] ?? null;
     }
     case 'b':
-      return vText === '1';
+      // Unlike `loadWorkbook`, this reader never throws on a value it cannot
+      // read: an iterator that dies on row 900,000 leaves the caller no way to
+      // finish the pass. A value outside xsd:boolean's lexical space reads as
+      // empty, the way an out-of-range shared-string index does.
+      return parseXsdBoolean(vText) ?? null;
     case 'e': {
       if (!vText || !ERROR_CODES.has(vText)) return null;
       return { kind: 'error', code: vText as ExcelErrorCode };
