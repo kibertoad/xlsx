@@ -6,6 +6,8 @@
 // in escape position; an existing `_xHHHH_` in the input is therefore
 // re-escaped to `_x005F_xHHHH_` so it round-trips losslessly.
 
+import { OpenXmlSchemaError } from './exceptions.js';
+
 // Every codepoint XML 1.0 cannot carry: the C0 controls, an unpaired
 // surrogate (which has no UTF-8 encoding), and U+FFFE / U+FFFF. A character
 // reference is no way out either, since `&#0;` is as illegal as the raw byte.
@@ -86,4 +88,38 @@ export function escapeXmlAttr(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// The codepoints XML 1.0 cannot carry in a text node under any encoding: the
+// C0 controls apart from tab / LF / CR, and an unpaired surrogate. A character
+// reference is no help either, since `&#0;` is as illegal as the raw byte.
+// Matching on code points (`u` flag) is what keeps a well-formed surrogate
+// pair, and so every astral character, out of `\p{Cs}`.
+const UNREPRESENTABLE_RE =
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: by design, these are the codepoints being rejected
+  /[\0-\x08\x0B\x0C\x0E-\x1F\p{Cs}]/u;
+
+/**
+ * Escape text for an OOXML text node the reader hands back verbatim: `<f>`,
+ * `<formula>`, `<formula1>`, `<formula2>` and a `t="str"` cached formula
+ * result. The `_xHHHH_` convention of {@link escapeCellString} must not be
+ * applied to these: nothing decodes them on read, so an encoded sequence would
+ * reach Excel as the literal text `_x000D_`.
+ *
+ * Tab and LF stay literal; CR becomes a numeric character reference, which
+ * survives the CR-to-LF normalisation every conforming parser applies to raw
+ * text. A codepoint XML 1.0 cannot represent therefore has nowhere to go and is
+ * rejected rather than silently rewritten.
+ *
+ * `node` and `at` name the offending value in that error (`worksheet: formula`
+ * / `A1`). They stay separate so that a formula-heavy sheet does not build one
+ * message string per cell for an error it never raises.
+ */
+export function escapeXmlTextVerbatim(s: string, node: string, at: string): string {
+  const unrepresentable = UNREPRESENTABLE_RE.exec(s);
+  if (unrepresentable) {
+    const codePoint = toHex4(s.charCodeAt(unrepresentable.index));
+    throw new OpenXmlSchemaError(`${node} at ${at} contains U+${codePoint}, which XML 1.0 cannot represent`);
+  }
+  return escapeXmlText(s).replace(/\r/g, '&#13;');
 }
