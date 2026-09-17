@@ -16,6 +16,7 @@ import {
   setFormula,
   setSharedFormula,
 } from '../cell/cell.js';
+import { richTextToString } from '../cell/rich-text.js';
 import type { Drawing } from '../drawing/drawing.js';
 import { translateFormula } from '../formula/translate.js';
 import type { Relationships } from '../packaging/relationships.js';
@@ -1417,7 +1418,7 @@ const readCell = (
     // into a workbook it cannot reach), and that cached value is the only
     // thing it has to display until the link resolves.
     const cachedRaw = vNode === undefined ? undefined : (vNode.text ?? '');
-    const cached = decodeCachedValue(cachedRaw, t);
+    const cached = decodeCachedValue(cachedRaw, t, ctx);
     handleFormula(cell, fNode, coord, cached, sharedFormulas);
     return;
   }
@@ -1432,16 +1433,7 @@ const readCell = (
       if (vNode?.text === undefined) {
         throw new OpenXmlSchemaError('worksheet: <c t="s"> missing <v>');
       }
-      const idx = Number.parseInt(vNode.text, 10);
-      if (!Number.isInteger(idx) || idx < 0) {
-        throw new OpenXmlSchemaError(`worksheet: <c t="s"><v>${vNode.text}</v> is not a valid index`);
-      }
-      const sst = ctx.sharedStrings[idx];
-      if (sst === undefined) {
-        throw new OpenXmlSchemaError(
-          `worksheet: shared-string index ${idx} out of range [0, ${ctx.sharedStrings.length})`,
-        );
-      }
+      const sst = resolveSharedString(vNode.text, ctx);
       value = typeof sst === 'string' ? sst : { kind: 'rich-text', runs: sst.runs };
       break;
     }
@@ -1488,7 +1480,23 @@ const readInlineString = (isNode: XmlNode | undefined): CellValue => {
   return typeof entry === 'string' ? entry : { kind: 'rich-text', runs: entry.runs };
 };
 
-const decodeCachedValue = (raw: string | undefined, t: string): number | string | boolean | undefined => {
+const resolveSharedString = (raw: string, ctx: WorksheetReadContext): SharedStringEntry => {
+  const idx = Number.parseInt(raw, 10);
+  if (!Number.isInteger(idx) || idx < 0) {
+    throw new OpenXmlSchemaError(`worksheet: <c t="s"><v>${raw}</v> is not a valid index`);
+  }
+  const sst = ctx.sharedStrings[idx];
+  if (sst === undefined) {
+    throw new OpenXmlSchemaError(`worksheet: shared-string index ${idx} out of range [0, ${ctx.sharedStrings.length})`);
+  }
+  return sst;
+};
+
+const decodeCachedValue = (
+  raw: string | undefined,
+  t: string,
+  ctx: WorksheetReadContext,
+): number | string | boolean | undefined => {
   if (raw === undefined) return undefined;
   switch (t) {
     case 'n':
@@ -1496,15 +1504,19 @@ const decodeCachedValue = (raw: string | undefined, t: string): number | string 
       return raw === '' ? undefined : Number.parseFloat(raw);
     case 'b':
       return raw === '' ? undefined : raw === '1';
-    case 'str':
-      return raw;
-    case 'e':
-      return raw;
-    case 's':
-      // Cached value of a formula resolving to a shared string is rare; keep
-      // as-is.
-      return raw;
+    case 's': {
+      // Excel writes a cached string result as `t="str"`, but other producers
+      // put it in the sst, where the `<v>` is an index and not the text. The
+      // model holds the text it points at, so the index never reaches a
+      // consumer (or the writer) as if it were the result. A rich-text entry
+      // flattens: a cached result carries no run formatting.
+      if (raw === '') return undefined;
+      const sst = resolveSharedString(raw, ctx);
+      return typeof sst === 'string' ? sst : richTextToString(sst.runs);
+    }
     default:
+      // `t="str"`, `t="e"` and whatever a non-Excel producer invents are all
+      // already the text Excel displays.
       return raw;
   }
 };

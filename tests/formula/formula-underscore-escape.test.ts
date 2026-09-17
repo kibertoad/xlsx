@@ -1,12 +1,12 @@
-// `<f>` text is a plain XML text node. The writer used to run it through
-// `escapeCellString` as well, which rewrites a literal `_xNNNN_` to
-// `_x005F_xNNNN_`. Nothing unescapes `<f>` on read, so the rewrite was applied
-// again on the next save and the formula drifted further from what the caller
-// wrote each time. The same applied to a `t="str"` cached result.
+// `_xNNNN_` in formula text and in a cached string result is literal text.
+// Both nodes come back from the reader exactly as stored, with no unescape
+// pass, so the writer must not apply the `_xHHHH_` cell-string convention to
+// them: an escape nothing reverses drifts further from the caller's text on
+// every save.
 
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { type FormulaValue, makeFormula } from '../../src/cell/cell.js';
+import { type FormulaValue, isFormulaValue, makeFormula } from '../../src/cell/cell.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
@@ -23,12 +23,10 @@ const buildWith = async (value: FormulaValue): Promise<Uint8Array> => {
 
 const formulaOf = async (bytes: Uint8Array): Promise<FormulaValue> => {
   const wb = await loadWorkbook(fromBuffer(bytes));
-  const sheet = wb.sheets[0]?.sheet;
-  if (!sheet || !('rows' in sheet)) throw new Error('expected a worksheet');
-  const value = getCell(sheet, 1, 1)?.value;
-  if (value === null || typeof value !== 'object' || !('kind' in value) || value.kind !== 'formula') {
-    throw new Error('expected a formula cell');
-  }
+  const ref = wb.sheets[0];
+  if (ref?.kind !== 'worksheet') throw new Error('expected a worksheet');
+  const value = getCell(ref.sheet, 1, 1)?.value;
+  if (value === undefined || !isFormulaValue(value)) throw new Error('expected a formula cell');
   return value;
 };
 
@@ -44,19 +42,22 @@ describe('formula text containing a literal _xNNNN_', () => {
     expect(sheetXml(bytes)).toContain('<f>CONCAT("_x0041_")</f>');
   });
 
-  it('is stable across repeated load and save cycles', async () => {
-    const source = 'CONCAT("_x0041_")';
-    let bytes = await buildWith(makeFormula(source));
-    for (let pass = 0; pass < 3; pass++) {
-      expect((await formulaOf(bytes)).formula).toBe(source);
-      bytes = await workbookToBytes(await loadWorkbook(fromBuffer(bytes)));
-    }
-  });
-
   it('keeps a cached string result verbatim', async () => {
     const bytes = await buildWith(makeFormula('=A2', { cachedValue: '_x0041_' }));
     expect(sheetXml(bytes)).toContain('<v>_x0041_</v>');
     expect((await formulaOf(bytes)).cachedValue).toBe('_x0041_');
+  });
+
+  it('is stable across repeated load and save cycles', async () => {
+    const formula = 'CONCAT("_x0041_")';
+    const cachedValue = '_x0042_';
+    let bytes = await buildWith(makeFormula(`=${formula}`, { cachedValue }));
+    for (let cycle = 0; cycle < 3; cycle++) {
+      bytes = await workbookToBytes(await loadWorkbook(fromBuffer(bytes)));
+      const parsed = await formulaOf(bytes);
+      expect(parsed.formula).toBe(formula);
+      expect(parsed.cachedValue).toBe(cachedValue);
+    }
   });
 
   it('still XML-escapes the characters that need it', async () => {

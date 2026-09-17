@@ -11,9 +11,14 @@ import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getC
 import type { Relationships } from '../packaging/relationships.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
-import { escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
+import {
+  escapeXmlAttr as escapeXmlAttrShared,
+  escapeXmlText as escapeXmlTextShared,
+  escapeXmlTextVerbatim,
+} from '../utils/escape.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
+import { ERROR_CODES } from '../utils/inference.js';
 import type { SharedStringEntry, SharedStringsTable } from '../workbook/shared-strings.js';
 import { addSharedRichText, addSharedString } from '../workbook/shared-strings.js';
 import { MARKUP_COMPAT_NS, SHEET_MAIN_NS, X14_NS } from '../xml/namespaces.js';
@@ -446,12 +451,7 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   if ((f.t === 'normal' || f.t === 'array') && normalized.length === 0) {
     throw new OpenXmlSchemaError(`worksheet: ${f.t} formula must not be empty at ${ref}`);
   }
-  // XML escaping only. `<f>` is an ordinary xsd:string text node, and Excel
-  // does not use the `_xHHHH_` convention there, so running `escapeCellString`
-  // over it rewrote any formula whose body contained the literal text
-  // `_xNNNN_` (the underscore became `_x005F_`). Nothing unescapes `<f>` on
-  // read, by design, so that rewrite compounded on every load and save.
-  const formulaText = escapeXmlText(normalized);
+  const formulaText = escapeXmlTextVerbatim(normalized, 'worksheet: formula', ref);
   const fEl = formulaText.length > 0 ? `<f${fAttrStr}>${formulaText}</f>` : `<f${fAttrStr}/>`;
 
   let valueAttr = '';
@@ -463,14 +463,20 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
     } else if (typeof cached === 'boolean') {
       valueAttr = ' t="b"';
       vEl = `<v>${cached ? '1' : '0'}</v>`;
+    } else if (ERROR_CODES.has(cached)) {
+      // `t="e"`, or the cell reads as ordinary text until Excel recalculates
+      // and ISERROR / IFERROR stop matching it. `cachedValue` has no error
+      // variant, so the code set is the only signal available, which is the
+      // inference `bindValue` already makes for a plain string cell. An error
+      // code carries no markup character, so there is nothing to escape.
+      valueAttr = ' t="e"';
+      vEl = `<v>${cached}</v>`;
     } else {
-      // String result of a formula — use t="str", not the sst path. An empty
-      // result still needs both the type and the `<v/>`: that is what Excel
-      // displays for a formula it cannot recalculate.
+      // A string result takes t="str", not the sst path. An empty result still
+      // needs both the type and the `<v/>`: that is what Excel displays for a
+      // formula it cannot recalculate.
       valueAttr = ' t="str"';
-      // Same as `<f>`: a `t="str"` result is plain text on both sides of the
-      // round-trip, so it takes XML escaping and nothing else.
-      const text = escapeXmlText(cached);
+      const text = escapeXmlTextVerbatim(cached, 'worksheet: cached formula result', ref);
       vEl = text.length > 0 ? `<v>${text}</v>` : '<v/>';
     }
   }
@@ -644,7 +650,11 @@ const serializeCfRule = (rule: ConditionalFormattingRule): string => {
   if (rule.timePeriod !== undefined) attrs += ` timePeriod="${rule.timePeriod}"`;
 
   const inner: string[] = [];
-  for (const f of rule.formulas) inner.push(`<formula>${escapeXmlText(normalizeFormulaText(f))}</formula>`);
+  for (const f of rule.formulas) {
+    const at = `priority ${rule.priority}`;
+    const text = escapeXmlTextVerbatim(normalizeFormulaText(f), 'worksheet: conditional-formatting formula', at);
+    inner.push(`<formula>${text}</formula>`);
+  }
   if (rule.innerXml) inner.push(rule.innerXml);
   if (inner.length === 0) return `<cfRule${attrs}/>`;
   return `<cfRule${attrs}>${inner.join('')}</cfRule>`;
@@ -669,11 +679,18 @@ const serializeDataValidation = (dv: DataValidation): string => {
   if (dv.error !== undefined) attrs += ` error="${escapeXmlAttr(dv.error)}"`;
   if (dv.promptTitle !== undefined) attrs += ` promptTitle="${escapeXmlAttr(dv.promptTitle)}"`;
   if (dv.prompt !== undefined) attrs += ` prompt="${escapeXmlAttr(dv.prompt)}"`;
-  attrs += ` sqref="${escapeXmlAttr(multiCellRangeToString(dv.sqref))}"`;
+  const sqref = multiCellRangeToString(dv.sqref);
+  attrs += ` sqref="${escapeXmlAttr(sqref)}"`;
 
   const formulas: string[] = [];
-  if (dv.formula1 !== undefined) formulas.push(`<formula1>${escapeXmlText(normalizeFormulaText(dv.formula1))}</formula1>`);
-  if (dv.formula2 !== undefined) formulas.push(`<formula2>${escapeXmlText(normalizeFormulaText(dv.formula2))}</formula2>`);
+  if (dv.formula1 !== undefined) {
+    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula1), 'worksheet: data-validation formula1', sqref);
+    formulas.push(`<formula1>${text}</formula1>`);
+  }
+  if (dv.formula2 !== undefined) {
+    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula2), 'worksheet: data-validation formula2', sqref);
+    formulas.push(`<formula2>${text}</formula2>`);
+  }
   if (formulas.length === 0) return `<dataValidation${attrs}/>`;
   return `<dataValidation${attrs}>${formulas.join('')}</dataValidation>`;
 };
