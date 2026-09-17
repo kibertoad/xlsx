@@ -7,8 +7,8 @@
 // in memory.
 
 import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
-import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, ARC_SHARED_STRINGS, ARC_STYLE, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
-import { findById, relsFromBytes } from '../packaging/relationships.js';
+import { ARC_CONTENT_TYPES, ARC_ROOT_RELS } from '../xml/namespaces.js';
+import { findById, findByType, makeRelationships, relsFromBytes } from '../packaging/relationships.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
@@ -18,15 +18,19 @@ import { unescapeCellString } from '../utils/escape.js';
 import { ERROR_CODES } from '../utils/inference.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
 import { parseXml } from '../xml/parser.js';
-import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import type { XlsxSource } from '../io/source.js';
 import { coordinateToTuple } from '../utils/coordinate.js';
 import { type Stylesheet, makeStylesheet } from '../styles/stylesheet.js';
 import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
-import { parseDate1904, resolveRelTarget } from '../io/load.js';
-
-const SHEET_TAG = `{${SHEET_MAIN_NS}}sheet`;
-const SHEETS_TAG = `{${SHEET_MAIN_NS}}sheets`;
+import {
+  OFFICE_DOC_REL_TYPE,
+  parseDate1904,
+  parseSheetEntries,
+  readOptionalWorkbookPart,
+  resolveRelTarget,
+  SHARED_STRINGS_PART,
+  STYLES_PART,
+} from '../io/load.js';
 
 export interface IterRowsOptions {
   minRow?: number;
@@ -56,30 +60,6 @@ export interface ReadOnlyWorkbook {
   openWorksheet(name: string): ReadOnlyWorksheet;
   close(): Promise<void>;
 }
-
-interface SheetEntry {
-  name: string;
-  rId: string;
-  partPath: string;
-}
-
-const parseSheetList = (root: XmlNode, workbookPath: string, archive: ZipArchive): SheetEntry[] => {
-  const sheetsEl = findChild(root, SHEETS_TAG);
-  if (!sheetsEl) return [];
-  const wbRelsPath = relsPathFor(workbookPath);
-  const wbRels = archive.has(wbRelsPath) ? relsFromBytes(archive.read(wbRelsPath)) : { rels: [] };
-  const out: SheetEntry[] = [];
-  for (const sheet of findChildren(sheetsEl, SHEET_TAG)) {
-    const name = sheet.attrs['name'];
-    const rId = sheet.attrs[`{${REL_NS}}id`];
-    if (!name || !rId) continue;
-    const rel = findById(wbRels, rId);
-    if (!rel) continue;
-    const partPath = resolveRelTarget(workbookPath, rel.target);
-    out.push({ name, rId, partPath });
-  }
-  return out;
-};
 
 const relsPathFor = (partPath: string): string => {
   const i = partPath.lastIndexOf('/');
@@ -562,7 +542,7 @@ const makeStreamingReadOnlyWorkbook = (
   styles: Stylesheet,
   date1904: boolean,
   archive: ZipArchive,
-  entries: ReadonlyMap<string, SheetEntry>,
+  partPathByName: ReadonlyMap<string, string>,
   sst: ReadonlyArray<string>,
 ): ReadOnlyWorkbook => {
   // Weak keys let unused worksheet handles release their indexed bytes. The
@@ -573,11 +553,11 @@ const makeStreamingReadOnlyWorkbook = (
     styles,
     date1904,
     openWorksheet(name) {
-      const entry = entries.get(name);
-      if (!entry) {
+      const partPath = partPathByName.get(name);
+      if (partPath === undefined) {
         throw new OpenXmlSchemaError(`loadWorkbookStream: no worksheet named "${name}"`);
       }
-      return makeStreamingReadOnlyWorksheet(name, archive, entry.partPath, sst, indexes);
+      return makeStreamingReadOnlyWorksheet(name, archive, partPath, sst, indexes);
     },
     async close() {
       archive.close();
@@ -616,7 +596,7 @@ export async function loadWorkbookStream(
     throw new OpenXmlSchemaError(`loadWorkbookStream: missing "${ARC_ROOT_RELS}"`);
   }
   const rootRels = relsFromBytes(archive.read(ARC_ROOT_RELS));
-  const officeDocRel = rootRels.rels.find((r) => r.type === `${REL_NS}/officeDocument`);
+  const officeDocRel = findByType(rootRels, OFFICE_DOC_REL_TYPE);
   if (!officeDocRel) {
     throw new OpenXmlSchemaError(`loadWorkbookStream: no officeDocument relationship in root rels`);
   }
@@ -625,25 +605,41 @@ export async function loadWorkbookStream(
     throw new OpenXmlSchemaError(`loadWorkbookStream: workbook part "${workbookPath}" missing`);
   }
   const workbookRoot = parseXml(archive.read(workbookPath));
-  const sheetEntries = parseSheetList(workbookRoot, workbookPath, archive);
-  const entryMap = new Map<string, SheetEntry>();
-  for (const e of sheetEntries) entryMap.set(e.name, e);
+  // loadWorkbook's `<sheets>` parser, and its rejections below: a declaration
+  // that loader refuses must not read here as a workbook without that sheet.
+  const declaredSheets = parseSheetEntries(workbookRoot);
+  const wbRelsPath = relsPathFor(workbookPath);
+  if (declaredSheets.length > 0 && !archive.has(wbRelsPath)) {
+    throw new OpenXmlSchemaError(
+      `loadWorkbookStream: workbook has sheets but rels part "${wbRelsPath}" is missing`,
+    );
+  }
+  const wbRels = archive.has(wbRelsPath) ? relsFromBytes(archive.read(wbRelsPath)) : makeRelationships();
+  const partPathByName = new Map<string, string>();
+  for (const declared of declaredSheets) {
+    if (partPathByName.has(declared.name)) {
+      throw new OpenXmlSchemaError(`loadWorkbookStream: duplicate sheet name "${declared.name}"`);
+    }
+    const rel = findById(wbRels, declared.rId);
+    if (!rel) {
+      throw new OpenXmlSchemaError(
+        `loadWorkbookStream: sheet "${declared.name}" rId "${declared.rId}" has no matching rels entry`,
+      );
+    }
+    partPathByName.set(declared.name, resolveRelTarget(workbookPath, rel.target));
+  }
 
-  let sst: SharedStringsTable = makeSharedStrings();
-  if (archive.has(ARC_SHARED_STRINGS)) {
-    sst = parseSharedStringsXml(archive.read(ARC_SHARED_STRINGS));
-  }
-  let styles: Stylesheet = makeStylesheet();
-  if (archive.has(ARC_STYLE)) {
-    styles = parseStylesheetXml(archive.read(ARC_STYLE));
-  }
+  const sstBytes = readOptionalWorkbookPart(archive, workbookPath, wbRels, SHARED_STRINGS_PART);
+  const sst: SharedStringsTable = sstBytes === undefined ? makeSharedStrings() : parseSharedStringsXml(sstBytes);
+  const stylesBytes = readOptionalWorkbookPart(archive, workbookPath, wbRels, STYLES_PART);
+  const styles: Stylesheet = stylesBytes === undefined ? makeStylesheet() : parseStylesheetXml(stylesBytes);
 
   return makeStreamingReadOnlyWorkbook(
-    sheetEntries.map((e) => e.name),
+    declaredSheets.map((e) => e.name),
     styles,
     parseDate1904(workbookRoot),
     archive,
-    entryMap,
+    partPathByName,
     sst.entries.map((e) => (typeof e === 'string' ? e : e.runs.map((r) => r.text).join(''))),
   );
 }

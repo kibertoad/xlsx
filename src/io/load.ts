@@ -21,7 +21,15 @@ import { corePropsFromBytes } from '../packaging/core.js';
 import { customPropsFromBytes } from '../packaging/custom.js';
 import { extendedPropsFromBytes } from '../packaging/extended.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
-import { findById, indexRelsById, makeRelationships, type Relationship, relsFromBytes } from '../packaging/relationships.js';
+import {
+  findById,
+  findByType,
+  indexRelsById,
+  makeRelationships,
+  type Relationship,
+  type Relationships,
+  relsFromBytes,
+} from '../packaging/relationships.js';
 import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DefinedName } from '../workbook/defined-names.js';
@@ -67,8 +75,8 @@ export interface LoadOptions {
   decompressionLimits?: DecompressionLimits | false;
 }
 
-/** Office Document relationship type — the package-root pointer to `xl/workbook.xml`. */
-const OFFICE_DOC_REL_TYPE = `${REL_NS}/officeDocument`;
+/** Office Document relationship type: the package-root pointer to `xl/workbook.xml`. */
+export const OFFICE_DOC_REL_TYPE = `${REL_NS}/officeDocument`;
 
 /**
  * Resolve an OPC relationship target against its source part path.
@@ -83,6 +91,20 @@ export function resolveRelTarget(sourcePartPath: string, target: string): string
   const parentDir = lastSlash >= 0 ? sourcePartPath.slice(0, lastSlash + 1) : '';
   const joined = parentDir + target;
   return normalizePath(joined);
+}
+
+/**
+ * Some producers store literal spaces in ZIP entry names. Decode only as a
+ * fallback after looking for the exact package name, so encoded names retain
+ * their identity and existing relationship resolution stays compatible.
+ */
+function decodeTarget(target: string): string {
+  if (!target.includes('%')) return target;
+  try {
+    return decodeURIComponent(target);
+  } catch {
+    return target;
+  }
 }
 
 function normalizePath(path: string): string {
@@ -103,6 +125,71 @@ function normalizePath(path: string): string {
     out.push(seg);
   }
   return out.join('/');
+}
+
+/** A workbook-level part a package carries at most one of. */
+interface OptionalWorkbookPart {
+  /** How the part is named in error messages. */
+  name: string;
+  /** Relationship type that binds the part to the workbook. */
+  relType: string;
+  /** Where Excel writes the part. A convention, not a rule. */
+  conventionalPath: string;
+}
+
+export const SHARED_STRINGS_PART: OptionalWorkbookPart = {
+  name: 'sharedStrings',
+  relType: `${REL_NS}/sharedStrings`,
+  conventionalPath: ARC_SHARED_STRINGS,
+};
+
+export const STYLES_PART: OptionalWorkbookPart = {
+  name: 'styles',
+  relType: `${REL_NS}/styles`,
+  conventionalPath: ARC_STYLE,
+};
+
+const THEME_PART: OptionalWorkbookPart = {
+  name: 'theme',
+  relType: `${REL_NS}/theme`,
+  conventionalPath: ARC_THEME,
+};
+
+/**
+ * Read an optional workbook-level part, following the relationship that binds
+ * it to the workbook.
+ *
+ * The relationship decides. `xl/sharedStrings.xml` and its siblings are only
+ * where Excel happens to write these parts, and a producer may point the rel
+ * at any part in the package, so the conventional path serves the packages
+ * that ship the part with no relationship at all.
+ *
+ * A relationship that resolves to nothing is a malformed package rather than
+ * an absent part, so it throws instead of reading back as an empty table.
+ */
+export function readOptionalWorkbookPart(
+  archive: ZipArchive,
+  workbookPath: string,
+  wbRels: Relationships,
+  part: OptionalWorkbookPart,
+): Uint8Array | undefined {
+  const rel = findByType(wbRels, part.relType);
+  if (!rel) {
+    return archive.has(part.conventionalPath) ? archive.read(part.conventionalPath) : undefined;
+  }
+  if (rel.targetMode === 'External') {
+    throw new OpenXmlSchemaError(
+      `workbook rels: the ${part.name} relationship is external ("${rel.target}"), and has to name a part inside the package`,
+    );
+  }
+  let path = resolveRelTarget(workbookPath, rel.target);
+  if (!archive.has(path)) path = resolveRelTarget(workbookPath, decodeTarget(rel.target));
+  if (!archive.has(path)) {
+    throw new OpenXmlSchemaError(
+      `workbook rels: the ${part.name} relationship targets "${path}", which the package does not contain`,
+    );
+  }
+  return archive.read(path);
 }
 
 /** Sibling rels-part path for a given part. `xl/workbook.xml` → `xl/_rels/workbook.xml.rels`. */
@@ -271,42 +358,21 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
   if (sheetEntries.length > 0 && !archive.has(wbRelsPath)) {
     throw new OpenXmlSchemaError(`loadWorkbook: workbook has sheets but rels part "${wbRelsPath}" is missing`);
   }
-  const wbRels = archive.has(wbRelsPath) ? relsFromBytes(archive.read(wbRelsPath)) : { rels: [] };
+  const wbRels = archive.has(wbRelsPath) ? relsFromBytes(archive.read(wbRelsPath)) : makeRelationships();
 
-  // 4b. sharedStrings.xml — optional. The workbook rels can also point at a
-  // non-default location; for the minimum-skeleton stage we look at the
-  // canonical `xl/sharedStrings.xml` path first, then fall back to the rels
-  // entry if present.
-  let sharedStrings: SharedStringsTable | undefined;
-  if (archive.has(ARC_SHARED_STRINGS)) {
-    sharedStrings = parseSharedStringsXml(archive.read(ARC_SHARED_STRINGS));
-  } else {
-    const sstRel = wbRels.rels.find((r) => r.type === `${REL_NS}/sharedStrings`);
-    if (sstRel) {
-      const sstPath = resolveRelTarget(workbookPath, sstRel.target);
-      if (archive.has(sstPath)) {
-        sharedStrings = parseSharedStringsXml(archive.read(sstPath));
-      }
-    }
-  }
+  // 4b. sharedStrings.xml: optional, wherever the workbook rels point.
+  const sstBytes = readOptionalWorkbookPart(archive, workbookPath, wbRels, SHARED_STRINGS_PART);
+  const sharedStrings: SharedStringsTable | undefined =
+    sstBytes === undefined ? undefined : parseSharedStringsXml(sstBytes);
   // Entries reach the worksheet reader as-is: a rich-text `<si>` becomes a
   // rich-text cell value, so the per-run formatting Excel stored survives the
   // round-trip instead of collapsing into the concatenated text body.
   const sst = sharedStrings?.entries ?? [];
 
-  // 4c. styles.xml — optional. Same default-or-rels lookup as sst.
-  let styles: ReturnType<typeof parseStylesheetXml> | undefined;
-  if (archive.has(ARC_STYLE)) {
-    styles = parseStylesheetXml(archive.read(ARC_STYLE));
-  } else {
-    const stylesRel = wbRels.rels.find((r) => r.type === `${REL_NS}/styles`);
-    if (stylesRel) {
-      const stylesPath = resolveRelTarget(workbookPath, stylesRel.target);
-      if (archive.has(stylesPath)) {
-        styles = parseStylesheetXml(archive.read(stylesPath));
-      }
-    }
-  }
+  // 4c. styles.xml: optional. Same lookup as sst.
+  const stylesBytes = readOptionalWorkbookPart(archive, workbookPath, wbRels, STYLES_PART);
+  const styles: ReturnType<typeof parseStylesheetXml> | undefined =
+    stylesBytes === undefined ? undefined : parseStylesheetXml(stylesBytes);
 
   // 4d. docProps/{core,app,custom}.xml — package-level metadata. Each part is
   // optional; absent ones leave the matching Workbook field undefined. We walk
@@ -318,15 +384,7 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
 
   // 4e. xl/theme/theme1.xml — kept verbatim. Excel renders with this exact
   // payload; round-tripping the bytes avoids drift.
-  const themeXml: Uint8Array | undefined = (() => {
-    if (archive.has(ARC_THEME)) return archive.read(ARC_THEME);
-    const themeRel = wbRels.rels.find((r) => r.type === `${REL_NS}/theme`);
-    if (themeRel) {
-      const themePath = resolveRelTarget(workbookPath, themeRel.target);
-      if (archive.has(themePath)) return archive.read(themePath);
-    }
-    return undefined;
-  })();
+  const themeXml = readOptionalWorkbookPart(archive, workbookPath, wbRels, THEME_PART);
 
   // 5. Build the Workbook. We bypass `addWorksheet` because that allocates
   // sheetIds via `allocateSheetId`; load preserves the IDs from XML.
