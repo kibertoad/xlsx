@@ -378,13 +378,14 @@ const sliceFromRow = (
 
 /**
  * Factory: build a {@link ReadOnlyWorksheet} bound to a single worksheet part
- * inside an opened archive. SAX iteration runs lazily — `iterRows` re-reads the
- * part bytes each time so the caller can iterate the same sheet repeatedly
- * without keeping a buffered decoder around.
+ * inside an opened archive. SAX iteration runs lazily: a whole-sheet `iterRows`
+ * streams the part again on every call, so nothing but the inflate window and
+ * the SAX state is ever resident.
  *
- * For `iterRows({ minRow > 1 })`, a row-offset index is built lazily on first
- * use and cached; subsequent band queries jump straight to the byte offset of
- * the first matching row instead of SAX-walking the entire `<sheetData>`.
+ * `iterRows({ minRow > 1 })` needs random access instead, so the first band
+ * query inflates the part and indexes its row offsets, and holds both for the
+ * life of the worksheet handle. Subsequent band queries jump straight to the
+ * byte offset of the first matching row without inflating or scanning again.
  */
 const makeStreamingReadOnlyWorksheet = (
   title: string,
@@ -392,12 +393,17 @@ const makeStreamingReadOnlyWorksheet = (
   partPath: string,
   sst: ReadonlyArray<string>,
 ): ReadOnlyWorksheet => {
-  // Lazy + cached. The index is small (~16 B per row); for 1M rows that's 16 MB
-  // of working set, vs. the alternative of walking the sheet bytes through
-  // saxes on every band query.
-  let cached: ReturnType<typeof buildRowOffsetIndex> | undefined;
-  const ensureIndex = (bytes: Uint8Array) => {
-    if (!cached) cached = buildRowOffsetIndex(bytes);
+  // Lazy + cached, bytes included: the archive only keeps small entries, so a
+  // second band query that went back to `read` would inflate the whole part
+  // again. The index is small (~16 B per row); the part is held from the first
+  // band query until the worksheet handle goes away, which beats walking it
+  // through saxes, or inflating it, on every query.
+  let cached: (ReturnType<typeof buildRowOffsetIndex> & { bytes: Uint8Array }) | undefined;
+  const ensureIndexed = () => {
+    if (!cached) {
+      const bytes = archive.read(partPath);
+      cached = { bytes, ...buildRowOffsetIndex(bytes) };
+    }
     return cached;
   };
 
@@ -412,9 +418,8 @@ const makeStreamingReadOnlyWorksheet = (
     }
     // Band query (minRow > 1): the row-offset index needs the full inflated
     // bytes so we can binary-search to the byte offset of the first matching
-    // row. Materialise once and reuse via `ensureIndex`.
-    const bytes = archive.read(partPath);
-    const { index, sheetDataEnd } = ensureIndex(bytes);
+    // row. Materialise once and reuse via `ensureIndexed`.
+    const { bytes, index, sheetDataEnd } = ensureIndexed();
     if (index.length === 0) return iterSheetRows(bytes, sst, opts);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {
