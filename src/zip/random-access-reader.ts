@@ -248,6 +248,20 @@ function parseCentralDirectory(b: Uint8Array, cdOffset: number, expectedCount: n
   return entries;
 }
 
+/**
+ * A DEFLATE payload is never empty: even a zero-byte file compresses to a
+ * final empty block. A central directory claiming method 8 with no compressed
+ * bytes is therefore describing an entry that isn't there, which only a
+ * crafted archive does. Reject it at the same point on both read paths, so
+ * neither `read` (which would hand back an empty array) nor `readStream`
+ * (which has no input to drive the inflater with) has to guess.
+ */
+const requireDeflatePayload = (path: string, compressed: Uint8Array): void => {
+  if (compressed.byteLength === 0) {
+    throw new OpenXmlIoError(`openZip: entry "${path}" is declared DEFLATE but carries no compressed bytes`);
+  }
+};
+
 /** Read the compressed bytes for a CD entry by walking its local file header. */
 function readCompressedBytes(b: Uint8Array, entry: CdEntry): Uint8Array {
   if (u32(b, entry.lfhOffset) !== SIG_LFH) {
@@ -414,6 +428,7 @@ export function openRandomAccessArchive(
     if (entry.compMethod !== COMP_DEFLATE) {
       throw new OpenXmlIoError(`openZip: unsupported compression method ${entry.compMethod} for "${path}"`);
     }
+    requireDeflatePayload(path, compressed);
     // DEFLATE: drive fflate's `Inflate` from `pull()` so the consumer's
     // demand controls how much we inflate. Each `pull()` either emits one
     // already-buffered inflated chunk or pushes one more block of compressed
@@ -497,6 +512,12 @@ export function openRandomAccessArchive(
         if (next) {
           controller.enqueue(next);
         }
+        // Reaching here with nothing enqueued means the loop pushed every
+        // compressed byte and the entry inflated to nothing, so the last push
+        // carried `isLast` and `inflaterFinal` is set. The stream closes
+        // rather than asking for another pull it could not answer, which is
+        // what `requireDeflatePayload` keeps true by rejecting an entry that
+        // has no bytes to push in the first place.
         if (inflaterFinal && pending.length === 0 && pushedOffset >= compressed.byteLength) {
           controller.close();
         }
@@ -552,6 +573,7 @@ function inflateBounded(
   compressed: Uint8Array,
   budget: DecompressionBudget | null,
 ): Uint8Array {
+  requireDeflatePayload(path, compressed);
   const cap = budget ? entryInflateCap(budget, compressed.byteLength) : Number.POSITIVE_INFINITY;
   const record = budget ? beginEntryInflate(budget, path) : null;
   const acc: Uint8Array[] = [];
