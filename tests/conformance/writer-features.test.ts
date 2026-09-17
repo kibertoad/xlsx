@@ -84,6 +84,20 @@ describe('conformance: writer feature survey', () => {
       await expectClean(wb);
     });
 
+    it('astral characters, and the codepoints XML 1.0 cannot carry', async () => {
+      const wb = createWorkbook();
+      const w = ws(addWorksheet(wb, 'Astral'));
+      setCell(w, 1, 1, 'hi \u{1F600} there');
+      setCell(w, 2, 1, { kind: 'rich-text', runs: makeRichText([{ text: '\u{20000}\u{1D11E}' }]) });
+      // A C0 control, an unpaired surrogate (no UTF-8 encoding) and U+FFFE /
+      // U+FFFF (outside XML 1.0's Char production) have to leave as `_xHHHH_`,
+      // or xmllint and Excel reject the part they land in.
+      setCell(w, 3, 1, 'ctrl \u0007 lone \uD83D noncharacter \uFFFE\uFFFF');
+      const f = ensureCell(w, 4, 1);
+      setFormula(f, 'CONCAT("\u{1F600}")', { cachedValue: 'hi \u{1F600}' });
+      await expectClean(wb);
+    });
+
     it('formulas (normal + cached value)', async () => {
       const wb = createWorkbook();
       const w = ws(addWorksheet(wb, 'F'));
