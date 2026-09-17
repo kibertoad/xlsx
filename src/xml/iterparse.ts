@@ -51,26 +51,38 @@ const isReadableStream = (v: unknown): v is ReadableStream<Uint8Array> => {
 const decoder = (): TextDecoder => new TextDecoder('utf-8', { fatal: false });
 
 /**
- * Feed size for byte and string inputs, in bytes / code units respectively.
- * saxes runs its handlers synchronously inside `write()`, so one `write()` of a
- * whole worksheet queues every event that worksheet produces before the
- * consumer sees the first one. 64 KB matches the chunk size the zip reader's
- * inflate stream emits, so all three input shapes queue a comparable batch.
+ * Feed size, in code units. saxes runs its handlers synchronously inside
+ * `write()`, so one `write()` queues every event its argument produces before
+ * the consumer sees any of them. Capping the argument caps the queue.
+ *
+ * This bounds every input shape, including a `ReadableStream`, whose upstream
+ * chunk size is not ours to choose: the zip reader pushes 64 KB of *compressed*
+ * bytes per pull, and worksheet XML inflates roughly sevenfold, so its chunks
+ * arrive around 450 KB.
  */
 const FEED_CHUNK_SIZE = 64 * 1024;
 
 /**
- * Decode any supported input into a sequence of bounded text chunks.
- *
- * Chunk boundaries fall on arbitrary offsets. That is safe because saxes holds
- * back a lone high surrogate at the end of a `write()` and rejoins it with the
- * next one, so a split codepoint still surfaces as a single text event.
+ * Split text that exceeds the feed size. Boundaries fall on arbitrary offsets,
+ * which is safe because saxes holds back a lone high surrogate at the end of a
+ * `write()` and rejoins it with the next one, so a split codepoint still
+ * surfaces as a single text event.
  */
+function* atFeedSize(text: string): IterableIterator<string> {
+  if (text.length === 0) return;
+  if (text.length <= FEED_CHUNK_SIZE) {
+    yield text;
+    return;
+  }
+  for (let i = 0; i < text.length; i += FEED_CHUNK_SIZE) {
+    yield text.slice(i, i + FEED_CHUNK_SIZE);
+  }
+}
+
+/** Decode any supported input into a sequence of feed-sized text chunks. */
 async function* decodedChunks(input: SaxInput): AsyncIterableIterator<string> {
   if (typeof input === 'string') {
-    for (let i = 0; i < input.length; i += FEED_CHUNK_SIZE) {
-      yield input.slice(i, i + FEED_CHUNK_SIZE);
-    }
+    yield* atFeedSize(input);
     return;
   }
   // `stream: true` holds back a codepoint split across a chunk boundary
@@ -78,22 +90,19 @@ async function* decodedChunks(input: SaxInput): AsyncIterableIterator<string> {
   const td = decoder();
   if (input instanceof Uint8Array) {
     for (let i = 0; i < input.byteLength; i += FEED_CHUNK_SIZE) {
-      const text = td.decode(input.subarray(i, Math.min(i + FEED_CHUNK_SIZE, input.byteLength)), { stream: true });
-      if (text.length > 0) yield text;
+      yield* atFeedSize(td.decode(input.subarray(i, Math.min(i + FEED_CHUNK_SIZE, input.byteLength)), { stream: true }));
     }
   } else if (isReadableStream(input)) {
     const reader = input.getReader();
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      const text = td.decode(value, { stream: true });
-      if (text.length > 0) yield text;
+      yield* atFeedSize(td.decode(value, { stream: true }));
     }
   } else {
     throw new OpenXmlSchemaError('iterParse: unsupported input type');
   }
-  const tail = td.decode();
-  if (tail.length > 0) yield tail;
+  yield* atFeedSize(td.decode());
 }
 
 interface SaxesOpenTag {

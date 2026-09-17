@@ -162,6 +162,33 @@ describe('iterParse: chunked feeding', () => {
     expect(seen).toBeGreaterThan(0);
   });
 
+  it('yields events before it has parsed the tail of an oversized stream chunk', async () => {
+    // A stream's chunk size is the producer's choice, not ours: the zip reader
+    // pushes 64 KB of compressed bytes per pull and worksheet XML inflates
+    // about sevenfold, so its chunks arrive around 450 KB. Feeding one of those
+    // to saxes whole queues everything it contains, which is the same failure
+    // as feeding a whole document, reached through the stream input instead.
+    const xml = `<root>${repeat(20_000, (i) => `<c r="A${i}"><v>${i}</v></c>`)}</wrong>`;
+    const bytes = new TextEncoder().encode(xml);
+    // Comfortably past the 450 KB a real inflated worksheet chunk runs to.
+    expect(bytes.byteLength).toBeGreaterThan(450 * 1024);
+
+    const oneChunk = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        controller.close();
+      },
+    });
+
+    let seen = 0;
+    await expect(
+      (async () => {
+        for await (const _e of iterParse(oneChunk)) seen++;
+      })(),
+    ).rejects.toThrow();
+    expect(seen).toBeGreaterThan(0);
+  });
+
   it('produces identical events for string, byte and stream input', async () => {
     // Multi-byte and surrogate-pair characters straddle the chunk boundaries,
     // which is where a naive slice splits a codepoint in half.
