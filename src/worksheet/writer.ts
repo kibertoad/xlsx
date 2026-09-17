@@ -11,7 +11,7 @@ import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getC
 import type { Relationships } from '../packaging/relationships.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
-import { escapeCellString, escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
+import { escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
 import type { SharedStringEntry, SharedStringsTable } from '../workbook/shared-strings.js';
@@ -446,7 +446,12 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   if ((f.t === 'normal' || f.t === 'array') && normalized.length === 0) {
     throw new OpenXmlSchemaError(`worksheet: ${f.t} formula must not be empty at ${ref}`);
   }
-  const formulaText = escapeXmlText(escapeCellString(normalized));
+  // XML escaping only. `<f>` is an ordinary xsd:string text node, and Excel
+  // does not use the `_xHHHH_` convention there, so running `escapeCellString`
+  // over it rewrote any formula whose body contained the literal text
+  // `_xNNNN_` (the underscore became `_x005F_`). Nothing unescapes `<f>` on
+  // read, by design, so that rewrite compounded on every load and save.
+  const formulaText = escapeXmlText(normalized);
   const fEl = formulaText.length > 0 ? `<f${fAttrStr}>${formulaText}</f>` : `<f${fAttrStr}/>`;
 
   let valueAttr = '';
@@ -463,7 +468,9 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
       // result still needs both the type and the `<v/>`: that is what Excel
       // displays for a formula it cannot recalculate.
       valueAttr = ' t="str"';
-      const text = escapeXmlText(escapeCellString(cached));
+      // Same as `<f>`: a `t="str"` result is plain text on both sides of the
+      // round-trip, so it takes XML escaping and nothing else.
+      const text = escapeXmlText(cached);
       vEl = text.length > 0 ? `<v>${text}</v>` : '<v/>';
     }
   }
