@@ -14,6 +14,14 @@ const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet.js'
 };
 
 describe('setHyperlink / getHyperlink / removeHyperlink', () => {
+  it('finds a directly replaced array entry under its new ref', () => {
+    const ws = addWorksheet(createWorkbook(), 'S');
+    setHyperlink(ws, 'A1', { target: 'https://a.example' });
+    ws.hyperlinks[0] = makeHyperlink({ ref: 'Z9', target: 'https://z.example' });
+    expect(getHyperlink(ws, 'Z9')?.target).toBe('https://z.example');
+    expect(getHyperlink(ws, 'A1')).toBeUndefined();
+  });
+
   it('rejects when neither target nor location is set', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'H');

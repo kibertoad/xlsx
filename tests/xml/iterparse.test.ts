@@ -73,6 +73,80 @@ describe('iterParse — security', () => {
   it('rejects loose <!ENTITY declarations', async () => {
     await expect(collect('<!ENTITY foo "bar"><r/>')).rejects.toBeInstanceOf(OpenXmlSchemaError);
   });
+
+  it('parses a document whose body quotes <!DOCTYPE inside a comment', async () => {
+    // The prescan covers the prologue, the only place a declaration is legal.
+    // Past the root element the same characters are ordinary content, and
+    // rejecting the file for carrying them turned a valid sheet into an error.
+    const filler = 'a'.repeat(64 * 1024);
+    const xml = `<r><t>${filler}</t><!-- <!DOCTYPE html> --><t>tail</t></r>`;
+
+    const events = await collect(xml);
+    expect(events.slice(-3)).toEqual([
+      { kind: 'text', text: 'tail' },
+      { kind: 'end', name: 't' },
+      { kind: 'end', name: 'r' },
+    ]);
+  });
+
+  it('accepts a feed chunk that ends on the bare <!ENTITY keyword', async () => {
+    // XML requires whitespace after the keyword, so `<!ENTITYFOO` inside a
+    // comment is not a declaration. Matching the keyword alone rejected it
+    // anyway, because a regex word boundary matches at end of string and the
+    // chunk stopped right after the `Y`.
+    const CHUNK = 64 * 1024;
+    const keyword = '<!ENTITY';
+    const pad = ' '.repeat(CHUNK - '<!--'.length - keyword.length);
+    const xml = `<!--${pad}${keyword}FOO--><r/>`;
+    expect(xml.slice(0, CHUNK).endsWith(keyword)).toBe(true);
+
+    expect(await collect(xml)).toEqual([
+      { kind: 'start', name: 'r', attrs: {} },
+      { kind: 'end', name: 'r' },
+    ]);
+  });
+});
+
+describe('iterParse — declaration context across input shapes', () => {
+  const stream = (chunks: string[]): ReadableStream<Uint8Array> => new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.close();
+    },
+  });
+
+  it.each([
+    '<r><!-- <!DOCTYPE html> --><t>ok</t></r>',
+    '<r><![CDATA[<!ENTITY foo>]]><t>ok</t></r>',
+    '<!-- <!DOCTYPE html> --><r><t>ok</t></r>',
+    '<?note <!ENTITY foo> ?><r><t>ok</t></r>',
+    '<?xml version="1.0"?><!-- <fake/> --><r><t>ok</t></r>',
+  ])('accepts literal markup regardless of chunk boundaries: %s', async (xml) => {
+    const expected = await collect('<r><t>ok</t></r>');
+    expect(await collect(xml)).toEqual(expected);
+    expect(await collect(new TextEncoder().encode(xml))).toEqual(expected);
+    expect(await collect(stream([xml]))).toEqual(expected);
+    expect(await collect(stream([...xml]))).toEqual(expected);
+    for (let at = 1; at < xml.length; at++) {
+      expect(await collect(stream([xml.slice(0, at), xml.slice(at)]))).toEqual(expected);
+    }
+  });
+
+  it.each([
+    '<!DOCTYPE r><r/>',
+    '<!-- <fake/> --><?note <fake/> ?><!DOCTYPE r SYSTEM "u"><r/>',
+    '<!DOCTYPE r [<!ENTITY x "expanded">]><r>&x;</r>',
+    '<!ENTITY x "expanded"><r/>',
+    '<r><!DOCTYPE r></r>',
+  ])('rejects declarations regardless of chunk boundaries: %s', async (xml) => {
+    await expect(collect(xml)).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    await expect(collect(new TextEncoder().encode(xml))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    await expect(collect(stream([xml]))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    await expect(collect(stream([...xml]))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    for (let at = 1; at < xml.length; at++) {
+      await expect(collect(stream([xml.slice(0, at), xml.slice(at)]))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    }
+  });
 });
 
 describe('iterParse — streaming input', () => {

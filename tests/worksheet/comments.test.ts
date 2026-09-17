@@ -55,6 +55,16 @@ describe('parseCommentsXml + serializeComments', () => {
 });
 
 describe('setComment / getComment / removeComment', () => {
+  it('finds and removes the first duplicate after its ref is edited directly', () => {
+    const ws = addWorksheet(createWorkbook(), 'S');
+    const first = setComment(ws, { ref: 'A1', author: 'a', text: 'first' });
+    setComment(ws, { ref: 'A2', author: 'b', text: 'second' });
+    first.ref = 'A2';
+    expect(getComment(ws, 'A2')).toBe(first);
+    expect(removeComment(ws, 'A2')).toBe(true);
+    expect(ws.legacyComments.map((comment) => comment.text)).toEqual(['second']);
+  });
+
   it('add, replace, get, remove', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'C');

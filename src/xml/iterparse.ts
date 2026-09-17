@@ -9,9 +9,9 @@
 // this layer just produces the events.
 //
 // DOCTYPE / external entity declarations are forbidden. saxes does not expand
-// external entities, but a prescan also rejects DTDs. Every input shape is fed
-// to the parser in chunks, and each chunk is prescanned before it is fed, so
-// the rejection happens before saxes sees the declaration.
+// external entities, and a prescan rejects a declaration before the parser
+// reaches it. A declaration is only legal in the prologue, so that is how far
+// the prescan reads.
 
 import { SaxesParser } from 'saxes';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
@@ -29,19 +29,46 @@ export type SaxEvent =
  */
 export type SaxInput = Uint8Array | string | ReadableStream<Uint8Array>;
 
-const DOCTYPE_RE = /<!DOCTYPE\b/;
-const ENTITY_RE = /<!ENTITY\b/;
-
-/** Longest token {@link checkDoctype} matches, in code units. */
-const DTD_TOKEN_LENGTH = '<!DOCTYPE'.length;
-
-const checkDoctype = (text: string): void => {
-  if (DOCTYPE_RE.test(text)) {
-    throw new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
-  }
-  if (ENTITY_RE.test(text)) {
-    throw new OpenXmlSchemaError('Entity declarations are not permitted in OOXML payloads');
-  }
+/**
+ * Recognize declarations only in the prologue, skipping comments and processing
+ * instructions. State spans chunks, but retained text is at most one keyword or
+ * terminator. Once a root tag begins, saxes handles all remaining syntax checks.
+ */
+const makeDtdScanner = (): ((chunk: string) => void) => {
+  let state: 'prologue' | 'markup' | 'comment' | 'pi' | 'done' = 'prologue';
+  let token = '';
+  return (chunk) => {
+    for (const char of chunk) {
+      if (state === 'done') return;
+      if (state === 'comment' || state === 'pi') {
+        const terminator = state === 'comment' ? '-->' : '?>';
+        token = (token + char).slice(-terminator.length);
+        if (token === terminator) {
+          state = 'prologue';
+          token = '';
+        }
+      } else if (state === 'prologue') {
+        if (char === '<') {
+          state = 'markup';
+          token = char;
+        }
+      } else {
+        token += char;
+        if (token === '<!--' || token === '<?') {
+          state = token === '<!--' ? 'comment' : 'pi';
+          token = '';
+        } else if (/^<!DOCTYPE[ \t\r\n]$/.test(token)) {
+          throw new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
+        } else if (/^<!ENTITY[ \t\r\n]$/.test(token)) {
+          throw new OpenXmlSchemaError('Entity declarations are not permitted in OOXML payloads');
+        } else if (!'<!--'.startsWith(token) && !'<!DOCTYPE'.startsWith(token) && !'<!ENTITY'.startsWith(token)) {
+          // A root name starts here (or invalid markup, which saxes rejects).
+          state = 'done';
+          token = '';
+        }
+      }
+    }
+  };
 };
 
 const isReadableStream = (v: unknown): v is ReadableStream<Uint8Array> => {
@@ -215,21 +242,7 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
     if (pending !== undefined) throw pending;
   };
 
-  // Scan each chunk on its own, then a short window spanning the boundary, so
-  // a `<!DOCTYPE` split across two chunks is still matched. Concatenating the
-  // carry onto the whole chunk instead would make V8 flatten a fresh copy of
-  // every chunk before the regex could run.
-  const CARRY_LENGTH = DTD_TOKEN_LENGTH - 1;
-  let dtdCarry = '';
-  const scanForDtd = (chunk: string): void => {
-    checkDoctype(chunk);
-    // Chunks shorter than the carry can hide a token across three of them, so
-    // the next carry comes off the joined window rather than the chunk.
-    const window = dtdCarry + chunk.slice(0, CARRY_LENGTH);
-    if (dtdCarry.length > 0) checkDoctype(window);
-    dtdCarry = (chunk.length >= CARRY_LENGTH ? chunk : window).slice(-CARRY_LENGTH);
-  };
-
+  const scanForDtd = makeDtdScanner();
   for await (const chunk of decodedChunks(input)) {
     scanForDtd(chunk);
     feed(chunk);
