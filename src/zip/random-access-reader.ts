@@ -502,9 +502,7 @@ export function openRandomAccessArchive(
         // No buffered output: push one block of compressed input and let
         // inflate's ondata fill `pending`. We stop pushing the moment we have
         // something to emit so the next pull can return it without racing
-        // further inflation. `inflaterFinal` is set inside the ondata callback
-        // during the same `push` call that sets `isLast`, so reaching
-        // `pushedOffset >= compressed.byteLength` always ends the loop too.
+        // further inflation.
         while (pending.length === 0 && pushedOffset < compressed.byteLength) {
           const end = Math.min(pushedOffset + INFLATE_CHUNK_BYTES, compressed.byteLength);
           const slice = compressed.subarray(pushedOffset, end);
