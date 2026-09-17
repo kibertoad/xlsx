@@ -259,17 +259,108 @@ async function* iterSheetRows(
   void currentRowAttrs;
 }
 
+const isXmlSpace = (b: number | undefined): boolean =>
+  b === 0x20 /* sp */ || b === 0x09 /* tab */ || b === 0x0a /* lf */ || b === 0x0d /* cr */;
+
+/**
+ * Read the `r="N"` row number out of a `<row …>` attribute region, scanning
+ * bytes directly. Returns -1 when the attribute is absent or malformed.
+ *
+ * Decoding the region to a string and running a regex instead costs one
+ * TextDecoder, one string and one match array per row, which on a million-row
+ * sheet dominates the scan this index exists to keep cheap.
+ */
+const readRowAttr = (bytes: Uint8Array, from: number, to: number): number => {
+  for (let p = from; p + 3 < to; p++) {
+    if (!isXmlSpace(bytes[p])) continue;
+    if (bytes[p + 1] !== 0x72 /* 'r' */ || bytes[p + 2] !== 0x3d /* '=' */ || bytes[p + 3] !== 0x22 /* '"' */) {
+      continue;
+    }
+    let value = 0;
+    let digits = 0;
+    let q = p + 4;
+    while (q < to) {
+      const d = bytes[q];
+      if (d === undefined || d < 0x30 || d > 0x39) break;
+      value = value * 10 + (d - 0x30);
+      digits++;
+      q++;
+    }
+    // A non-numeric or unterminated `r` is not the row ref; keep scanning the
+    // rest of the region the way the equivalent regex would have.
+    if (digits > 0 && q < to && bytes[q] === 0x22 /* '"' */) return value;
+  }
+  return -1;
+};
+
+const isQuote = (b: number | undefined): boolean => b === 0x22 /* dquote */ || b === 0x27 /* squote */;
+
+/**
+ * Byte offset just past the worksheet's opening `sheetData` tag, or
+ * -1 when there is none. Skips the XML declaration, comments and processing
+ * instructions ahead of it, and ignores `>` inside attribute values.
+ */
+const findSheetDataTagEnd = (bytes: Uint8Array): number => {
+  const td = new TextDecoder();
+  let i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] !== 0x3c /* '<' */) {
+      i++;
+      continue;
+    }
+    const kind = bytes[i + 1];
+    if (kind === 0x3f /* '?' */ || kind === 0x21 /* '!' */) {
+      // Comments and processing instructions may contain `>` in their body.
+      const isComment = bytes[i + 2] === 0x2d /* '-' */ && bytes[i + 3] === 0x2d;
+      i += 2;
+      while (i < bytes.length) {
+        if (bytes[i] === 0x3e /* '>' */ &&
+          (isComment ? bytes[i - 1] === 0x2d && bytes[i - 2] === 0x2d
+            : kind !== 0x3f || bytes[i - 1] === 0x3f)) break;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    let nameEnd = i + 1;
+    while (nameEnd < bytes.length && !isXmlSpace(bytes[nameEnd]) && bytes[nameEnd] !== 0x3e && bytes[nameEnd] !== 0x2f) nameEnd++;
+    const isSheetData = td.decode(bytes.subarray(i + 1, nameEnd)) === 'sheetData';
+    let quote = 0;
+    let tagEnd = -1;
+    for (let j = i + 1; j < bytes.length; j++) {
+      const b = bytes[j];
+      if (b === undefined) break;
+      if (quote !== 0) {
+        if (b === quote) quote = 0;
+        continue;
+      }
+      if (isQuote(b)) {
+        quote = b;
+        continue;
+      }
+      if (b === 0x3e /* '>' */) {
+        tagEnd = j + 1;
+        break;
+      }
+    }
+    if (tagEnd < 0 || isSheetData) return tagEnd;
+    i = tagEnd;
+  }
+  return -1;
+};
+
 /**
  * Build a sorted `[rowNum, byteOffset]` index for every `<row r="N">`
  * occurrence in a worksheet's bytes. Pure byte-level scan (no SAX), cheap
- * relative to the per-cell SAX walk: ~50 ns per row on M-series Node 22.
+ * relative to the per-cell SAX walk.
  *
  * `sheetDataEnd` is the byte offset of `</sheetData>` so callers can clip the
- * slice that gets handed to saxes.
+ * region that gets handed to saxes. `sheetDataTagEnd` includes the original
+ * namespace-bearing ancestor tags, reused by {@link replayFromRow}.
  */
 const buildRowOffsetIndex = (
   bytes: Uint8Array,
-): { index: ReadonlyArray<{ row: number; offset: number }>; sheetDataEnd: number } => {
+): { index: ReadonlyArray<{ row: number; offset: number }>; sheetDataEnd: number; sheetDataTagEnd: number } => {
   const out: Array<{ row: number; offset: number }> = [];
   let sheetDataEnd = -1;
   let i = 0;
@@ -322,17 +413,14 @@ const buildRowOffsetIndex = (
     let j = i + 4;
     while (j < bytes.length && bytes[j] !== 0x3e) j++;
     if (j >= bytes.length) break;
-    const attrsBuf = bytes.subarray(start + 4, j);
-    const attrs = new TextDecoder('ascii', { fatal: false }).decode(attrsBuf);
-    const m = /\sr="(\d+)"/.exec(attrs);
-    if (m?.[1]) {
-      const row = Number.parseInt(m[1], 10);
-      if (Number.isInteger(row)) out.push({ row, offset: start });
-    }
+    const row = readRowAttr(bytes, start + 4, j);
+    // Rows are 1-based (ECMA-376 §18.3.1.73), so `r="0"` is not an offset this
+    // index can seek to; -1 means there was no usable `r` at all.
+    if (row > 0) out.push({ row, offset: start });
     i = j + 1;
   }
   if (sheetDataEnd < 0) sheetDataEnd = bytes.length;
-  return { index: out, sheetDataEnd };
+  return { index: out, sheetDataEnd, sheetDataTagEnd: findSheetDataTagEnd(bytes) };
 };
 
 /**
@@ -355,25 +443,34 @@ const firstRowAtOrAfter = (
 };
 
 /**
- * Slice a worksheet's bytes to start at the row at index `idxPos` of the
- * row-offset index, wrapping the result with a synthetic `<sheetData>` envelope
- * so saxes parses it in the right namespace.
+ * Replay a row band with the original prefix through the opening sheetData
+ * tag. Namespace declarations can occur on either worksheet or sheetData;
+ * synthesising either tag loses bindings required by the retained rows.
+ * Views avoid copying the inflated sheet just to prepend its ancestor tags.
  */
-const SHEET_DATA_OPEN = `<?xml version="1.0" encoding="UTF-8"?><sheetData xmlns="${SHEET_MAIN_NS}">`;
-const SHEET_DATA_CLOSE = `</sheetData>`;
-const sliceFromRow = (
+const replayFromRow = (
   bytes: Uint8Array,
+  sheetDataTagEnd: number,
   fromOffset: number,
   sheetDataEnd: number,
-): Uint8Array => {
-  const prefix = new TextEncoder().encode(SHEET_DATA_OPEN);
-  const suffix = new TextEncoder().encode(SHEET_DATA_CLOSE);
-  const middle = bytes.subarray(fromOffset, sheetDataEnd);
-  const out = new Uint8Array(prefix.length + middle.length + suffix.length);
-  out.set(prefix, 0);
-  out.set(middle, prefix.length);
-  out.set(suffix, prefix.length + middle.length);
-  return out;
+): ReadableStream<Uint8Array> => {
+  const parts = [
+    bytes.subarray(0, sheetDataTagEnd),
+    bytes.subarray(fromOffset, sheetDataEnd),
+    bytes.subarray(sheetDataEnd),
+  ];
+  let next = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const part = parts[next];
+      if (part === undefined) {
+        controller.close();
+        return;
+      }
+      next++;
+      controller.enqueue(part);
+    },
+  });
 };
 
 /**
@@ -392,9 +489,9 @@ const makeStreamingReadOnlyWorksheet = (
   partPath: string,
   sst: ReadonlyArray<string>,
 ): ReadOnlyWorksheet => {
-  // Lazy + cached. The index is small (~16 B per row); for 1M rows that's 16 MB
-  // of working set, vs. the alternative of walking the sheet bytes through
-  // saxes on every band query.
+  // Lazy + cached. The index costs one small object per row, which buys
+  // skipping the SAX tokenisation of every row below the band: the deeper the
+  // band starts, the more it saves.
   let cached: ReturnType<typeof buildRowOffsetIndex> | undefined;
   const ensureIndex = (bytes: Uint8Array) => {
     if (!cached) cached = buildRowOffsetIndex(bytes);
@@ -412,19 +509,21 @@ const makeStreamingReadOnlyWorksheet = (
     }
     // Band query (minRow > 1): the row-offset index needs the full inflated
     // bytes so we can binary-search to the byte offset of the first matching
-    // row. Materialise once and reuse via `ensureIndex`.
+    // row. Materialise once and reuse via `ensureIndex`. This trades the
+    // sheet's inflated size in resident bytes against tokenising every row
+    // below the band, which is the more expensive half once the band starts
+    // deep into a large sheet.
     const bytes = archive.read(partPath);
-    const { index, sheetDataEnd } = ensureIndex(bytes);
-    if (index.length === 0) return iterSheetRows(bytes, sst, opts);
+    const { index, sheetDataEnd, sheetDataTagEnd } = ensureIndex(bytes);
+    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(bytes, sst, opts);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {
-      // Every row is below minRow — nothing to yield.
+      // Every row is below minRow, so there is nothing to yield.
       return (async function* () {})();
     }
     const target = index[pos];
     if (!target) return iterSheetRows(bytes, sst, opts);
-    const sliced = sliceFromRow(bytes, target.offset, sheetDataEnd);
-    return iterSheetRows(sliced, sst, opts);
+    return iterSheetRows(replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
   };
   const iterValues = async function* (opts: IterRowsOptions = {}): AsyncIterableIterator<CellValue[]> {
     for await (const row of iterRows(opts)) {
