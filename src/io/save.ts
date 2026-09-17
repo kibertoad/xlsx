@@ -585,6 +585,9 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
       await writer.addEntry(`${dir}/_rels/${file}.rels`, relsToBytes(sheetRels));
     }
   };
+  // One sheet at a time by necessity: the ZIP writer permits a single open
+  // streaming entry, so running these concurrently interleaves two sheets'
+  // bytes into one entry and produces an archive Excel cannot open.
   for (const plan of sheetPlans) await writeSheetPart(plan);
 
   // ---- 4. workbook rels -- sheets first, then sst (if any), then styles, then
