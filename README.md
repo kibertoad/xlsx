@@ -285,6 +285,15 @@ worksheet payload. Band queries (`minRow > 1`) build a row-offset index once
 per sheet, which does materialise that sheet's inflated bytes; subsequent
 band queries reuse the cached index.
 
+The two readers differ on damaged input, deliberately. Handed a cell it cannot
+interpret (`<c t="b"><v>yes</v></c>`, an unknown error code, a shared-string
+index past the end of the table) `loadWorkbook` throws an `OpenXmlSchemaError`,
+on the grounds that a wrong value is worse than a failed load.
+`loadWorkbookStream` reads that cell as empty and keeps going, because an
+iterator that throws on row 900,000 leaves you no way to finish the pass.
+Structural problems (a missing part, no `officeDocument` relationship, an
+unknown sheet name) throw in both.
+
 ### Migrating from openpyxl
 
 @office-kit/xlsx is shaped after openpyxl, but a few defaults differ. The most
