@@ -78,8 +78,6 @@ describe('iterParse — security', () => {
     // The prescan covers the prologue, the only place a declaration is legal.
     // Past the root element the same characters are ordinary content, and
     // rejecting the file for carrying them turned a valid sheet into an error.
-    // The quote has to land in a later feed chunk than the root, because the
-    // chunk the root opens in is scanned whole before it is fed.
     const filler = 'a'.repeat(64 * 1024);
     const xml = `<r><t>${filler}</t><!-- <!DOCTYPE html> --><t>tail</t></r>`;
 
@@ -106,6 +104,48 @@ describe('iterParse — security', () => {
       { kind: 'start', name: 'r', attrs: {} },
       { kind: 'end', name: 'r' },
     ]);
+  });
+});
+
+describe('iterParse — declaration context across input shapes', () => {
+  const stream = (chunks: string[]): ReadableStream<Uint8Array> => new ReadableStream({
+    start(controller) {
+      for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk));
+      controller.close();
+    },
+  });
+
+  it.each([
+    '<r><!-- <!DOCTYPE html> --><t>ok</t></r>',
+    '<r><![CDATA[<!ENTITY foo>]]><t>ok</t></r>',
+    '<!-- <!DOCTYPE html> --><r><t>ok</t></r>',
+    '<?note <!ENTITY foo> ?><r><t>ok</t></r>',
+    '<?xml version="1.0"?><!-- <fake/> --><r><t>ok</t></r>',
+  ])('accepts literal markup regardless of chunk boundaries: %s', async (xml) => {
+    const expected = await collect('<r><t>ok</t></r>');
+    expect(await collect(xml)).toEqual(expected);
+    expect(await collect(new TextEncoder().encode(xml))).toEqual(expected);
+    expect(await collect(stream([xml]))).toEqual(expected);
+    expect(await collect(stream([...xml]))).toEqual(expected);
+    for (let at = 1; at < xml.length; at++) {
+      expect(await collect(stream([xml.slice(0, at), xml.slice(at)]))).toEqual(expected);
+    }
+  });
+
+  it.each([
+    '<!DOCTYPE r><r/>',
+    '<!-- <fake/> --><?note <fake/> ?><!DOCTYPE r SYSTEM "u"><r/>',
+    '<!DOCTYPE r [<!ENTITY x "expanded">]><r>&x;</r>',
+    '<!ENTITY x "expanded"><r/>',
+    '<r><!DOCTYPE r></r>',
+  ])('rejects declarations regardless of chunk boundaries: %s', async (xml) => {
+    await expect(collect(xml)).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    await expect(collect(new TextEncoder().encode(xml))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    await expect(collect(stream([xml]))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    await expect(collect(stream([...xml]))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    for (let at = 1; at < xml.length; at++) {
+      await expect(collect(stream([xml.slice(0, at), xml.slice(at)]))).rejects.toBeInstanceOf(OpenXmlSchemaError);
+    }
   });
 });
 

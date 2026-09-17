@@ -29,22 +29,46 @@ export type SaxEvent =
  */
 export type SaxInput = Uint8Array | string | ReadableStream<Uint8Array>;
 
-// The separator is part of each pattern because XML requires whitespace after
-// either keyword (§2.8, §4.2). Matching the bare keyword rejected a chunk that
-// happened to end on one, since `\b` matches at end of string too.
-const DOCTYPE_RE = /<!DOCTYPE\s/;
-const ENTITY_RE = /<!ENTITY\s/;
-
-/** Longest keyword {@link checkDoctype} matches, in code units. */
-const DTD_TOKEN_LENGTH = '<!DOCTYPE'.length;
-
-const checkDoctype = (text: string): void => {
-  if (DOCTYPE_RE.test(text)) {
-    throw new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
-  }
-  if (ENTITY_RE.test(text)) {
-    throw new OpenXmlSchemaError('Entity declarations are not permitted in OOXML payloads');
-  }
+/**
+ * Recognize declarations only in the prologue, skipping comments and processing
+ * instructions. State spans chunks, but retained text is at most one keyword or
+ * terminator. Once a root tag begins, saxes handles all remaining syntax checks.
+ */
+const makeDtdScanner = (): ((chunk: string) => void) => {
+  let state: 'prologue' | 'markup' | 'comment' | 'pi' | 'done' = 'prologue';
+  let token = '';
+  return (chunk) => {
+    for (const char of chunk) {
+      if (state === 'done') return;
+      if (state === 'comment' || state === 'pi') {
+        const terminator = state === 'comment' ? '-->' : '?>';
+        token = (token + char).slice(-terminator.length);
+        if (token === terminator) {
+          state = 'prologue';
+          token = '';
+        }
+      } else if (state === 'prologue') {
+        if (char === '<') {
+          state = 'markup';
+          token = char;
+        }
+      } else {
+        token += char;
+        if (token === '<!--' || token === '<?') {
+          state = token === '<!--' ? 'comment' : 'pi';
+          token = '';
+        } else if (/^<!DOCTYPE[ \t\r\n]$/.test(token)) {
+          throw new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
+        } else if (/^<!ENTITY[ \t\r\n]$/.test(token)) {
+          throw new OpenXmlSchemaError('Entity declarations are not permitted in OOXML payloads');
+        } else if (!'<!--'.startsWith(token) && !'<!DOCTYPE'.startsWith(token) && !'<!ENTITY'.startsWith(token)) {
+          // A root name starts here (or invalid markup, which saxes rejects).
+          state = 'done';
+          token = '';
+        }
+      }
+    }
+  };
 };
 
 const isReadableStream = (v: unknown): v is ReadableStream<Uint8Array> => {
@@ -180,7 +204,6 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   let queue: SaxEvent[] = [];
   let head = 0;
   let pending: Error | undefined;
-  let rootOpened = false;
 
   parser.on('error', (err: Error) => {
     // saxes reports syntax errors as plain Error; consumers of this library
@@ -191,7 +214,6 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
     pending = new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
   });
   parser.on('opentag', (node: SaxesOpenTag) => {
-    rootOpened = true;
     queue.push({ kind: 'start', name: qname(node.uri, node.local), attrs: buildAttrsClark(node.attributes) });
   });
   parser.on('closetag', (node: SaxesCloseTag) => {
@@ -220,31 +242,9 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
     if (pending !== undefined) throw pending;
   };
 
-  // Scan each chunk on its own, then a short window spanning the boundary, so
-  // a `<!DOCTYPE` split across two chunks is still matched. Concatenating the
-  // carry onto the whole chunk instead would make V8 flatten a fresh copy of
-  // every chunk before the regex could run.
-  //
-  // The window holds the whole keyword rather than one character short of it,
-  // because the patterns match the separator that follows: a chunk can end on
-  // the final `E` of `<!DOCTYPE` and leave the space that makes it one behind.
-  const CARRY_LENGTH = DTD_TOKEN_LENGTH;
-  let dtdCarry = '';
-  const scanForDtd = (chunk: string): void => {
-    checkDoctype(chunk);
-    // Chunks shorter than the carry can hide a token across three of them, so
-    // the next carry comes off the joined window rather than the chunk.
-    const window = dtdCarry + chunk.slice(0, CARRY_LENGTH);
-    if (dtdCarry.length > 0) checkDoctype(window);
-    dtdCarry = (chunk.length >= CARRY_LENGTH ? chunk : window).slice(-CARRY_LENGTH);
-  };
-
+  const scanForDtd = makeDtdScanner();
   for await (const chunk of decodedChunks(input)) {
-    // The prologue is the only place a declaration is legal, and it is fed
-    // before the root element opens. Past that, `<!DOCTYPE` in the text is a
-    // literal inside a comment, CDATA or character data, and scanning on would
-    // both reject a valid sheet and re-read the whole document for nothing.
-    if (!rootOpened) scanForDtd(chunk);
+    scanForDtd(chunk);
     feed(chunk);
     yield* drain();
   }
