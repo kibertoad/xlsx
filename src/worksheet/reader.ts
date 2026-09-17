@@ -24,6 +24,7 @@ import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
 import { ERROR_CODES } from '../utils/inference.js';
+import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { MARKUP_COMPAT_NS, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { parseXml } from '../xml/parser.js';
 import { serializeXml } from '../xml/serializer.js';
@@ -235,13 +236,13 @@ export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx
     if (outlineLevelRow !== undefined) ws.outlineLevelRow = outlineLevelRow;
     const outlineLevelCol = parseIntegerAttr(sheetFormatEl.attrs['outlineLevelCol']);
     if (outlineLevelCol !== undefined) ws.outlineLevelCol = outlineLevelCol;
-    const customHeight = parseBoolXmlAttr(sheetFormatEl.attrs['customHeight']);
+    const customHeight = parseXsdBoolean(sheetFormatEl.attrs['customHeight']);
     if (customHeight !== undefined) ws.customHeight = customHeight;
-    const zeroHeight = parseBoolXmlAttr(sheetFormatEl.attrs['zeroHeight']);
+    const zeroHeight = parseXsdBoolean(sheetFormatEl.attrs['zeroHeight']);
     if (zeroHeight !== undefined) ws.zeroHeight = zeroHeight;
-    const thickTop = parseBoolXmlAttr(sheetFormatEl.attrs['thickTop']);
+    const thickTop = parseXsdBoolean(sheetFormatEl.attrs['thickTop']);
     if (thickTop !== undefined) ws.thickTop = thickTop;
-    const thickBottom = parseBoolXmlAttr(sheetFormatEl.attrs['thickBottom']);
+    const thickBottom = parseXsdBoolean(sheetFormatEl.attrs['thickBottom']);
     if (thickBottom !== undefined) ws.thickBottom = thickBottom;
     const baseColWidth = parseIntegerAttr(sheetFormatEl.attrs['baseColWidth']);
     if (baseColWidth !== undefined) ws.baseColWidth = baseColWidth;
@@ -452,9 +453,9 @@ export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx
         const type = Number.parseInt(typeRaw, 10);
         if (!Number.isInteger(type)) continue;
         const tag: import('./smart-tags.js').CellSmartTag = { type, properties: [] };
-        const deleted = parseBoolXmlAttr(tagNode.attrs['deleted']);
+        const deleted = parseXsdBoolean(tagNode.attrs['deleted']);
         if (deleted !== undefined) tag.deleted = deleted;
-        const xmlBased = parseBoolXmlAttr(tagNode.attrs['xmlBased']);
+        const xmlBased = parseXsdBoolean(tagNode.attrs['xmlBased']);
         if (xmlBased !== undefined) tag.xmlBased = xmlBased;
         for (const prop of findChildren(tagNode, CELL_SMART_TAG_PR_TAG)) {
           const key = prop.attrs['key'];
@@ -603,9 +604,9 @@ const parseSortState = (node: XmlNode): SortState | undefined => {
   const ref = node.attrs['ref'];
   if (!ref) return undefined;
   const out: SortState = { ref, conditions: [] };
-  const cs = parseBoolXmlAttr(node.attrs['columnSort']);
+  const cs = parseXsdBoolean(node.attrs['columnSort']);
   if (cs !== undefined) out.columnSort = cs;
-  const cse = parseBoolXmlAttr(node.attrs['caseSensitive']);
+  const cse = parseXsdBoolean(node.attrs['caseSensitive']);
   if (cse !== undefined) out.caseSensitive = cse;
   const sm = node.attrs['sortMethod'];
   if (sm && SORT_METHODS.includes(sm as SortMethod)) out.sortMethod = sm as SortMethod;
@@ -614,7 +615,7 @@ const parseSortState = (node: XmlNode): SortState | undefined => {
     const cRef = sc.attrs['ref'];
     if (!cRef) continue;
     const c: SortCondition = { ref: cRef };
-    const desc = parseBoolXmlAttr(sc.attrs['descending']);
+    const desc = parseXsdBoolean(sc.attrs['descending']);
     if (desc !== undefined) c.descending = desc;
     const sb = sc.attrs['sortBy'];
     if (sb && SORT_BY_VALUES.includes(sb as SortBy)) c.sortBy = sb as SortBy;
@@ -656,9 +657,9 @@ const parseScenario = (node: XmlNode): Scenario | undefined => {
   const name = node.attrs['name'];
   if (!name) return undefined;
   const out: Scenario = { name, inputCells: [] };
-  const locked = parseBoolXmlAttr(node.attrs['locked']);
+  const locked = parseXsdBoolean(node.attrs['locked']);
   if (locked !== undefined) out.locked = locked;
-  const hidden = parseBoolXmlAttr(node.attrs['hidden']);
+  const hidden = parseXsdBoolean(node.attrs['hidden']);
   if (hidden !== undefined) out.hidden = hidden;
   if (node.attrs['user'] !== undefined) out.user = node.attrs['user'];
   if (node.attrs['comment'] !== undefined) out.comment = node.attrs['comment'];
@@ -675,9 +676,9 @@ const parseScenarioInputCell = (node: XmlNode): ScenarioInputCell | undefined =>
   const val = node.attrs['val'];
   if (!ref || val === undefined) return undefined;
   const out: ScenarioInputCell = { ref, val };
-  const deleted = parseBoolXmlAttr(node.attrs['deleted']);
+  const deleted = parseXsdBoolean(node.attrs['deleted']);
   if (deleted !== undefined) out.deleted = deleted;
-  const undone = parseBoolXmlAttr(node.attrs['undone']);
+  const undone = parseXsdBoolean(node.attrs['undone']);
   if (undone !== undefined) out.undone = undone;
   const numFmtId = parseIntegerAttr(node.attrs['numFmtId']);
   if (numFmtId !== undefined) out.numFmtId = numFmtId;
@@ -704,11 +705,11 @@ const parseDataConsolidate = (node: XmlNode): DataConsolidate | undefined => {
   if (f && DATA_CONSOLIDATE_FUNCTIONS.includes(f as DataConsolidateFunction)) {
     out.function = f as DataConsolidateFunction;
   }
-  const topLabels = parseBoolXmlAttr(node.attrs['topLabels']);
+  const topLabels = parseXsdBoolean(node.attrs['topLabels']);
   if (topLabels !== undefined) out.topLabels = topLabels;
-  const leftLabels = parseBoolXmlAttr(node.attrs['leftLabels']);
+  const leftLabels = parseXsdBoolean(node.attrs['leftLabels']);
   if (leftLabels !== undefined) out.leftLabels = leftLabels;
-  const link = parseBoolXmlAttr(node.attrs['link']);
+  const link = parseXsdBoolean(node.attrs['link']);
   if (link !== undefined) out.link = link;
   if (node.attrs['startLabels'] !== undefined) out.startLabels = node.attrs['startLabels'];
 
@@ -777,7 +778,7 @@ export const parseWebPublishItem = (node: XmlNode): WebPublishItem | undefined =
   if (node.attrs['sourceRef'] !== undefined) out.sourceRef = node.attrs['sourceRef'];
   if (node.attrs['sourceObject'] !== undefined) out.sourceObject = node.attrs['sourceObject'];
   if (node.attrs['title'] !== undefined) out.title = node.attrs['title'];
-  const auto = parseBoolXmlAttr(node.attrs['autoRepublish']);
+  const auto = parseXsdBoolean(node.attrs['autoRepublish']);
   if (auto !== undefined) out.autoRepublish = auto;
   return out;
 };
@@ -820,7 +821,7 @@ const parseCustomSheetView = (node: XmlNode): CustomSheetView | undefined => {
     'showRuler',
   ] as const satisfies ReadonlyArray<keyof CustomSheetView>;
   for (const k of boolKeys) {
-    const v = parseBoolXmlAttr(node.attrs[k]);
+    const v = parseXsdBoolean(node.attrs[k]);
     if (v !== undefined) out[k] = v;
   }
   const stateRaw = node.attrs['state'];
@@ -894,7 +895,7 @@ const parseOleObject = (node: XmlNode): OleObject | undefined => {
   const oleUpdate = node.attrs['oleUpdate'];
   if (oleUpdate && OLE_UPDATE_MODES.includes(oleUpdate as OleUpdateMode))
     out.oleUpdate = oleUpdate as OleUpdateMode;
-  const autoLoad = parseBoolXmlAttr(node.attrs['autoLoad']);
+  const autoLoad = parseXsdBoolean(node.attrs['autoLoad']);
   if (autoLoad !== undefined) out.autoLoad = autoLoad;
   const objectPr = findChild(node, OBJECT_PR_TAG);
   if (objectPr) out.objectPr = objectPr;
@@ -923,9 +924,9 @@ const parsePageBreak = (node: XmlNode): PageBreak => {
   if (min !== undefined) out.min = min;
   const max = parseIntegerAttr(node.attrs['max']);
   if (max !== undefined) out.max = max;
-  const man = parseBoolXmlAttr(node.attrs['man']);
+  const man = parseXsdBoolean(node.attrs['man']);
   if (man !== undefined) out.man = man;
-  const pt = parseBoolXmlAttr(node.attrs['pt']);
+  const pt = parseXsdBoolean(node.attrs['pt']);
   if (pt !== undefined) out.pt = pt;
   return out;
 };
@@ -1303,28 +1304,21 @@ const parseIntegerAttr = (raw: string | undefined): number | undefined => {
   return Number.isInteger(n) ? n : undefined;
 };
 
-const parseBoolXmlAttr = (raw: string | undefined): boolean | undefined => {
-  if (raw === undefined) return undefined;
-  if (raw === '1' || raw === 'true') return true;
-  if (raw === '0' || raw === 'false') return false;
-  return undefined;
-};
-
 const parseSheetView = (node: XmlNode): SheetView => {
   const opts: Partial<SheetView> = {
     workbookViewId: parseIntegerAttr(node.attrs['workbookViewId']) ?? 0,
   };
-  const tabSelected = parseBoolXmlAttr(node.attrs['tabSelected']);
+  const tabSelected = parseXsdBoolean(node.attrs['tabSelected']);
   if (tabSelected !== undefined) opts.tabSelected = tabSelected;
-  const showGridLines = parseBoolXmlAttr(node.attrs['showGridLines']);
+  const showGridLines = parseXsdBoolean(node.attrs['showGridLines']);
   if (showGridLines !== undefined) opts.showGridLines = showGridLines;
-  const showRowColHeaders = parseBoolXmlAttr(node.attrs['showRowColHeaders']);
+  const showRowColHeaders = parseXsdBoolean(node.attrs['showRowColHeaders']);
   if (showRowColHeaders !== undefined) opts.showRowColHeaders = showRowColHeaders;
-  const showFormulas = parseBoolXmlAttr(node.attrs['showFormulas']);
+  const showFormulas = parseXsdBoolean(node.attrs['showFormulas']);
   if (showFormulas !== undefined) opts.showFormulas = showFormulas;
-  const showZeros = parseBoolXmlAttr(node.attrs['showZeros']);
+  const showZeros = parseXsdBoolean(node.attrs['showZeros']);
   if (showZeros !== undefined) opts.showZeros = showZeros;
-  const rightToLeft = parseBoolXmlAttr(node.attrs['rightToLeft']);
+  const rightToLeft = parseXsdBoolean(node.attrs['rightToLeft']);
   if (rightToLeft !== undefined) opts.rightToLeft = rightToLeft;
   const view = node.attrs['view'];
   if (view !== undefined && (SHEET_VIEW_MODES as ReadonlyArray<string>).includes(view)) {
@@ -1417,7 +1411,7 @@ const readCell = (
     // into a workbook it cannot reach), and that cached value is the only
     // thing it has to display until the link resolves.
     const cachedRaw = vNode === undefined ? undefined : (vNode.text ?? '');
-    const cached = decodeCachedValue(cachedRaw, t);
+    const cached = decodeCachedValue(cachedRaw, t, coord);
     handleFormula(cell, fNode, coord, cached, sharedFormulas);
     return;
   }
@@ -1446,18 +1440,20 @@ const readCell = (
       break;
     }
     case 'b': {
-      // xsd:boolean admits `true` / `false` alongside `1` / `0`, and
-      // producers other than Excel do write the long spelling. Comparing
-      // against `'1'` turned `<v>true</v>` into `false` with nothing to
-      // signal it. A missing `<v>` is an empty cell, as it is under `t="n"`.
-      const raw = vNode?.text;
+      // A `<v>` holding nothing but whitespace carries no boolean, so it is an
+      // empty cell the way a missing `<v>` is under `t="n"`. The cell keeps no
+      // type of its own once its value is null, so `<c t="b"/>` is written
+      // back as `<c/>`, which is what Excel emits for an empty cell.
+      const raw = vNode?.text?.trim();
       if (raw === undefined || raw === '') {
         value = null;
         break;
       }
-      const parsed = parseBoolXmlAttr(raw);
+      const parsed = parseXsdBoolean(raw);
       if (parsed === undefined) {
-        throw new OpenXmlSchemaError(`worksheet: <c t="b"><v>${raw}</v> is not a boolean`);
+        throw new OpenXmlSchemaError(
+          `worksheet: <c r="${tupleToCoordinate(coord.col, coord.row)}" t="b"><v>${clipCellText(raw)}</v></c> is not a boolean`,
+        );
       }
       value = parsed;
       break;
@@ -1482,6 +1478,18 @@ const readCell = (
   setCell(ws, coord.row, coord.col, value, styleId);
 };
 
+const MAX_REPORTED_TEXT = 40;
+
+/**
+ * Cell text quoted into an error message is untrusted input of unbounded
+ * length, and nothing stops it from spanning lines, so keep the message one
+ * short line whatever the part holds.
+ */
+const clipCellText = (raw: string): string => {
+  const oneLine = raw.replace(/\s+/g, ' ');
+  return oneLine.length > MAX_REPORTED_TEXT ? `${oneLine.slice(0, MAX_REPORTED_TEXT)}…` : oneLine;
+};
+
 const parseStyleId = (raw: string): number => {
   const n = Number.parseInt(raw, 10);
   if (!Number.isInteger(n) || n < 0) {
@@ -1502,14 +1510,30 @@ const readInlineString = (isNode: XmlNode | undefined): CellValue => {
   return typeof entry === 'string' ? entry : { kind: 'rich-text', runs: entry.runs };
 };
 
-const decodeCachedValue = (raw: string | undefined, t: string): number | string | boolean | undefined => {
+const decodeCachedValue = (
+  raw: string | undefined,
+  t: string,
+  coord: { row: number; col: number },
+): number | string | boolean | undefined => {
   if (raw === undefined) return undefined;
   switch (t) {
     case 'n':
       // An empty `<v/>` under the (default) numeric type carries no number.
       return raw === '' ? undefined : Number.parseFloat(raw);
-    case 'b':
-      return raw === '' ? undefined : parseBoolXmlAttr(raw);
+    case 'b': {
+      const text = raw.trim();
+      if (text === '') return undefined;
+      const parsed = parseXsdBoolean(text);
+      if (parsed === undefined) {
+        // Dropping it instead would lose the cached result *and* the `t="b"`
+        // the writer takes from it, so a load then save would quietly rewrite
+        // the cell as an untyped formula.
+        throw new OpenXmlSchemaError(
+          `worksheet: <c r="${tupleToCoordinate(coord.col, coord.row)}" t="b"><v>${clipCellText(text)}</v></c> cached result is not a boolean`,
+        );
+      }
+      return parsed;
+    }
     case 'str':
       return raw;
     case 'e':
@@ -1604,12 +1628,12 @@ const handleFormula = (
         ...(cached !== undefined ? { cachedValue: cached } : {}),
         ...(fNode.attrs['r1'] !== undefined ? { r1: fNode.attrs['r1'] } : {}),
         ...(fNode.attrs['r2'] !== undefined ? { r2: fNode.attrs['r2'] } : {}),
-        ...(parseDataTableBool(fNode.attrs['dt2D']) ? { dt2D: true } : {}),
-        ...(parseDataTableBool(fNode.attrs['dtr']) ? { dtr: true } : {}),
-        ...(parseDataTableBool(fNode.attrs['del1']) ? { del1: true } : {}),
-        ...(parseDataTableBool(fNode.attrs['del2']) ? { del2: true } : {}),
-        ...(parseDataTableBool(fNode.attrs['aca']) ? { aca: true } : {}),
-        ...(parseDataTableBool(fNode.attrs['ca']) ? { ca: true } : {}),
+        ...(parseXsdBoolean(fNode.attrs['dt2D']) ? { dt2D: true } : {}),
+        ...(parseXsdBoolean(fNode.attrs['dtr']) ? { dtr: true } : {}),
+        ...(parseXsdBoolean(fNode.attrs['del1']) ? { del1: true } : {}),
+        ...(parseXsdBoolean(fNode.attrs['del2']) ? { del2: true } : {}),
+        ...(parseXsdBoolean(fNode.attrs['aca']) ? { aca: true } : {}),
+        ...(parseXsdBoolean(fNode.attrs['ca']) ? { ca: true } : {}),
       };
       setDataTableFormula(cell, formula, dtOpts);
       return;
@@ -1617,12 +1641,6 @@ const handleFormula = (
     default:
       throw new OpenXmlSchemaError(`worksheet: <f t="${tAttr}"> unknown formula kind`);
   }
-};
-
-const parseDataTableBool = (raw: string | undefined): boolean => {
-  // Excel emits these as the OOXML truthy values "1" or "true".
-  if (raw === undefined) return false;
-  return raw === '1' || raw === 'true';
 };
 
 const parseColumnDimension = (node: XmlNode): ColumnDimension => {
@@ -1639,17 +1657,17 @@ const parseColumnDimension = (node: XmlNode): ColumnDimension => {
   const opts: Partial<Omit<ColumnDimension, 'min' | 'max'>> = {};
   const width = parseFloatAttr(node.attrs['width']);
   if (width !== undefined) opts.width = width;
-  const customWidth = parseBoolXmlAttr(node.attrs['customWidth']);
+  const customWidth = parseXsdBoolean(node.attrs['customWidth']);
   if (customWidth !== undefined) opts.customWidth = customWidth;
-  const hidden = parseBoolXmlAttr(node.attrs['hidden']);
+  const hidden = parseXsdBoolean(node.attrs['hidden']);
   if (hidden !== undefined) opts.hidden = hidden;
-  const bestFit = parseBoolXmlAttr(node.attrs['bestFit']);
+  const bestFit = parseXsdBoolean(node.attrs['bestFit']);
   if (bestFit !== undefined) opts.bestFit = bestFit;
   const outlineLevel = parseIntegerAttr(node.attrs['outlineLevel']);
   if (outlineLevel !== undefined) opts.outlineLevel = outlineLevel;
   const style = parseIntegerAttr(node.attrs['style']);
   if (style !== undefined) opts.style = style;
-  const collapsed = parseBoolXmlAttr(node.attrs['collapsed']);
+  const collapsed = parseXsdBoolean(node.attrs['collapsed']);
   if (collapsed !== undefined) opts.collapsed = collapsed;
   // makeColumnDimension fills min=col=max; rebuild with both range ends.
   return { ...makeColumnDimension(min, opts), max };
@@ -1690,13 +1708,13 @@ const parseDataValidation = (node: XmlNode): DataValidation => {
   if (operator && (DV_OPERATORS as ReadonlyArray<string>).includes(operator)) {
     opts.operator = operator as DataValidationOperator;
   }
-  const allowBlank = parseBoolXmlAttr(node.attrs['allowBlank']);
+  const allowBlank = parseXsdBoolean(node.attrs['allowBlank']);
   if (allowBlank !== undefined) opts.allowBlank = allowBlank;
-  const showInputMessage = parseBoolXmlAttr(node.attrs['showInputMessage']);
+  const showInputMessage = parseXsdBoolean(node.attrs['showInputMessage']);
   if (showInputMessage !== undefined) opts.showInputMessage = showInputMessage;
-  const showErrorMessage = parseBoolXmlAttr(node.attrs['showErrorMessage']);
+  const showErrorMessage = parseXsdBoolean(node.attrs['showErrorMessage']);
   if (showErrorMessage !== undefined) opts.showErrorMessage = showErrorMessage;
-  const showDropDown = parseBoolXmlAttr(node.attrs['showDropDown']);
+  const showDropDown = parseXsdBoolean(node.attrs['showDropDown']);
   if (showDropDown !== undefined) opts.showDropDown = showDropDown;
   const errorTitle = node.attrs['errorTitle'];
   if (errorTitle !== undefined) opts.errorTitle = errorTitle;
@@ -1751,7 +1769,7 @@ const parseConditionalFormatting = (node: XmlNode): ConditionalFormatting | unde
     sqref: parseMultiCellRange(sqrefRaw),
     rules,
   };
-  const pivot = parseBoolXmlAttr(node.attrs['pivot']);
+  const pivot = parseXsdBoolean(node.attrs['pivot']);
   if (pivot !== undefined) opts.pivot = pivot;
   return makeConditionalFormatting(opts);
 };
@@ -1767,19 +1785,19 @@ const parseCfRule = (node: XmlNode): ConditionalFormattingRule | undefined => {
   const opts: Parameters<typeof makeCfRule>[0] = { type, priority };
   const dxf = parseIntegerAttr(node.attrs['dxfId']);
   if (dxf !== undefined) opts.dxfId = dxf;
-  const stop = parseBoolXmlAttr(node.attrs['stopIfTrue']);
+  const stop = parseXsdBoolean(node.attrs['stopIfTrue']);
   if (stop !== undefined) opts.stopIfTrue = stop;
   if (node.attrs['operator']) opts.operator = node.attrs['operator'];
   if (node.attrs['text'] !== undefined) opts.text = node.attrs['text'];
-  const percent = parseBoolXmlAttr(node.attrs['percent']);
+  const percent = parseXsdBoolean(node.attrs['percent']);
   if (percent !== undefined) opts.percent = percent;
-  const bottom = parseBoolXmlAttr(node.attrs['bottom']);
+  const bottom = parseXsdBoolean(node.attrs['bottom']);
   if (bottom !== undefined) opts.bottom = bottom;
   const rank = parseIntegerAttr(node.attrs['rank']);
   if (rank !== undefined) opts.rank = rank;
-  const aboveAverage = parseBoolXmlAttr(node.attrs['aboveAverage']);
+  const aboveAverage = parseXsdBoolean(node.attrs['aboveAverage']);
   if (aboveAverage !== undefined) opts.aboveAverage = aboveAverage;
-  const equalAverage = parseBoolXmlAttr(node.attrs['equalAverage']);
+  const equalAverage = parseXsdBoolean(node.attrs['equalAverage']);
   if (equalAverage !== undefined) opts.equalAverage = equalAverage;
   const stdDev = parseIntegerAttr(node.attrs['stdDev']);
   if (stdDev !== undefined) opts.stdDev = stdDev;
@@ -1817,7 +1835,7 @@ const parseAutoFilter = (node: XmlNode): AutoFilter | undefined => {
       const v = f.attrs['val'];
       if (v !== undefined) values.push(v);
     }
-    const blank = parseBoolXmlAttr(filtersEl.attrs['blank']);
+    const blank = parseXsdBoolean(filtersEl.attrs['blank']);
     const fc2: FilterColumn = { kind: 'filters', colId, values };
     if (blank !== undefined) fc2.blank = blank;
     filterColumns.push(fc2);
@@ -1848,13 +1866,13 @@ const maybeRecordRowDimension = (ws: Worksheet, node: XmlNode, rowIdx: number): 
   const opts: Partial<RowDimension> = {};
   const ht = parseFloatAttr(node.attrs['ht']);
   if (ht !== undefined) opts.height = ht;
-  const customHeight = parseBoolXmlAttr(node.attrs['customHeight']);
+  const customHeight = parseXsdBoolean(node.attrs['customHeight']);
   if (customHeight !== undefined) opts.customHeight = customHeight;
-  const hidden = parseBoolXmlAttr(node.attrs['hidden']);
+  const hidden = parseXsdBoolean(node.attrs['hidden']);
   if (hidden !== undefined) opts.hidden = hidden;
   const outlineLevel = parseIntegerAttr(node.attrs['outlineLevel']);
   if (outlineLevel !== undefined) opts.outlineLevel = outlineLevel;
-  const collapsed = parseBoolXmlAttr(node.attrs['collapsed']);
+  const collapsed = parseXsdBoolean(node.attrs['collapsed']);
   if (collapsed !== undefined) opts.collapsed = collapsed;
   const style = parseIntegerAttr(node.attrs['s']);
   if (style !== undefined) opts.style = style;

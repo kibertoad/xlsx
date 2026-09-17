@@ -16,6 +16,7 @@ import { type ZipArchive, openZip } from '../zip/reader.js';
 import type { CellValue, ExcelErrorCode } from '../cell/cell.js';
 import { unescapeCellString } from '../utils/escape.js';
 import { ERROR_CODES } from '../utils/inference.js';
+import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
 import { parseXml } from '../xml/parser.js';
 import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
@@ -92,18 +93,6 @@ const localName = (qname: string): string => {
   return i < 0 ? qname : qname.slice(i + 1);
 };
 
-/**
- * xsd:boolean lexical space. `true` / `false` are as valid as `1` / `0` and
- * producers other than Excel do write them, so comparing against `'1'` read
- * `<v>true</v>` back as `false`. Anything else is not a boolean; this reader
- * drops unreadable values rather than throwing, as it does everywhere else.
- */
-const parseCellBool = (raw: string | undefined): boolean | null => {
-  if (raw === '1' || raw === 'true') return true;
-  if (raw === '0' || raw === 'false') return false;
-  return null;
-};
-
 const decodeCellValue = (
   t: string,
   vText: string | undefined,
@@ -120,7 +109,11 @@ const decodeCellValue = (
       return sst[idx] ?? null;
     }
     case 'b':
-      return parseCellBool(vText);
+      // Unlike `loadWorkbook`, this reader never throws on a value it cannot
+      // read: an iterator that dies on row 900,000 leaves the caller no way to
+      // finish the pass. A value outside xsd:boolean's lexical space reads as
+      // empty, the way an out-of-range shared-string index does.
+      return parseXsdBoolean(vText) ?? null;
     case 'e': {
       if (!vText || !ERROR_CODES.has(vText)) return null;
       return { kind: 'error', code: vText as ExcelErrorCode };
