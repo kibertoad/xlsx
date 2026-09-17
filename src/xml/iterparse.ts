@@ -9,9 +9,9 @@
 // this layer just produces the events.
 //
 // DOCTYPE / external entity declarations are forbidden. saxes does not expand
-// external entities, but a prescan also rejects DTDs. Every input shape is fed
-// to the parser in chunks, and each chunk is prescanned before it is fed, so
-// the rejection happens before saxes sees the declaration.
+// external entities, and a prescan rejects a declaration before the parser
+// reaches it. A declaration is only legal in the prologue, so that is how far
+// the prescan reads.
 
 import { SaxesParser } from 'saxes';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
@@ -29,10 +29,13 @@ export type SaxEvent =
  */
 export type SaxInput = Uint8Array | string | ReadableStream<Uint8Array>;
 
-const DOCTYPE_RE = /<!DOCTYPE\b/;
-const ENTITY_RE = /<!ENTITY\b/;
+// The separator is part of each pattern because XML requires whitespace after
+// either keyword (§2.8, §4.2). Matching the bare keyword rejected a chunk that
+// happened to end on one, since `\b` matches at end of string too.
+const DOCTYPE_RE = /<!DOCTYPE\s/;
+const ENTITY_RE = /<!ENTITY\s/;
 
-/** Longest token {@link checkDoctype} matches, in code units. */
+/** Longest keyword {@link checkDoctype} matches, in code units. */
 const DTD_TOKEN_LENGTH = '<!DOCTYPE'.length;
 
 const checkDoctype = (text: string): void => {
@@ -177,6 +180,7 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   let queue: SaxEvent[] = [];
   let head = 0;
   let pending: Error | undefined;
+  let rootOpened = false;
 
   parser.on('error', (err: Error) => {
     // saxes reports syntax errors as plain Error; consumers of this library
@@ -187,6 +191,7 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
     pending = new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
   });
   parser.on('opentag', (node: SaxesOpenTag) => {
+    rootOpened = true;
     queue.push({ kind: 'start', name: qname(node.uri, node.local), attrs: buildAttrsClark(node.attributes) });
   });
   parser.on('closetag', (node: SaxesCloseTag) => {
@@ -219,7 +224,11 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   // a `<!DOCTYPE` split across two chunks is still matched. Concatenating the
   // carry onto the whole chunk instead would make V8 flatten a fresh copy of
   // every chunk before the regex could run.
-  const CARRY_LENGTH = DTD_TOKEN_LENGTH - 1;
+  //
+  // The window holds the whole keyword rather than one character short of it,
+  // because the patterns match the separator that follows: a chunk can end on
+  // the final `E` of `<!DOCTYPE` and leave the space that makes it one behind.
+  const CARRY_LENGTH = DTD_TOKEN_LENGTH;
   let dtdCarry = '';
   const scanForDtd = (chunk: string): void => {
     checkDoctype(chunk);
@@ -231,7 +240,11 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   };
 
   for await (const chunk of decodedChunks(input)) {
-    scanForDtd(chunk);
+    // The prologue is the only place a declaration is legal, and it is fed
+    // before the root element opens. Past that, `<!DOCTYPE` in the text is a
+    // literal inside a comment, CDATA or character data, and scanning on would
+    // both reject a valid sheet and re-read the whole document for nothing.
+    if (!rootOpened) scanForDtd(chunk);
     feed(chunk);
     yield* drain();
   }

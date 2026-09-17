@@ -73,6 +73,40 @@ describe('iterParse — security', () => {
   it('rejects loose <!ENTITY declarations', async () => {
     await expect(collect('<!ENTITY foo "bar"><r/>')).rejects.toBeInstanceOf(OpenXmlSchemaError);
   });
+
+  it('parses a document whose body quotes <!DOCTYPE inside a comment', async () => {
+    // The prescan covers the prologue, the only place a declaration is legal.
+    // Past the root element the same characters are ordinary content, and
+    // rejecting the file for carrying them turned a valid sheet into an error.
+    // The quote has to land in a later feed chunk than the root, because the
+    // chunk the root opens in is scanned whole before it is fed.
+    const filler = 'a'.repeat(64 * 1024);
+    const xml = `<r><t>${filler}</t><!-- <!DOCTYPE html> --><t>tail</t></r>`;
+
+    const events = await collect(xml);
+    expect(events.slice(-3)).toEqual([
+      { kind: 'text', text: 'tail' },
+      { kind: 'end', name: 't' },
+      { kind: 'end', name: 'r' },
+    ]);
+  });
+
+  it('accepts a feed chunk that ends on the bare <!ENTITY keyword', async () => {
+    // XML requires whitespace after the keyword, so `<!ENTITYFOO` inside a
+    // comment is not a declaration. Matching the keyword alone rejected it
+    // anyway, because a regex word boundary matches at end of string and the
+    // chunk stopped right after the `Y`.
+    const CHUNK = 64 * 1024;
+    const keyword = '<!ENTITY';
+    const pad = ' '.repeat(CHUNK - '<!--'.length - keyword.length);
+    const xml = `<!--${pad}${keyword}FOO--><r/>`;
+    expect(xml.slice(0, CHUNK).endsWith(keyword)).toBe(true);
+
+    expect(await collect(xml)).toEqual([
+      { kind: 'start', name: 'r', attrs: {} },
+      { kind: 'end', name: 'r' },
+    ]);
+  });
 });
 
 describe('iterParse — streaming input', () => {
