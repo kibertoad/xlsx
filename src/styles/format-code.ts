@@ -61,7 +61,7 @@ const MONTH_NAMES = [
 
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
-const COLOR_NAMES: ReadonlySet<string> = new Set(FORMAT_COLOR_NAMES);
+const COLOR_NAMES: ReadonlySet<string> = new Set(FORMAT_COLOR_NAMES.toLowerCase().split('|'));
 const INDEXED_COLOR_RE = /^color\s*\d+$/i;
 /**
  * The body of an elapsed-time bracket: one letter repeated, as in `[h]` or

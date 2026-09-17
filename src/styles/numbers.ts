@@ -92,13 +92,14 @@ export function isBuiltinFormat(code: string): boolean {
 // to decide whether a format implies a date / time / duration interpretation.
 
 /**
- * The colour names Excel accepts in a bracket group (`[Red]`). The format-code
- * parser needs the same list to tell a colour apart from a comparison or a
- * calendar modifier, so it lives here once.
+ * The colour names Excel accepts in a bracket group (`[Red]`), as the regex
+ * alternation `STRIP_RE` needs them. The format-code parser needs the same
+ * names to tell a colour apart from a comparison or a calendar modifier, so
+ * they live here once.
  */
-export const FORMAT_COLOR_NAMES = ['black', 'blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow'] as const;
+export const FORMAT_COLOR_NAMES = 'BLACK|BLUE|CYAN|GREEN|MAGENTA|RED|WHITE|YELLOW';
 
-const COLORS_GROUP = `\\[(${FORMAT_COLOR_NAMES.join('|').toUpperCase()})\\]`;
+const COLORS_GROUP = `\\[(${FORMAT_COLOR_NAMES})\\]`;
 const LITERAL_GROUP = '"[^"]*"';
 const LOCALE_GROUP = '\\[(?!hh?\\]|mm?\\]|ss?\\])[^\\]]*\\]';
 
