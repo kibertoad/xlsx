@@ -74,8 +74,6 @@ interface CdEntry {
   compMethod: number;
   compSize: number;
   uncompSize: number;
-  /** General-purpose bit flag, used to detect bit-3 (data descriptor) and bit-11 (UTF-8). */
-  gpFlag: number;
 }
 
 const u16 = (b: Uint8Array, off: number): number => (b[off] ?? 0) | ((b[off + 1] ?? 0) << 8);
@@ -215,7 +213,6 @@ function parseCentralDirectory(b: Uint8Array, cdOffset: number, expectedCount: n
     if (u32(b, p) !== SIG_CD) {
       throw new OpenXmlIoError(`openZip: malformed central directory at byte ${p}`);
     }
-    const gpFlag = u16(b, p + 8);
     const compMethod = u16(b, p + 10);
     let compSize = u32(b, p + 20);
     let uncompSize = u32(b, p + 24);
@@ -224,9 +221,9 @@ function parseCentralDirectory(b: Uint8Array, cdOffset: number, expectedCount: n
     const commentLen = u16(b, p + 32);
     let lfhOffset = u32(b, p + 42);
     const nameBytes = b.subarray(p + 46, p + 46 + nameLen);
-    // Bit 11 (0x0800) signals UTF-8 filename. xlsx archives are almost always
-    // UTF-8 already; treat bit-0 as UTF-8 too since CP437 ⊃ ASCII and xlsx uses
-    // ASCII paths.
+    // Bit 11 of the general-purpose flag signals a UTF-8 name, but every name
+    // decodes as UTF-8 without consulting it: CP437 and UTF-8 agree on ASCII,
+    // and xlsx part names are ASCII.
     const path = CD_NAME_DECODER.decode(nameBytes);
 
     // ZIP64 Extended Information rewrites whichever of {uncompSize, compSize,
@@ -242,25 +239,27 @@ function parseCentralDirectory(b: Uint8Array, cdOffset: number, expectedCount: n
       if (extra.compSize !== undefined) compSize = extra.compSize;
       if (extra.lfhOffset !== undefined) lfhOffset = extra.lfhOffset;
     }
-    entries.push({ path, lfhOffset, compMethod, compSize, uncompSize, gpFlag });
+    entries.push({ path, lfhOffset, compMethod, compSize, uncompSize });
     p += 46 + nameLen + extraLen + commentLen;
   }
   return entries;
 }
 
 /**
- * A DEFLATE payload is never empty: even a zero-byte file compresses to a
- * final empty block. A central directory claiming method 8 with no compressed
- * bytes is therefore describing an entry that isn't there, which only a
- * crafted archive does. Reject it at the same point on both read paths, so
- * neither `read` (which would hand back an empty array) nor `readStream`
- * (which has no input to drive the inflater with) has to guess.
+ * RFC 1951 gives every deflate stream at least one block, and the last block
+ * carries the BFINAL bit, so a method-8 entry declaring zero compressed bytes
+ * has no stream to decode. Reject it where both read paths meet the bytes,
+ * rather than letting each one invent an answer for an entry that isn't there.
  */
 const requireDeflatePayload = (path: string, compressed: Uint8Array): void => {
   if (compressed.byteLength === 0) {
     throw new OpenXmlIoError(`openZip: entry "${path}" is declared DEFLATE but carries no compressed bytes`);
   }
 };
+
+/** Message for a deflate stream that runs out before signalling its last block. */
+const incompleteDeflateError = (path: string): OpenXmlIoError =>
+  new OpenXmlIoError(`openZip: deflate stream for "${path}" ended before its final block`);
 
 /** Read the compressed bytes for a CD entry by walking its local file header. */
 function readCompressedBytes(b: Uint8Array, entry: CdEntry): Uint8Array {
@@ -270,6 +269,15 @@ function readCompressedBytes(b: Uint8Array, entry: CdEntry): Uint8Array {
   const nameLen = u16(b, entry.lfhOffset + 26);
   const extraLen = u16(b, entry.lfhOffset + 28);
   const dataStart = entry.lfhOffset + 30 + nameLen + extraLen;
+  // `subarray` clamps to the end of the buffer instead of throwing, so without
+  // this an entry whose declared span runs past EOF would silently inflate (or
+  // pass STORE through) from however many bytes happened to be left.
+  if (dataStart + entry.compSize > b.length) {
+    throw new OpenXmlIoError(
+      `openZip: entry "${entry.path}" declares ${entry.compSize} compressed bytes at offset ${dataStart},` +
+        ` past the end of the ${b.length}-byte archive`,
+    );
+  }
   return b.subarray(dataStart, dataStart + entry.compSize);
 }
 
@@ -461,6 +469,20 @@ export function openRandomAccessArchive(
       }
       if (final) inflaterFinal = true;
     });
+    // Every `pull` must enqueue, close or error: a return that does none of
+    // the three leaves the stream machinery to call it again with identical
+    // state, which is an uncancellable busy loop. This is the close/error
+    // half. An empty `pending` with every compressed byte pushed means there
+    // is nothing left to emit, and getting there without a final block from
+    // the inflater means the deflate stream ended early.
+    const settleWhenDrained = (controller: ReadableStreamDefaultController<Uint8Array>): void => {
+      if (pending.length > 0 || pushedOffset < compressed.byteLength) return;
+      if (inflaterFinal) {
+        controller.close();
+        return;
+      }
+      controller.error(incompleteDeflateError(path));
+    };
     return new ReadableStream<Uint8Array>({
       pull(controller) {
         if (inflateError) {
@@ -474,9 +496,7 @@ export function openRandomAccessArchive(
         const buffered = pending.shift();
         if (buffered) {
           controller.enqueue(buffered);
-          if (inflaterFinal && pending.length === 0 && pushedOffset >= compressed.byteLength) {
-            controller.close();
-          }
+          settleWhenDrained(controller);
           return;
         }
         // No buffered output: push one block of compressed input and let
@@ -512,15 +532,7 @@ export function openRandomAccessArchive(
         if (next) {
           controller.enqueue(next);
         }
-        // Reaching here with nothing enqueued means the loop pushed every
-        // compressed byte and the entry inflated to nothing, so the last push
-        // carried `isLast` and `inflaterFinal` is set. The stream closes
-        // rather than asking for another pull it could not answer, which is
-        // what `requireDeflatePayload` keeps true by rejecting an entry that
-        // has no bytes to push in the first place.
-        if (inflaterFinal && pending.length === 0 && pushedOffset >= compressed.byteLength) {
-          controller.close();
-        }
+        settleWhenDrained(controller);
       },
       cancel() {
         // Consumer abandoned the stream early — drop buffered chunks and
@@ -579,7 +591,11 @@ function inflateBounded(
   const acc: Uint8Array[] = [];
   let emitted = 0;
   let aborted: Error | undefined;
-  const inflater = new Inflate((chunk) => {
+  let sawFinal = false;
+  const inflater = new Inflate((chunk, final) => {
+    // Record the final block before the early returns below: a zero-byte
+    // entry's stream reports `final` on a chunk that carries no bytes.
+    if (final) sawFinal = true;
     if (aborted) return;
     if (chunk.byteLength === 0) return;
     emitted += chunk.byteLength;
@@ -609,6 +625,9 @@ function inflateBounded(
     }
     if (aborted) throw aborted;
     off = end;
+  }
+  if (!sawFinal) {
+    throw incompleteDeflateError(path);
   }
   const out = new Uint8Array(emitted);
   let cursor = 0;

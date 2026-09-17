@@ -4,23 +4,11 @@
 // bound: per-entry size, per-archive total, and compression ratio.
 
 import { describe, expect, it } from 'vitest';
-import { fromBuffer, toBuffer } from '../../src/io/node.js';
+import { fromBuffer } from '../../src/io/node.js';
 import { OpenXmlDecompressionBombError } from '../../src/utils/exceptions.js';
 import { DEFAULT_DECOMPRESSION_LIMITS } from '../../src/zip/decompression-guard.js';
 import { openZip } from '../../src/zip/reader.js';
-import { createZipWriter } from '../../src/zip/writer.js';
-
-const buildArchive = async (
-  entries: ReadonlyArray<{ path: string; bytes: Uint8Array; compress?: boolean }>,
-): Promise<Uint8Array> => {
-  const sink = toBuffer();
-  const w = createZipWriter(sink);
-  for (const e of entries) {
-    await w.addEntry(e.path, e.bytes, e.compress === false ? { compress: false } : undefined);
-  }
-  await w.finalize();
-  return sink.result();
-};
+import { buildArchive, patchEntrySizes } from './_helpers.js';
 
 // A run of identical bytes deflates to a tiny payload, producing extreme
 // compression ratios that simulate a zip-bomb without actually allocating
@@ -117,39 +105,16 @@ describe('decompression-bomb guard — overrides', () => {
   });
 });
 
-// Patch the uncompSize fields (Central Directory + Local File Header) of the
-// only entry in `bytes` so the CD declares a smaller size than the entry
-// actually inflates to. This is how a real bomb hides its true size from a
-// CD-pre-check — needed to exercise the runtime inflate-time abort.
-const patchSingleEntryUncompSize = (bytes: Uint8Array, declaredUncomp: number): Uint8Array => {
-  const SIG_CD = 0x02014b50;
-  const SIG_LFH = 0x04034b50;
-  const u32 = (b: Uint8Array, off: number): number =>
-    ((b[off] ?? 0) | ((b[off + 1] ?? 0) << 8) | ((b[off + 2] ?? 0) << 16) | ((b[off + 3] ?? 0) << 24)) >>> 0;
-  const writeU32 = (b: Uint8Array, off: number, v: number): void => {
-    b[off] = v & 0xff;
-    b[off + 1] = (v >>> 8) & 0xff;
-    b[off + 2] = (v >>> 16) & 0xff;
-    b[off + 3] = (v >>> 24) & 0xff;
-  };
-  const out = new Uint8Array(bytes);
-  // Find LFH (single entry: starts at offset 0).
-  if (u32(out, 0) !== SIG_LFH) throw new Error('expected LFH at offset 0');
-  writeU32(out, 22, declaredUncomp); // LFH +22 == uncompressed size
-  // Find CD (scan forward from LFH end).
-  for (let i = 0; i < out.length - 4; i++) {
-    if (u32(out, i) === SIG_CD) {
-      writeU32(out, i + 24, declaredUncomp); // CD +24 == uncompressed size
-      return out;
-    }
-  }
-  throw new Error('no CD found');
-};
+// Declaring a smaller uncompressed size than the entry really inflates to is
+// how a bomb hides from the central-directory pre-check, which is what makes
+// the runtime inflate-time abort worth testing.
+const lieAboutSize = (bytes: Uint8Array, declaredUncomp: number): Uint8Array =>
+  patchEntrySizes(bytes, 'big.bin', { uncompSize: declaredUncomp });
 
 describe('decompression-bomb guard — streaming reads', () => {
   it.each([true, false])('keeps rejecting an over-budget entry on retry (compress=%s)', async (compress) => {
     const honest = await buildArchive([{ path: 'big.bin', bytes: zeros(200 * 1024), compress }]);
-    const archive = await openZip(fromBuffer(patchSingleEntryUncompSize(honest, 1024)), {
+    const archive = await openZip(fromBuffer(lieAboutSize(honest, 1024)), {
       decompressionLimits: { maxTotalUncompressedBytes: 64 * 1024, maxCompressionRatio: 1_000_000 },
     });
     try {
@@ -174,7 +139,7 @@ describe('decompression-bomb guard — streaming reads', () => {
     // The pre-check passes (declared sizes are tiny), but inflate produces the
     // real payload — the streaming abort must fire mid-flight.
     const honest = await buildArchive([{ path: 'big.bin', bytes: zeros(4 * 1024 * 1024) }]);
-    const lying = patchSingleEntryUncompSize(honest, 1024);
+    const lying = lieAboutSize(honest, 1024);
     const archive = await openZip(fromBuffer(lying), {
       decompressionLimits: { maxEntryUncompressedBytes: 64 * 1024, maxCompressionRatio: 1_000_000 },
     });
@@ -193,7 +158,7 @@ describe('decompression-bomb guard — streaming reads', () => {
 
   it('aborts a sync read on a CD-lying entry too', async () => {
     const honest = await buildArchive([{ path: 'big.bin', bytes: zeros(4 * 1024 * 1024) }]);
-    const lying = patchSingleEntryUncompSize(honest, 1024);
+    const lying = lieAboutSize(honest, 1024);
     const archive = await openZip(fromBuffer(lying), {
       decompressionLimits: { maxEntryUncompressedBytes: 64 * 1024, maxCompressionRatio: 1_000_000 },
     });
@@ -212,7 +177,7 @@ describe('decompression-bomb guard — streaming reads', () => {
     const honest = await buildArchive([
       { path: 'big.bin', bytes: zeros(256 * 1024), compress: false },
     ]);
-    const lying = patchSingleEntryUncompSize(honest, 1024);
+    const lying = lieAboutSize(honest, 1024);
     const archive = await openZip(fromBuffer(lying), {
       decompressionLimits: { maxEntryUncompressedBytes: 64 * 1024 },
     });
