@@ -309,6 +309,7 @@ describe('iterParse: chunked feeding', () => {
       if (++seen > 3) break;
     }
     expect(cancelled).toBe(true);
+    expect(stream.locked).toBe(false);
   });
 
   it('reports a syntax error as OpenXmlSchemaError with the saxes error as cause', async () => {

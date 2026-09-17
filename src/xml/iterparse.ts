@@ -120,6 +120,7 @@ async function* decodedChunks(input: SaxInput): AsyncIterableIterator<string> {
       // reader's inflate state. A cancel that rejects is cleanup on a stream
       // nobody will read again, and must not mask why we left the loop.
       await reader.cancel().catch(() => {});
+      reader.releaseLock();
     }
   } else {
     throw new OpenXmlSchemaError('iterParse: unsupported input type');

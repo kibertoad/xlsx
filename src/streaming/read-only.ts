@@ -296,11 +296,12 @@ const readRowAttr = (bytes: Uint8Array, from: number, to: number): number => {
 const isQuote = (b: number | undefined): boolean => b === 0x22 /* dquote */ || b === 0x27 /* squote */;
 
 /**
- * Byte offset just past the `>` that closes the document's root open tag, or
+ * Byte offset just past the worksheet's opening `sheetData` tag, or
  * -1 when there is none. Skips the XML declaration, comments and processing
  * instructions ahead of it, and ignores `>` inside attribute values.
  */
-const findRootTagEnd = (bytes: Uint8Array): number => {
+const findSheetDataTagEnd = (bytes: Uint8Array): number => {
+  const td = new TextDecoder();
   let i = 0;
   while (i < bytes.length) {
     if (bytes[i] !== 0x3c /* '<' */) {
@@ -309,18 +310,23 @@ const findRootTagEnd = (bytes: Uint8Array): number => {
     }
     const kind = bytes[i + 1];
     if (kind === 0x3f /* '?' */ || kind === 0x21 /* '!' */) {
-      // A comment may contain `>`, so it ends at `-->` rather than at the
-      // first one; declarations and DOCTYPEs end at the first one.
+      // Comments and processing instructions may contain `>` in their body.
       const isComment = bytes[i + 2] === 0x2d /* '-' */ && bytes[i + 3] === 0x2d;
       i += 2;
       while (i < bytes.length) {
-        if (bytes[i] === 0x3e /* '>' */ && (!isComment || (bytes[i - 1] === 0x2d && bytes[i - 2] === 0x2d))) break;
+        if (bytes[i] === 0x3e /* '>' */ &&
+          (isComment ? bytes[i - 1] === 0x2d && bytes[i - 2] === 0x2d
+            : kind !== 0x3f || bytes[i - 1] === 0x3f)) break;
         i++;
       }
       i++;
       continue;
     }
+    let nameEnd = i + 1;
+    while (nameEnd < bytes.length && !isXmlSpace(bytes[nameEnd]) && bytes[nameEnd] !== 0x3e && bytes[nameEnd] !== 0x2f) nameEnd++;
+    const isSheetData = td.decode(bytes.subarray(i + 1, nameEnd)) === 'sheetData';
     let quote = 0;
+    let tagEnd = -1;
     for (let j = i + 1; j < bytes.length; j++) {
       const b = bytes[j];
       if (b === undefined) break;
@@ -332,9 +338,13 @@ const findRootTagEnd = (bytes: Uint8Array): number => {
         quote = b;
         continue;
       }
-      if (b === 0x3e /* '>' */) return j + 1;
+      if (b === 0x3e /* '>' */) {
+        tagEnd = j + 1;
+        break;
+      }
     }
-    return -1;
+    if (tagEnd < 0 || isSheetData) return tagEnd;
+    i = tagEnd;
   }
   return -1;
 };
@@ -345,12 +355,12 @@ const findRootTagEnd = (bytes: Uint8Array): number => {
  * relative to the per-cell SAX walk.
  *
  * `sheetDataEnd` is the byte offset of `</sheetData>` so callers can clip the
- * region that gets handed to saxes. `rootTagEnd` is where the worksheet's own
- * prologue ends, which {@link replayFromRow} reuses as the band's header.
+ * region that gets handed to saxes. `sheetDataTagEnd` includes the original
+ * namespace-bearing ancestor tags, reused by {@link replayFromRow}.
  */
 const buildRowOffsetIndex = (
   bytes: Uint8Array,
-): { index: ReadonlyArray<{ row: number; offset: number }>; sheetDataEnd: number; rootTagEnd: number } => {
+): { index: ReadonlyArray<{ row: number; offset: number }>; sheetDataEnd: number; sheetDataTagEnd: number } => {
   const out: Array<{ row: number; offset: number }> = [];
   let sheetDataEnd = -1;
   let i = 0;
@@ -410,7 +420,7 @@ const buildRowOffsetIndex = (
     i = j + 1;
   }
   if (sheetDataEnd < 0) sheetDataEnd = bytes.length;
-  return { index: out, sheetDataEnd, rootTagEnd: findRootTagEnd(bytes) };
+  return { index: out, sheetDataEnd, sheetDataTagEnd: findSheetDataTagEnd(bytes) };
 };
 
 /**
@@ -432,35 +442,20 @@ const firstRowAtOrAfter = (
   return lo < index.length ? lo : -1;
 };
 
-// CT_SheetData carries no attributes (ECMA-376 §18.3.1.80), so the element the
-// band is wrapped in is a constant; everything namespace-bearing comes from the
-// worksheet's own root tag.
-const SHEET_DATA_OPEN = new TextEncoder().encode('<sheetData>');
-
 /**
- * Replay a worksheet's rows from `fromOffset` to `sheetDataEnd` as a document
- * saxes can parse on its own.
- *
- * The header is the file's own bytes up to the end of `<worksheet …>` rather
- * than a synthetic envelope: Excel declares `x14ac` on that root tag and puts
- * `x14ac:dyDescent` on nearly every `<row>`, so a replay that redeclares only
- * the default namespace dies on the first row with an unbound prefix. The
- * bytes from `</sheetData>` to the end of the part close the root the same way.
- *
- * Every part is a view over `bytes`, never a copy: a band query on a 500 MB
- * sheet would otherwise allocate a second buffer nearly that size just to
- * prepend a header. Feed sizing belongs to `iterParse`, which caps what it
- * decodes per step whatever a producer hands it, so the band goes over whole.
+ * Replay a row band with the original prefix through the opening sheetData
+ * tag. Namespace declarations can occur on either worksheet or sheetData;
+ * synthesising either tag loses bindings required by the retained rows.
+ * Views avoid copying the inflated sheet just to prepend its ancestor tags.
  */
 const replayFromRow = (
   bytes: Uint8Array,
-  rootTagEnd: number,
+  sheetDataTagEnd: number,
   fromOffset: number,
   sheetDataEnd: number,
 ): ReadableStream<Uint8Array> => {
   const parts = [
-    bytes.subarray(0, rootTagEnd),
-    SHEET_DATA_OPEN,
+    bytes.subarray(0, sheetDataTagEnd),
     bytes.subarray(fromOffset, sheetDataEnd),
     bytes.subarray(sheetDataEnd),
   ];
@@ -519,8 +514,8 @@ const makeStreamingReadOnlyWorksheet = (
     // below the band, which is the more expensive half once the band starts
     // deep into a large sheet.
     const bytes = archive.read(partPath);
-    const { index, sheetDataEnd, rootTagEnd } = ensureIndex(bytes);
-    if (index.length === 0 || rootTagEnd < 0) return iterSheetRows(bytes, sst, opts);
+    const { index, sheetDataEnd, sheetDataTagEnd } = ensureIndex(bytes);
+    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(bytes, sst, opts);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {
       // Every row is below minRow, so there is nothing to yield.
@@ -528,7 +523,7 @@ const makeStreamingReadOnlyWorksheet = (
     }
     const target = index[pos];
     if (!target) return iterSheetRows(bytes, sst, opts);
-    return iterSheetRows(replayFromRow(bytes, rootTagEnd, target.offset, sheetDataEnd), sst, opts);
+    return iterSheetRows(replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
   };
   const iterValues = async function* (opts: IterRowsOptions = {}): AsyncIterableIterator<CellValue[]> {
     for await (const row of iterRows(opts)) {

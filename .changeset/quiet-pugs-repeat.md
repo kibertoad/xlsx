@@ -22,7 +22,7 @@ Three changes in behavior come with it:
   Excel. The band was replayed inside a rebuilt `<sheetData>` envelope that
   declared only the default namespace, so the `x14ac:dyDescent` Excel puts on
   nearly every `<row>` raised an unbound-prefix error. The replay now carries
-  the worksheet's own namespace declarations.
+  the worksheet's and sheetData's own namespace declarations.
 - Malformed XML throws `OpenXmlSchemaError` with the parser's own error as
   `cause`, instead of surfacing the raw `saxes` `Error`.
 - Streamed input is scanned for DTD and entity declarations across the whole

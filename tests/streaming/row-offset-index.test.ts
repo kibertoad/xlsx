@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { loadWorkbookStream } from '../../src/streaming/read-only.js';
@@ -117,6 +118,28 @@ describe('phase-4 — row-offset index for sub-sheet iter', () => {
     expect(all.length).toBeGreaterThan(100);
     expect(band).toEqual(all.filter((c) => c.row >= 3));
     await wb.close();
+  });
+
+  it('preserves declarations on sheetData and processing instructions during band replay', async () => {
+    const parts = unzipSync(await buildSheet(3));
+    const path = 'xl/worksheets/sheet1.xml';
+    const original = parts[path];
+    if (!original) throw new Error('missing sheet');
+    parts[path] = strToU8(strFromU8(original)
+      .replace('<worksheet', '<?probe > <fake> ?><worksheet')
+      .replace('<sheetData>', '<sheetData xmlns:custom="urn:test">')
+      .replace(/<row /g, '<row custom:flag="yes" '));
+    const wb = await loadWorkbookStream(fromBuffer(zipSync(parts)));
+    try {
+      const ws = wb.openWorksheet('A');
+      const full = [];
+      for await (const row of ws.iterRows()) full.push(row);
+      const band = [];
+      for await (const row of ws.iterRows({ minRow: 2 })) band.push(row);
+      expect(band).toEqual(full.slice(1));
+    } finally {
+      await wb.close();
+    }
   });
 
   it('cell values stay correct in the sliced path (sharedStrings + numeric mix)', async () => {
