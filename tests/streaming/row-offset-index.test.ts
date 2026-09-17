@@ -5,12 +5,20 @@
 // regression in either the index builder or the saxes wrap doesn't
 // silently corrupt the iter output.
 
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { loadWorkbookStream } from '../../src/streaming/read-only.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import { setCell } from '../../src/worksheet/worksheet.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+// Excel-emitted, unlike everything this library writes: the worksheet root
+// declares x14ac and all 142 rows carry `x14ac:dyDescent`.
+const EXCEL_SAMPLE = resolve(here, '../../reference/openpyxl/openpyxl/reader/tests/data/sample.xlsx');
 
 const buildSheet = async (rows: number): Promise<Uint8Array> => {
   const wb = createWorkbook();
@@ -82,6 +90,32 @@ describe('phase-4 — row-offset index for sub-sheet iter', () => {
     }
     expect(a).toEqual([10, 11, 12]);
     expect(b).toEqual([25, 26, 27]);
+    await wb.close();
+  });
+
+  it('the band matches the full walk on an Excel-emitted sheet', async () => {
+    // The band is replayed as a standalone document, which has to carry the
+    // namespace declarations the worksheet root made. Rebuilding the envelope
+    // from scratch drops them and every prefixed row attribute Excel writes
+    // then fails to resolve. The fixtures above cannot catch it: our own
+    // writer emits no prefixed attributes on <row>.
+    const wb = await loadWorkbookStream(fromBuffer(readFileSync(EXCEL_SAMPLE)));
+    const first = wb.sheetNames[0];
+    if (first === undefined) throw new Error('fixture has no sheets');
+    const ws = wb.openWorksheet(first);
+
+    const cells = async (opts?: { minRow: number }) => {
+      const out: Array<{ row: number; col: number; value: unknown }> = [];
+      for await (const row of ws.iterRows(opts)) {
+        for (const c of row) out.push({ row: c.row, col: c.col, value: c.value });
+      }
+      return out;
+    };
+
+    const all = await cells();
+    const band = await cells({ minRow: 3 });
+    expect(all.length).toBeGreaterThan(100);
+    expect(band).toEqual(all.filter((c) => c.row >= 3));
     await wb.close();
   });
 
