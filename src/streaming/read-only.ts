@@ -376,6 +376,10 @@ const sliceFromRow = (
   return out;
 };
 
+interface RowIndexCache {
+  byWorksheet: WeakMap<object, ReturnType<typeof buildRowOffsetIndex> & { bytes: Uint8Array }>;
+}
+
 /**
  * Factory: build a {@link ReadOnlyWorksheet} bound to a single worksheet part
  * inside an opened archive. SAX iteration runs lazily: a whole-sheet `iterRows`
@@ -384,25 +388,28 @@ const sliceFromRow = (
  *
  * `iterRows({ minRow > 1 })` needs random access instead, so the first band
  * query inflates the part and indexes its row offsets, and holds both for the
- * life of the worksheet handle. Subsequent band queries jump straight to the
- * byte offset of the first matching row without inflating or scanning again.
+ * life of the worksheet handle or until the workbook closes. Subsequent band
+ * queries jump straight to the byte offset of the first matching row without inflating or scanning again.
  */
 const makeStreamingReadOnlyWorksheet = (
   title: string,
   archive: ZipArchive,
   partPath: string,
   sst: ReadonlyArray<string>,
+  indexes: RowIndexCache,
 ): ReadOnlyWorksheet => {
   // Lazy + cached, bytes included: the archive only keeps small entries, so a
   // second band query that went back to `read` would inflate the whole part
   // again. The index is small (~16 B per row); the part is held from the first
-  // band query until the worksheet handle goes away, which beats walking it
-  // through saxes, or inflating it, on every query.
-  let cached: (ReturnType<typeof buildRowOffsetIndex> & { bytes: Uint8Array }) | undefined;
+  // band query until the worksheet handle goes away or the workbook closes.
+  // This avoids parsing or inflating the whole part on every query.
+  const cacheKey = {};
   const ensureIndexed = () => {
+    let cached = indexes.byWorksheet.get(cacheKey);
     if (!cached) {
       const bytes = archive.read(partPath);
       cached = { bytes, ...buildRowOffsetIndex(bytes) };
+      indexes.byWorksheet.set(cacheKey, cached);
     }
     return cached;
   };
@@ -451,21 +458,27 @@ const makeStreamingReadOnlyWorkbook = (
   archive: ZipArchive,
   entries: ReadonlyMap<string, SheetEntry>,
   sst: ReadonlyArray<string>,
-): ReadOnlyWorkbook => ({
-  sheetNames,
-  styles,
-  date1904,
-  openWorksheet(name) {
-    const entry = entries.get(name);
-    if (!entry) {
-      throw new OpenXmlSchemaError(`loadWorkbookStream: no worksheet named "${name}"`);
-    }
-    return makeStreamingReadOnlyWorksheet(name, archive, entry.partPath, sst);
-  },
-  async close() {
-    archive.close();
-  },
-});
+): ReadOnlyWorkbook => {
+  // Weak keys let unused worksheet handles release their indexed bytes. The
+  // indirection also lets close() release every index while handles remain live.
+  const indexes: RowIndexCache = { byWorksheet: new WeakMap() };
+  return {
+    sheetNames,
+    styles,
+    date1904,
+    openWorksheet(name) {
+      const entry = entries.get(name);
+      if (!entry) {
+        throw new OpenXmlSchemaError(`loadWorkbookStream: no worksheet named "${name}"`);
+      }
+      return makeStreamingReadOnlyWorksheet(name, archive, entry.partPath, sst, indexes);
+    },
+    async close() {
+      archive.close();
+      indexes.byWorksheet = new WeakMap();
+    },
+  };
+};
 
 /** Options for {@link loadWorkbookStream}. */
 export interface LoadWorkbookStreamOptions {

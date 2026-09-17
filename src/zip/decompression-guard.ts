@@ -140,9 +140,13 @@ export function beginEntryInflate(
   return (bytes: number): void => {
     inflated += bytes;
     const charged = budget.chargedByPath.get(path) ?? 0;
-    if (inflated <= charged) return;
-    budget.totalInflated += inflated - charged;
-    budget.chargedByPath.set(path, inflated);
+    if (inflated > charged) {
+      budget.totalInflated += inflated - charged;
+      budget.chargedByPath.set(path, inflated);
+    }
+    // A failed inflate also advances the high-water mark. Check the total
+    // even when this read adds nothing, or retrying a rejected entry bypasses
+    // the archive limit using the charge left by the first attempt.
     if (budget.totalInflated > budget.limits.maxTotalUncompressedBytes) {
       throw new OpenXmlDecompressionBombError(
         `openZip: archive-wide inflated size exceeded ${budget.limits.maxTotalUncompressedBytes} bytes` +

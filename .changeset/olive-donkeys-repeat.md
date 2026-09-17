@@ -11,6 +11,9 @@ inflate of it produced, so reading one again costs nothing however the reads
 overlap. The per-entry size and ratio caps are unchanged, and an archive whose
 distinct entries genuinely exceed the total is still rejected.
 
+An entry rejected for exceeding the archive total remains rejected on repeated
+sync or streaming reads, including archives with understated directory sizes.
+
 perf!: loading a workbook no longer holds every part it has read
 
 Inflated entries were cached for the lifetime of the archive, which put the whole
@@ -24,3 +27,7 @@ previously handed back the same array once an entry had been read, so mutating o
 read's result changed what later reads of that path returned. Code that relied on
 that aliasing, or on two reads yielding the identical object, has to keep its own
 reference now.
+
+Repeated row-band queries retain their worksheet bytes and row index without
+re-inflating the part. Closing the workbook releases these caches and prevents
+subsequent band queries from using stale bytes.

@@ -147,6 +147,28 @@ const patchSingleEntryUncompSize = (bytes: Uint8Array, declaredUncomp: number): 
 };
 
 describe('decompression-bomb guard — streaming reads', () => {
+  it.each([true, false])('keeps rejecting an over-budget entry on retry (compress=%s)', async (compress) => {
+    const honest = await buildArchive([{ path: 'big.bin', bytes: zeros(200 * 1024), compress }]);
+    const archive = await openZip(fromBuffer(patchSingleEntryUncompSize(honest, 1024)), {
+      decompressionLimits: { maxTotalUncompressedBytes: 64 * 1024, maxCompressionRatio: 1_000_000 },
+    });
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        expect(() => archive.read('big.bin')).toThrowError(OpenXmlDecompressionBombError);
+        await expect((async () => {
+          const reader = archive.readStream('big.bin').getReader();
+          try {
+            while (!(await reader.read()).done) { /* drain */ }
+          } finally {
+            reader.releaseLock();
+          }
+        })()).rejects.toThrowError(OpenXmlDecompressionBombError);
+      }
+    } finally {
+      archive.close();
+    }
+  });
+
   it('aborts a streaming read when the inflated size crosses the runtime cap despite an honest-looking CD', async () => {
     // Build a 4 MiB-zero entry, then mutate the CD so it claims only 1 KiB.
     // The pre-check passes (declared sizes are tiny), but inflate produces the
