@@ -138,7 +138,10 @@ async function* iterSheetRows(
   const maxCol = opts.maxCol ?? Number.POSITIVE_INFINITY;
 
   let inSheetData = false;
+  // `-1` means "not inside a <row>". `nextRow` survives that reset because it
+  // is the running row number, which a row without `@r` needs.
   let currentRow = -1;
+  let nextRow = 1;
   let currentRowAttrs: Record<string, string> | null = null;
   let currentCells: ReadOnlyCell[] = [];
 
@@ -166,8 +169,13 @@ async function* iterSheetRows(
       switch (local) {
         case 'row': {
           currentRowAttrs = e.attrs;
-          const rRaw = e.attrs['r'];
-          currentRow = rRaw ? Number.parseInt(rRaw, 10) : currentRow + 1;
+          // `@r` is optional on CT_Row (ECMA-376 section 18.3.1.73), and
+          // `currentRow` is back at its -1 sentinel by the time the next row
+          // starts, so deriving the number from it put every `@r`-less row at
+          // row 0 and below `minRow`: the whole sheet iterated as empty.
+          const parsed = Number.parseInt(e.attrs['r'] ?? '', 10);
+          currentRow = Number.isInteger(parsed) && parsed >= 1 ? parsed : nextRow;
+          nextRow = currentRow + 1;
           currentCells = [];
           break;
         }

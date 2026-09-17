@@ -259,8 +259,10 @@ export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx
   const sheetData = findChild(root, SHEETDATA_TAG);
   if (sheetData) {
     const sharedFormulas = new Map<number, SharedFormulaCache>();
+    let nextRow = 1;
     for (const rowNode of findChildren(sheetData, ROW_TAG)) {
-      const rowIdx = parseRowIndex(rowNode);
+      const rowIdx = parseRowIndex(rowNode, nextRow);
+      nextRow = rowIdx + 1;
       maybeRecordRowDimension(ws, rowNode, rowIdx);
       let nextCol = 1;
       for (const cNode of findChildren(rowNode, C_TAG)) {
@@ -1369,11 +1371,12 @@ const parseSelection = (node: XmlNode): Selection => {
   return sel;
 };
 
-const parseRowIndex = (rowNode: XmlNode): number => {
+const parseRowIndex = (rowNode: XmlNode, fallbackRow: number): number => {
   const rAttr = rowNode.attrs['r'];
-  if (rAttr === undefined) {
-    throw new OpenXmlSchemaError('worksheet: <row> missing required @r');
-  }
+  // `@r` is optional on CT_Row (ECMA-376 section 18.3.1.73). A row without
+  // one occupies the slot after the previous row, which is the rule
+  // `parseCellCoord` already applies to a cell without `@r`.
+  if (rAttr === undefined) return fallbackRow;
   const r = Number.parseInt(rAttr, 10);
   if (!Number.isInteger(r) || r < 1) {
     throw new OpenXmlSchemaError(`worksheet: <row r="${rAttr}"> is not a positive integer`);
