@@ -127,6 +127,10 @@ export function createBudget(limits: ResolvedDecompressionLimits): Decompression
  * by a `read`, or a read of an entry the inflate cache has evicted) would
  * otherwise count it twice and reject a legitimate file. The per-entry cap is
  * unaffected: it is re-evaluated from scratch on every read.
+ *
+ * Assumes one inflate of a path at a time. Two concurrent streams over the same
+ * entry would interleave their refunds and undercount it; every read path here
+ * runs to completion before the next starts, so that case does not arise today.
  */
 export function startEntryInflate(budget: DecompressionBudget, path: string): void {
   const prior = budget.chargedByPath.get(path);
