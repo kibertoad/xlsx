@@ -19,7 +19,7 @@ import { ERROR_CODES } from '../utils/inference.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
 import { parseXml } from '../xml/parser.js';
 import type { XlsxSource } from '../io/source.js';
-import { coordinateToTuple } from '../utils/coordinate.js';
+import { coordinateToTuple, derivedRowNumber, MAX_ROW, rowNumberFromAttr } from '../utils/coordinate.js';
 import { type Stylesheet, makeStylesheet } from '../styles/stylesheet.js';
 import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
 import {
@@ -118,9 +118,24 @@ async function* iterSheetRows(
   const maxCol = opts.maxCol ?? Number.POSITIVE_INFINITY;
 
   let inSheetData = false;
+  // -1: outside a <row>. 0: inside one that carried no `@r`, whose number the
+  // first located cell settles. `nextRow` is the high-water mark a row with
+  // neither an `@r` nor a located cell falls back to.
   let currentRow = -1;
-  let currentRowAttrs: Record<string, string> | null = null;
+  let nextRow = 1;
   let currentCells: ReadOnlyCell[] = [];
+  let nextCol = 1;
+  let pendingCells: Array<{ col: number; type: string; text: string; inline: string; styleId: number }> = [];
+  const settleRow = (row: number): void => {
+    currentRow = row;
+    nextRow = Math.max(nextRow, row + 1);
+    if (row >= minRow && row <= maxRow) {
+      for (const cell of pendingCells) {
+        currentCells.push({ row, col: cell.col, value: decodeCellValue(cell.type, cell.text, cell.inline, sst), styleId: cell.styleId });
+      }
+    }
+    pendingCells = [];
+  };
 
   // Per-cell state. Reset when each <c> starts.
   let cellOpen = false;
@@ -145,31 +160,41 @@ async function* iterSheetRows(
       }
       switch (local) {
         case 'row': {
-          currentRowAttrs = e.attrs;
+          // `@r` is optional on CT_Row (ECMA-376 §18.3.1.73); such a row waits
+          // for its first cell to name it.
           const rRaw = e.attrs['r'];
-          currentRow = rRaw ? Number.parseInt(rRaw, 10) : currentRow + 1;
+          if (rRaw === undefined) {
+            currentRow = 0;
+          } else {
+            currentRow = rowNumberFromAttr(rRaw, 'loadWorkbookStream');
+            nextRow = Math.max(nextRow, currentRow + 1);
+          }
           currentCells = [];
+          pendingCells = [];
+          nextCol = 1;
           break;
         }
         case 'c': {
           if (currentRow < 0) break;
+          const ref = e.attrs['r'];
+          if (currentRow === 0 && ref) settleRow(coordinateToTuple(ref).row);
           // Skip cell-attr parsing entirely when the row is outside the
           // requested band — saves the parseInt + coordinateToTuple hit on
           // every cell of every excluded row.
-          if (currentRow < minRow || currentRow > maxRow) break;
+          if (currentRow !== 0 && (currentRow < minRow || currentRow > maxRow)) break;
           cellOpen = true;
           cellType = e.attrs['t'] ?? 'n';
           const sRaw = e.attrs['s'];
           cellStyleId = sRaw ? Number.parseInt(sRaw, 10) || 0 : 0;
-          const ref = e.attrs['r'];
           if (ref) {
             const tup = coordinateToTuple(ref);
             cellRow = tup.row;
             cellCol = tup.col;
           } else {
             cellRow = currentRow;
-            cellCol = (currentCells[currentCells.length - 1]?.col ?? 0) + 1;
+            cellCol = nextCol;
           }
+          nextCol = cellCol + 1;
           vText = '';
           isText = '';
           break;
@@ -204,6 +229,11 @@ async function* iterSheetRows(
         inSheetData = false;
         return;
       case 'row': {
+        // A row that held no located cell still consumes a slot, so settle it
+        // before moving the high-water mark past it.
+        if (currentRow === 0) {
+          settleRow(derivedRowNumber(nextRow, 'loadWorkbookStream'));
+        }
         if (currentRow >= minRow && currentRow <= maxRow && currentCells.length > 0) {
           yield currentCells;
         }
@@ -215,12 +245,13 @@ async function* iterSheetRows(
           return;
         }
         currentRow = -1;
-        currentRowAttrs = null;
         currentCells = [];
         break;
       }
       case 'c': {
-        if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
+        if (cellOpen && cellRow === 0 && cellCol >= minCol && cellCol <= maxCol) {
+          pendingCells.push({ col: cellCol, type: cellType, text: vText, inline: isText, styleId: cellStyleId });
+        } else if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
           const value = decodeCellValue(cellType, vText, isText, sst);
           currentCells.push({ row: cellRow, col: cellCol, value, styleId: cellStyleId });
         }
@@ -245,8 +276,6 @@ async function* iterSheetRows(
         break;
     }
   }
-  // Avoid unused-var lint when row attrs never touched.
-  void currentRowAttrs;
 }
 
 const isXmlSpace = (b: number | undefined): boolean =>
@@ -254,7 +283,9 @@ const isXmlSpace = (b: number | undefined): boolean =>
 
 /**
  * Read the `r="N"` row number out of a `<row …>` attribute region, scanning
- * bytes directly. Returns -1 when the attribute is absent or malformed.
+ * bytes directly. Returns -1 when the attribute is absent, or holds anything
+ * `parseRowNumberAttr` rejects: the two accept the same shapes, so the index
+ * can never seek by a number the SAX walk reads differently.
  *
  * Decoding the region to a string and running a regex instead costs one
  * TextDecoder, one string and one match array per row, which on a million-row
@@ -266,9 +297,11 @@ const readRowAttr = (bytes: Uint8Array, from: number, to: number): number => {
     if (bytes[p + 1] !== 0x72 /* 'r' */ || bytes[p + 2] !== 0x3d /* '=' */ || bytes[p + 3] !== 0x22 /* '"' */) {
       continue;
     }
+    let q = p + 4;
+    while (q < to && isXmlSpace(bytes[q])) q++;
+    if (bytes[q] === 0x2b /* + */) q++;
     let value = 0;
     let digits = 0;
-    let q = p + 4;
     while (q < to) {
       const d = bytes[q];
       if (d === undefined || d < 0x30 || d > 0x39) break;
@@ -276,9 +309,10 @@ const readRowAttr = (bytes: Uint8Array, from: number, to: number): number => {
       digits++;
       q++;
     }
-    // A non-numeric or unterminated `r` is not the row ref; keep scanning the
-    // rest of the region the way the equivalent regex would have.
-    if (digits > 0 && q < to && bytes[q] === 0x22 /* '"' */) return value;
+    while (q < to && isXmlSpace(bytes[q])) q++;
+    // A non-numeric, out-of-range or unterminated `r` is not the row ref; keep
+    // scanning the rest of the region the way the equivalent regex would have.
+    if (digits > 0 && value >= 1 && value <= MAX_ROW && q < to && bytes[q] === 0x22 /* '"' */) return value;
   }
   return -1;
 };
@@ -347,11 +381,21 @@ const findSheetDataTagEnd = (bytes: Uint8Array): number => {
  * `sheetDataEnd` is the byte offset of `</sheetData>` so callers can clip the
  * region that gets handed to saxes. `sheetDataTagEnd` includes the original
  * namespace-bearing ancestor tags, reused by {@link replayFromRow}.
+ *
+ * `hasUnnumberedRow` reports a `<row>` this scan cannot number, which makes the
+ * whole sheet unseekable: a row without `@r` takes the row its first cell
+ * names, and reading cell refs is the SAX walk's job.
  */
 const buildRowOffsetIndex = (
   bytes: Uint8Array,
-): { index: ReadonlyArray<{ row: number; offset: number }>; sheetDataEnd: number; sheetDataTagEnd: number } => {
+): {
+  index: ReadonlyArray<{ row: number; offset: number }>;
+  sheetDataEnd: number;
+  sheetDataTagEnd: number;
+  hasUnnumberedRow: boolean;
+} => {
   const out: Array<{ row: number; offset: number }> = [];
+  let hasUnnumberedRow = false;
   let sheetDataEnd = -1;
   let i = 0;
   while (i < bytes.length) {
@@ -404,13 +448,12 @@ const buildRowOffsetIndex = (
     while (j < bytes.length && bytes[j] !== 0x3e) j++;
     if (j >= bytes.length) break;
     const row = readRowAttr(bytes, start + 4, j);
-    // Rows are 1-based (ECMA-376 §18.3.1.73), so `r="0"` is not an offset this
-    // index can seek to; -1 means there was no usable `r` at all.
     if (row > 0) out.push({ row, offset: start });
+    else hasUnnumberedRow = true;
     i = j + 1;
   }
   if (sheetDataEnd < 0) sheetDataEnd = bytes.length;
-  return { index: out, sheetDataEnd, sheetDataTagEnd: findSheetDataTagEnd(bytes) };
+  return { index: out, sheetDataEnd, sheetDataTagEnd: findSheetDataTagEnd(bytes), hasUnnumberedRow };
 };
 
 /**
@@ -463,8 +506,17 @@ const replayFromRow = (
   });
 };
 
+/**
+ * A worksheet is seekable when every one of its rows carries an `@r` the byte
+ * scan can read. Otherwise the scan's own numbering would disagree with the SAX
+ * walk's, so band queries stream the part instead, and nothing is retained.
+ */
+type SheetSeek =
+  | { seekable: false }
+  | ({ seekable: true; bytes: Uint8Array } & Omit<ReturnType<typeof buildRowOffsetIndex>, 'hasUnnumberedRow'>);
+
 interface RowIndexCache {
-  byWorksheet: WeakMap<object, ReturnType<typeof buildRowOffsetIndex> & { bytes: Uint8Array }>;
+  byWorksheet: WeakMap<object, SheetSeek>;
 }
 
 /**
@@ -476,7 +528,9 @@ interface RowIndexCache {
  * `iterRows({ minRow > 1 })` needs random access instead, so the first band
  * query inflates the part and indexes its row offsets, and holds both for the
  * life of the worksheet handle or until the workbook closes. Subsequent band
- * queries jump straight to the first matching row without inflating or scanning again.
+ * queries jump straight to the first matching row without inflating or scanning
+ * again. A sheet whose rows omit `@r` cannot be indexed by row number, so its
+ * band queries keep streaming and hold nothing.
  */
 const makeStreamingReadOnlyWorksheet = (
   title: string,
@@ -491,11 +545,14 @@ const makeStreamingReadOnlyWorksheet = (
   // band query until the worksheet handle goes away or the workbook closes.
   // This avoids parsing or inflating the whole part on every query.
   const cacheKey = {};
-  const ensureIndexed = () => {
+  const ensureIndexed = (): SheetSeek => {
     let cached = indexes.byWorksheet.get(cacheKey);
     if (!cached) {
       const bytes = archive.read(partPath);
-      cached = { bytes, ...buildRowOffsetIndex(bytes) };
+      const { hasUnnumberedRow, index, sheetDataEnd, sheetDataTagEnd } = buildRowOffsetIndex(bytes);
+      cached = hasUnnumberedRow
+        ? { seekable: false }
+        : { seekable: true, bytes, index, sheetDataEnd, sheetDataTagEnd };
       indexes.byWorksheet.set(cacheKey, cached);
     }
     return cached;
@@ -513,7 +570,11 @@ const makeStreamingReadOnlyWorksheet = (
     // Band query (minRow > 1): the row-offset index needs the full inflated
     // bytes so we can binary-search to the byte offset of the first matching
     // row. Materialise once and reuse via `ensureIndexed`.
-    const { bytes, index, sheetDataEnd, sheetDataTagEnd } = ensureIndexed();
+    const seek = ensureIndexed();
+    // Rows the index cannot number: walk the part instead of seeking into it,
+    // which is the only way the derived numbers stay the SAX walk's.
+    if (!seek.seekable) return iterSheetRows(archive.readStream(partPath), sst, opts);
+    const { bytes, index, sheetDataEnd, sheetDataTagEnd } = seek;
     if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(bytes, sst, opts);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {

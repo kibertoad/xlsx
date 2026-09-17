@@ -249,6 +249,47 @@ export function isValidRowNumber(n: unknown): n is number {
   return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= MAX_ROW;
 }
 
+// Digits with an optional plus sign and XML whitespace, which `xsd:unsignedInt` collapses
+// away. The streaming row-offset index scans bytes for this exact shape, so a
+// looser rule here would let the index and the SAX walk number a row
+// differently, and a band query would then seek past rows it should yield.
+const ROW_ATTR_VALUE = /^[ \t\r\n]*\+?([0-9]+)[ \t\r\n]*$/;
+
+/**
+ * Parse a `<row r="…">` value into a row number, or `undefined` when it is not
+ * a row number in `[1, MAX_ROW]`.
+ */
+function parseRowNumberAttr(raw: string): number | undefined {
+  const digits = ROW_ATTR_VALUE.exec(raw)?.[1];
+  if (digits === undefined) return undefined;
+  const n = Number(digits);
+  return isValidRowNumber(n) ? n : undefined;
+}
+
+/**
+ * Row number carried by a `<row>`'s `@r`. A malformed or out-of-range value
+ * throws: renumbering it would shift every row after it, and the file is
+ * already one no reader can agree on.
+ */
+export function rowNumberFromAttr(raw: string, where: string): number {
+  const n = parseRowNumberAttr(raw);
+  if (n === undefined) {
+    throw new OpenXmlSchemaError(`${where}: <row r="${raw}"> is not a row number in [1, ${MAX_ROW}]`);
+  }
+  return n;
+}
+
+/**
+ * Row number for a `<row>` that omits `@r` and holds no cell to locate it:
+ * `fallback`, the slot after the highest row read so far.
+ */
+export function derivedRowNumber(fallback: number, where: string): number {
+  if (!isValidRowNumber(fallback)) {
+    throw new OpenXmlSchemaError(`${where}: <row> without @r falls past the last row (${MAX_ROW})`);
+  }
+  return fallback;
+}
+
 /**
  * Predicate: true iff `n` is a valid 1-based column index in `[1, 16384]`.
  * Non-finite / non-integer / out-of-bound fails.

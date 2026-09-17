@@ -21,7 +21,7 @@ import type { Drawing } from '../drawing/drawing.js';
 import { translateFormula } from '../formula/translate.js';
 import type { Relationships } from '../packaging/relationships.js';
 import { findById } from '../packaging/relationships.js';
-import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate.js';
+import { coordinateToTuple, derivedRowNumber, rowNumberFromAttr, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
 import { ERROR_CODES } from '../utils/inference.js';
@@ -260,8 +260,12 @@ export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx
   const sheetData = findChild(root, SHEETDATA_TAG);
   if (sheetData) {
     const sharedFormulas = new Map<number, SharedFormulaCache>();
+    // High-water mark, not the previous row: an `@r` that jumps backwards must
+    // not send a later row without `@r` onto a row already read.
+    let nextRow = 1;
     for (const rowNode of findChildren(sheetData, ROW_TAG)) {
-      const rowIdx = parseRowIndex(rowNode);
+      const rowIdx = parseRowIndex(rowNode, nextRow);
+      nextRow = Math.max(nextRow, rowIdx + 1);
       maybeRecordRowDimension(ws, rowNode, rowIdx);
       let nextCol = 1;
       for (const cNode of findChildren(rowNode, C_TAG)) {
@@ -1370,16 +1374,28 @@ const parseSelection = (node: XmlNode): Selection => {
   return sel;
 };
 
-const parseRowIndex = (rowNode: XmlNode): number => {
+/** Row named by the first cell that carries an `@r`, if the row holds one. */
+const firstLocatedCellRow = (rowNode: XmlNode): number | undefined => {
+  // Walks children rather than collecting them: the ref is almost always on the
+  // first cell, and this runs per row on a sheet that omits every row's `@r`.
+  for (const cNode of rowNode.children) {
+    if (cNode.name !== C_TAG) continue;
+    const ref = cNode.attrs['r'];
+    if (ref) return coordinateToTuple(ref).row;
+  }
+  return undefined;
+};
+
+/**
+ * Row number for a `<row>`. `@r` is optional on CT_Row (ECMA-376 §18.3.1.73);
+ * without it the row is the one its first located cell names, which is the only
+ * record a generator that omits `@r` leaves of a gap, and is how openpyxl's
+ * reader places such a row too. With neither, the row takes `fallbackRow`.
+ */
+const parseRowIndex = (rowNode: XmlNode, fallbackRow: number): number => {
   const rAttr = rowNode.attrs['r'];
-  if (rAttr === undefined) {
-    throw new OpenXmlSchemaError('worksheet: <row> missing required @r');
-  }
-  const r = Number.parseInt(rAttr, 10);
-  if (!Number.isInteger(r) || r < 1) {
-    throw new OpenXmlSchemaError(`worksheet: <row r="${rAttr}"> is not a positive integer`);
-  }
-  return r;
+  if (rAttr !== undefined) return rowNumberFromAttr(rAttr, 'worksheet');
+  return firstLocatedCellRow(rowNode) ?? derivedRowNumber(fallbackRow, 'worksheet');
 };
 
 const parseCellCoord = (cNode: XmlNode, rowIdx: number, fallbackCol: number): { row: number; col: number } => {
@@ -1390,7 +1406,7 @@ const parseCellCoord = (cNode: XmlNode, rowIdx: number, fallbackCol: number): { 
   }
   const t = coordinateToTuple(rAttr);
   if (t.row !== rowIdx) {
-    throw new OpenXmlSchemaError(`worksheet: <c r="${rAttr}"> row ${t.row} disagrees with <row r="${rowIdx}">`);
+    throw new OpenXmlSchemaError(`worksheet: <c r="${rAttr}"> row ${t.row} disagrees with row ${rowIdx}`);
   }
   return { row: t.row, col: t.col };
 };
