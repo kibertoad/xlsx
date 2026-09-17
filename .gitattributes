@@ -1,0 +1,5 @@
+# A control byte embedded in a test fixture string makes Git classify the whole
+# source file as binary, and every later change to it lands as
+# `Bin 2085 -> 3026 bytes` with nothing for a reviewer to read. TypeScript
+# sources are always text, so diff them as text.
+*.ts diff

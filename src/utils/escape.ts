@@ -6,24 +6,22 @@
 // in escape position; an existing `_xHHHH_` in the input is therefore
 // re-escaped to `_x005F_xHHHH_` so it round-trips losslessly.
 
-// Escape every C0 control character (U+0000 through U+001F) plus any
-// unpaired surrogate. NUL is invalid in XML 1.0 entirely.
+// Every codepoint XML 1.0 cannot carry: the C0 controls, an unpaired
+// surrogate (which has no UTF-8 encoding), and U+FFFE / U+FFFF. A character
+// reference is no way out either, since `&#0;` is as illegal as the raw byte.
 // This range deliberately covers `\t` (U+0009), `\n` (U+000A) and `\r`
-// (U+000D) even though XML 1.0 considers them legal whitespace — XML
+// (U+000D) even though XML 1.0 considers them legal whitespace: XML
 // parsers normalise CRLF / lone CR to LF on read, so a cell string
 // containing `\r` would silently lose its CR without the `_x000D_`
 // encoding. openpyxl escapes the same `\x01-\x19` range; we add NUL
 // to keep the writer well-formed when callers feed in binary data.
 //
-// The `u` flag is what keeps astral characters intact. Without it the
-// class matches UTF-16 code units, so a well-formed pair like U+1F600
-// is two separate matches and escapes to `_xD83D__xDE00_`, which Excel
-// then displays literally. In unicode mode a pair is one code point
-// outside D800-DFFF and passes through, while a lone surrogate (which
-// has no UTF-8 encoding and is illegal in XML) still matches.
+// The `u` flag makes the class match code points rather than UTF-16 code
+// units, so a well-formed surrogate pair is a single character outside
+// D800-DFFF and passes through intact.
 const ILLEGAL_RE =
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: by design — these are the codepoints we replace
-  /[\x00-\x1F\u{D800}-\u{DFFF}]/gu;
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: by design, these are the codepoints we replace
+  /[\x00-\x1F\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
 const ESCAPED_PATTERN_RE = /(_)(x[0-9A-Fa-f]{4}_)/g;
 
 const toHex4 = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');

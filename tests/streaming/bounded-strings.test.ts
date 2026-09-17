@@ -79,3 +79,31 @@ describe('write-only string retention', () => {
     }
   });
 });
+
+describe('write-only shared-string chunking', () => {
+  it('keeps a surrogate pair whole across a chunk boundary', async () => {
+    // The sst part is streamed in 16,384-code-unit slices, so a cut can land
+    // between the halves of a surrogate pair. TextEncoder would then emit
+    // U+FFFD twice and the character would be lost on a path no round-trip
+    // through this library can see. One of the two prefix lengths puts a high
+    // surrogate at the last unit of a slice whatever the sst header measures.
+    for (const prefix of ['', 'x']) {
+      const sink = toBuffer();
+      const wb = await createWriteOnlyWorkbook(sink);
+      const ws = await wb.addWorksheet('S');
+      const value = prefix + '\u{1F600}'.repeat(20_000);
+      await ws.appendRow([value]);
+      await ws.close();
+      await wb.finalize();
+
+      const zip = await openZip(fromBuffer(sink.result()));
+      try {
+        const sst = new TextDecoder().decode(await zip.read('xl/sharedStrings.xml'));
+        expect(sst).not.toContain('\uFFFD');
+        expect(sst).toContain(`<t>${value}</t>`);
+      } finally {
+        zip.close();
+      }
+    }
+  });
+});
