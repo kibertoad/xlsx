@@ -85,6 +85,13 @@ export interface OpenZipOptions {
  * uncompressed entry resident. The fflate `unzipSync` fallback is preserved
  * internally for ZIP64 / non-standard archives the random-access reader
  * rejects, and it does hold every entry inflated.
+ *
+ * Throws {@link OpenXmlIoError} when the bytes are not a readable zip, and
+ * when the source itself fails to produce them. Those two are the only reason
+ * a caller has to look past the class: see the error-handling contract on
+ * {@link OpenXmlIoError}. An OLE compound file or a raw BIFF workbook throws
+ * {@link OpenXmlUnsupportedFormatError} instead, carrying the format it
+ * recognised.
  */
 export async function openZip(source: XlsxSource, opts: OpenZipOptions = {}): Promise<ZipArchive> {
   let bytes: Uint8Array;
