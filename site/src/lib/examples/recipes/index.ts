@@ -4,6 +4,7 @@
 // snippet shown to readers can never drift from the live API.
 
 import openAndIterate from './open-and-iterate.ts?raw';
+import readForeignWorkbook from './read-foreign-workbook.ts?raw';
 import buildFromScratch from './build-from-scratch.ts?raw';
 import styleCells from './style-cells.ts?raw';
 import reportStyles from './report-styles.ts?raw';
@@ -60,6 +61,20 @@ export const recipeGroups: Array<{ title: string; recipes: Recipe[] }> = [
           'For huge sheets, prefer `loadWorkbookStream` + `iterRows` instead — see the streaming recipe below.',
         ],
         relatedApi: ['loadWorkbook', 'fromFile', 'Worksheet'],
+      },
+      {
+        slug: 'read-foreign-workbook',
+        title: 'Read a workbook somebody else produced',
+        teaser:
+          'Load bytes you did not write, skip the blank sheets, and read each cell as the text Excel shows.',
+        path: 'site/src/lib/examples/recipes/read-foreign-workbook.ts',
+        source: readForeignWorkbook,
+        notes: [
+          '`getCellDisplayText` puts the value through the number format the cell points at, so `0.5` under `0.0%` reads `50.0%` and a date serial reads as a date. `cellValueAsString` never sees the stylesheet and would give you `0.5` and `45365`.',
+          'Excel stores a date as a plain number of days since the workbook epoch, so nothing in the value says it is a date: the number format is the only evidence, and `getCellDate` is what reads it.',
+          'A producer that writes text into a numeric column leaves you strings next to numbers; `getCellDisplayText` returns text either way.',
+        ],
+        relatedApi: ['loadWorkbook', 'fromBlob', 'getCellDisplayText', 'getCellDate', 'isWorksheetEmpty'],
       },
       {
         slug: 'edit-and-save',

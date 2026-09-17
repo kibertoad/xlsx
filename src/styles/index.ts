@@ -60,6 +60,7 @@ export {
   setRangeStyle,
   setRangeWrapText,
 } from './cell-style.js';
+export { getCellDate, getCellDisplayText } from './display-text.js';
 export type { DifferentialStyle } from './differential.js';
 export { addDxf, makeDifferentialStyle } from './differential.js';
 export type { NamedStyle, StylesheetNamedStyle } from './named-styles.js';

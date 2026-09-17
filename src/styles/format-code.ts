@@ -1,0 +1,1152 @@
+// Interpreter for Excel number-format codes: a `formatCode` plus a value in,
+// the text Excel prints in the cell out.
+//
+// ECMA-376 types `numFmt@formatCode` as a plain string (§18.8.30) and leaves
+// the grammar to the application, so Excel's own rules are the specification
+// here. A code is up to four `;`-separated sections chosen by the value's sign
+// (positive, negative, zero, text), and each section mixes literals with
+// placeholders: `0` `#` `?` for digits, `y` `m` `d` `h` `s` for date parts, `@`
+// for text.
+//
+// `parseFormatCode` returns `undefined` for a code outside the subset
+// `getCellDisplayText` documents, so callers degrade to a plain coercion rather
+// than print a guess.
+
+import { excelToDate, type ExcelEpoch } from '../utils/datetime.js';
+
+/** Excel carries 15 significant decimal digits and never shows more. */
+const EXCEL_SIGNIFICANT_DIGITS = 15;
+/** Positive, negative, zero, text. */
+const MAX_SECTIONS = 4;
+const GROUP_SEPARATOR = ',';
+const GROUP_SIZE = 3;
+const SCALE_DIVISOR = 1000;
+const PERCENT_MULTIPLIER = 100;
+/** `mmm` and wider render a month or weekday name, never a minute. */
+const NAME_TOKEN_WIDTH = 3;
+const MONTH_FULL_WIDTH = 4;
+/** Excel pads a `General` exponent to two digits, so 1e-7 shows as `1E-07`. */
+const GENERAL_EXPONENT_DIGITS = 2;
+const FULL_YEAR_DIGITS = 4;
+/** Excel stores time to the millisecond, so `.0000` gains nothing over `.000`. */
+const MAX_SUBSECOND_DIGITS = 3;
+const SECONDS_PER_DAY = 86_400;
+const SECONDS_PER_HOUR = 3_600;
+const SECONDS_PER_MINUTE = 60;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const HOURS_PER_HALF_DAY = 12;
+const ZERO_CHAR_CODE = '0'.charCodeAt(0);
+const FIVE_CHAR_CODE = '5'.charCodeAt(0);
+const NINE_CHAR_CODE = '9'.charCodeAt(0);
+/** Terms and closeness at which the fraction search stops chasing a double. */
+const FRACTION_MAX_TERMS = 64;
+const FRACTION_EPSILON = 1e-12;
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
+
+const COLOR_NAMES = new Set(['black', 'blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow']);
+const INDEXED_COLOR_RE = /^color\s*\d+$/i;
+const ELAPSED_RE = /^([hms])\1*$/i;
+
+// ---- tokens ----------------------------------------------------------------
+
+type DigitPlaceholder = '0' | '#' | '?';
+
+type DatePart = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'monthOrMinute';
+type ElapsedPart = 'hour' | 'minute' | 'second';
+
+interface DatePartToken {
+  readonly kind: 'datePart';
+  readonly part: DatePart;
+  readonly width: number;
+}
+
+interface ElapsedToken {
+  readonly kind: 'elapsed';
+  readonly part: ElapsedPart;
+  readonly width: number;
+}
+
+type Token =
+  | { readonly kind: 'literal'; readonly text: string }
+  | { readonly kind: 'general' }
+  | { readonly kind: 'digit'; readonly placeholder: DigitPlaceholder }
+  | { readonly kind: 'point' }
+  | { readonly kind: 'comma' }
+  | { readonly kind: 'percent' }
+  | { readonly kind: 'exponent'; readonly explicitSign: boolean }
+  | { readonly kind: 'slash' }
+  | { readonly kind: 'textPlaceholder' }
+  | { readonly kind: 'meridiem'; readonly short: boolean }
+  | { readonly kind: 'subsecond'; readonly digits: number }
+  | DatePartToken
+  | ElapsedToken;
+
+// ---- sections --------------------------------------------------------------
+
+interface NumberFormatSection {
+  readonly kind: 'number';
+  readonly tokens: readonly Token[];
+  readonly grouped: boolean;
+  /** Trailing commas; each one divides the value by a thousand. */
+  readonly scale: number;
+  /** `%` occurrences; each one multiplies the value by a hundred. */
+  readonly percents: number;
+  /** Token index where the integer region ends (exclusive). */
+  readonly intEnd: number;
+  readonly intPlaceholders: readonly DigitPlaceholder[];
+  readonly fracPlaceholders: readonly DigitPlaceholder[];
+  /** Token index of the `E+` / `E-` marker, or -1 outside scientific codes. */
+  readonly exponentIndex: number;
+  readonly exponentDigits: number;
+  readonly exponentExplicitSign: boolean;
+}
+
+interface DateFormatSection {
+  readonly kind: 'date';
+  readonly tokens: readonly Token[];
+  readonly elapsed: boolean;
+  readonly hasMeridiem: boolean;
+  readonly subsecondDigits: number;
+}
+
+interface FractionFormatSection {
+  readonly kind: 'fraction';
+  readonly tokens: readonly Token[];
+  readonly slashIndex: number;
+  /** Token range holding the whole-number run, or -1 when the code has none. */
+  readonly wholeStart: number;
+  readonly wholeEnd: number;
+  readonly numeratorStart: number;
+  readonly denominatorEnd: number;
+  /** Placeholder count in the denominator run; caps the denominator at 10^n - 1. */
+  readonly denominatorDigits: number;
+  /** Non-zero when the code spells the denominator out, as in `# ?/16`. */
+  readonly fixedDenominator: number;
+}
+
+interface TextFormatSection {
+  readonly kind: 'text';
+  readonly tokens: readonly Token[];
+}
+
+type FormatSection =
+  | { readonly kind: 'general' }
+  | { readonly kind: 'blank' }
+  | NumberFormatSection
+  | DateFormatSection
+  | FractionFormatSection
+  | TextFormatSection;
+
+export interface ParsedFormat {
+  readonly sections: readonly FormatSection[];
+}
+
+// ---- decimal arithmetic ----------------------------------------------------
+
+interface DecimalParts {
+  readonly int: string;
+  readonly frac: string;
+}
+
+/**
+ * Plain (never exponential) decimal digits of a finite non-negative number at
+ * Excel's precision. Rounding has to go through this string: `(1.005).toFixed(2)`
+ * is `"1.00"` because the double nearest 1.005 sits just below it, while Excel
+ * rounds the 15-digit decimal it shows and prints `1.01`.
+ */
+const toPlainDecimal = (value: number): string => {
+  const text = value.toPrecision(EXCEL_SIGNIFICANT_DIGITS);
+  const parsed = /^(\d+)(?:\.(\d+))?e([+-]\d+)$/.exec(text);
+  if (parsed === null) return text;
+  const intPart = parsed[1] ?? '';
+  const digits = intPart + (parsed[2] ?? '');
+  const point = intPart.length + Number(parsed[3] ?? '0');
+  if (point <= 0) return `0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return digits + '0'.repeat(point - digits.length);
+  return `${digits.slice(0, point)}.${digits.slice(point)}`;
+};
+
+/** Add one to the last digit of a digit string, growing it on overflow. */
+const carryOne = (digits: string): string => {
+  let i = digits.length - 1;
+  let tail = '';
+  while (i >= 0 && digits.charCodeAt(i) === NINE_CHAR_CODE) {
+    tail = `0${tail}`;
+    i--;
+  }
+  if (i < 0) return `1${tail}`;
+  return digits.slice(0, i) + String(digits.charCodeAt(i) - ZERO_CHAR_CODE + 1) + tail;
+};
+
+/** Round `int`.`frac` to `decimals` places, half away from zero. */
+const roundParts = (int: string, frac: string, decimals: number): DecimalParts => {
+  if (frac.length <= decimals) return { int, frac: frac.padEnd(decimals, '0') };
+  const kept = frac.slice(0, decimals);
+  if (frac.charCodeAt(decimals) < FIVE_CHAR_CODE) return { int, frac: kept };
+  const bumped = carryOne(int + kept);
+  return { int: bumped.slice(0, bumped.length - decimals), frac: bumped.slice(bumped.length - decimals) };
+};
+
+const roundDecimal = (value: number, decimals: number): DecimalParts => {
+  const text = toPlainDecimal(value);
+  const dot = text.indexOf('.');
+  if (dot === -1) return roundParts(text, '', decimals);
+  return roundParts(text.slice(0, dot), text.slice(dot + 1), decimals);
+};
+
+/** Significant digits of a non-negative number, most significant first. */
+const significantDigits = (value: number): string => toPlainDecimal(value).replace('.', '').replace(/^0+/, '');
+
+/** Power of ten of the leading significant digit; 0 for a zero value. */
+const decimalOrder = (value: number): number => {
+  const text = toPlainDecimal(value);
+  const dot = text.indexOf('.');
+  const int = (dot === -1 ? text : text.slice(0, dot)).replace(/^0+/, '');
+  if (int.length > 0) return int.length - 1;
+  const frac = dot === -1 ? '' : text.slice(dot + 1);
+  const leading = frac.search(/[1-9]/);
+  return leading === -1 ? 0 : -(leading + 1);
+};
+
+// ---- tokenizer -------------------------------------------------------------
+
+const pushLiteral = (tokens: Token[], text: string): void => {
+  const last = tokens[tokens.length - 1];
+  if (last?.kind === 'literal') tokens[tokens.length - 1] = { kind: 'literal', text: last.text + text };
+  else tokens.push({ kind: 'literal', text });
+};
+
+const datePartOf = (letter: string): DatePart => {
+  if (letter === 'y') return 'year';
+  if (letter === 'd') return 'day';
+  if (letter === 'h') return 'hour';
+  if (letter === 's') return 'second';
+  return 'monthOrMinute';
+};
+
+/** `[Red]`, `[$€-407]`, `[hh]`, `[>100]`: everything Excel puts in brackets. */
+const tokenizeBracket = (body: string, tokens: Token[]): boolean => {
+  const elapsed = ELAPSED_RE.exec(body);
+  if (elapsed !== null) {
+    const letter = (elapsed[1] ?? 'h').toLowerCase();
+    const part: ElapsedPart = letter === 'h' ? 'hour' : letter === 'm' ? 'minute' : 'second';
+    tokens.push({ kind: 'elapsed', part, width: body.length });
+    return true;
+  }
+  if (body.startsWith('$')) {
+    // `[$<symbol>-<locale>]`: the symbol prints, the locale id only picks
+    // number words and calendar names this renderer does not vary.
+    const symbol = body.slice(1).split('-')[0] ?? '';
+    if (symbol.length > 0) pushLiteral(tokens, symbol);
+    return true;
+  }
+  const lower = body.toLowerCase();
+  if (COLOR_NAMES.has(lower) || INDEXED_COLOR_RE.test(body)) return true;
+  // Comparison sections (`[>=100]"big"`) and calendar modifiers (`[DBNum1]`)
+  // change the value that prints, so a code carrying one is out of scope.
+  return false;
+};
+
+const MERIDIEM_LONG = 'AM/PM';
+const MERIDIEM_SHORT = 'A/P';
+
+const tokenizeSection = (src: string): Token[] | undefined => {
+  const tokens: Token[] = [];
+  let i = 0;
+  while (i < src.length) {
+    const ch = src.charAt(i);
+    if (ch === '"') {
+      const end = src.indexOf('"', i + 1);
+      if (end === -1) return undefined;
+      pushLiteral(tokens, src.slice(i + 1, end));
+      i = end + 1;
+      continue;
+    }
+    if (ch === '\\') {
+      pushLiteral(tokens, src.charAt(i + 1));
+      i += 2;
+      continue;
+    }
+    if (ch === '_') {
+      // `_x` reserves the width of `x`; the cell shows a space there.
+      pushLiteral(tokens, ' ');
+      i += 2;
+      continue;
+    }
+    if (ch === '*') {
+      // `*x` repeats `x` until the column is full, so how much it prints is not
+      // a property of the cell. Nothing is emitted for it.
+      i += 2;
+      continue;
+    }
+    if (ch === '[') {
+      const end = src.indexOf(']', i + 1);
+      if (end === -1) return undefined;
+      if (!tokenizeBracket(src.slice(i + 1, end), tokens)) return undefined;
+      i = end + 1;
+      continue;
+    }
+    if (ch === '0' || ch === '#' || ch === '?') {
+      tokens.push({ kind: 'digit', placeholder: ch });
+      i++;
+      continue;
+    }
+    if (ch === '.') {
+      tokens.push({ kind: 'point' });
+      i++;
+      continue;
+    }
+    if (ch === ',') {
+      tokens.push({ kind: 'comma' });
+      i++;
+      continue;
+    }
+    if (ch === '%') {
+      tokens.push({ kind: 'percent' });
+      i++;
+      continue;
+    }
+    if (ch === '/') {
+      tokens.push({ kind: 'slash' });
+      i++;
+      continue;
+    }
+    if (ch === '@') {
+      tokens.push({ kind: 'textPlaceholder' });
+      i++;
+      continue;
+    }
+    const upperRest = src.slice(i, i + MERIDIEM_LONG.length).toUpperCase();
+    if (upperRest === MERIDIEM_LONG) {
+      tokens.push({ kind: 'meridiem', short: false });
+      i += MERIDIEM_LONG.length;
+      continue;
+    }
+    if (src.slice(i, i + MERIDIEM_SHORT.length).toUpperCase() === MERIDIEM_SHORT) {
+      tokens.push({ kind: 'meridiem', short: true });
+      i += MERIDIEM_SHORT.length;
+      continue;
+    }
+    if (src.slice(i, i + 'General'.length).toLowerCase() === 'general') {
+      tokens.push({ kind: 'general' });
+      i += 'General'.length;
+      continue;
+    }
+    const lower = ch.toLowerCase();
+    if (lower === 'e') {
+      const sign = src.charAt(i + 1);
+      // A bare `e` is the era-year token, which needs a calendar this renderer
+      // does not carry.
+      if (sign !== '+' && sign !== '-') return undefined;
+      tokens.push({ kind: 'exponent', explicitSign: sign === '+' });
+      i += 2;
+      continue;
+    }
+    if (lower === 'y' || lower === 'm' || lower === 'd' || lower === 'h' || lower === 's') {
+      let width = 1;
+      while (src.charAt(i + width).toLowerCase() === lower) width++;
+      tokens.push({ kind: 'datePart', part: datePartOf(lower), width });
+      i += width;
+      continue;
+    }
+    // `g` (era) and `b` (Buddhist calendar) shift the calendar system.
+    if (lower === 'g' || lower === 'b') return undefined;
+    pushLiteral(tokens, ch);
+    i++;
+  }
+  return tokens;
+};
+
+// ---- section parsing -------------------------------------------------------
+
+const splitSections = (code: string): string[] | undefined => {
+  const out: string[] = [];
+  let start = 0;
+  let i = 0;
+  while (i < code.length) {
+    const ch = code.charAt(i);
+    if (ch === '"') {
+      const end = code.indexOf('"', i + 1);
+      if (end === -1) return undefined;
+      i = end + 1;
+      continue;
+    }
+    if (ch === '[') {
+      const end = code.indexOf(']', i + 1);
+      if (end === -1) return undefined;
+      i = end + 1;
+      continue;
+    }
+    if (ch === '\\' || ch === '_' || ch === '*') {
+      i += 2;
+      continue;
+    }
+    if (ch === ';') {
+      out.push(code.slice(start, i));
+      start = i + 1;
+    }
+    i++;
+  }
+  out.push(code.slice(start));
+  return out;
+};
+
+const literalFor = (token: Token): string => {
+  switch (token.kind) {
+    case 'literal':
+      return token.text;
+    case 'percent':
+      return '%';
+    case 'slash':
+      return '/';
+    case 'point':
+      return '.';
+    case 'comma':
+      return GROUP_SEPARATOR;
+    default:
+      return '';
+  }
+};
+
+const onlyCommasBetween = (tokens: readonly Token[], from: number, to: number): boolean => {
+  for (let i = from + 1; i < to; i++) {
+    if (tokens[i]?.kind !== 'comma') return false;
+  }
+  return true;
+};
+
+interface CommaResolution {
+  readonly tokens: Token[];
+  readonly grouped: boolean;
+  readonly scale: number;
+}
+
+/**
+ * A comma means three different things depending on where it sits: thousands
+ * grouping between digit placeholders, division by a thousand after the last
+ * one, and a plain comma anywhere else.
+ */
+const resolveCommas = (tokens: readonly Token[]): CommaResolution => {
+  const isDigit = tokens.map((t) => t.kind === 'digit');
+  const firstDigit = isDigit.indexOf(true);
+  const lastDigit = isDigit.lastIndexOf(true);
+  const out: Token[] = [];
+  let grouped = false;
+  let scale = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === undefined) continue;
+    if (token.kind !== 'comma') {
+      out.push(token);
+      continue;
+    }
+    if (firstDigit !== -1 && i > firstDigit && i < lastDigit) {
+      grouped = true;
+      continue;
+    }
+    if (lastDigit !== -1 && i > lastDigit && onlyCommasBetween(tokens, lastDigit, i)) {
+      scale++;
+      continue;
+    }
+    pushLiteral(out, GROUP_SEPARATOR);
+  }
+  return { tokens: out, grouped, scale };
+};
+
+const placeholdersIn = (tokens: readonly Token[], from: number, to: number): DigitPlaceholder[] => {
+  const out: DigitPlaceholder[] = [];
+  for (let i = from; i < to; i++) {
+    const token = tokens[i];
+    if (token?.kind === 'digit') out.push(token.placeholder);
+  }
+  return out;
+};
+
+const resolveNumberSection = (resolved: CommaResolution): NumberFormatSection => {
+  const { tokens } = resolved;
+  const pointIndex = tokens.findIndex((t) => t.kind === 'point');
+  const exponentIndex = tokens.findIndex((t) => t.kind === 'exponent');
+  const intEnd = pointIndex !== -1 ? pointIndex : exponentIndex !== -1 ? exponentIndex : tokens.length;
+  const fracEnd = exponentIndex !== -1 ? exponentIndex : tokens.length;
+  const exponentToken = exponentIndex === -1 ? undefined : tokens[exponentIndex];
+  return {
+    kind: 'number',
+    tokens,
+    grouped: resolved.grouped,
+    scale: resolved.scale,
+    percents: tokens.filter((t) => t.kind === 'percent').length,
+    intEnd,
+    intPlaceholders: placeholdersIn(tokens, 0, intEnd),
+    fracPlaceholders: pointIndex === -1 ? [] : placeholdersIn(tokens, pointIndex + 1, fracEnd),
+    exponentIndex,
+    exponentDigits: exponentIndex === -1 ? 0 : placeholdersIn(tokens, exponentIndex + 1, tokens.length).length,
+    exponentExplicitSign: exponentToken?.kind === 'exponent' ? exponentToken.explicitSign : false,
+  };
+};
+
+const digitRunStart = (tokens: readonly Token[], end: number): number => {
+  let start = end;
+  while (start > 0 && tokens[start - 1]?.kind === 'digit') start--;
+  return start;
+};
+
+/** `# ??/??`: a slash with digit placeholders on both sides is a fraction. */
+const resolveFractionSection = (tokens: readonly Token[]): FractionFormatSection | undefined => {
+  const slashIndex = tokens.findIndex((t) => t.kind === 'slash');
+  if (slashIndex < 1 || tokens[slashIndex - 1]?.kind !== 'digit') return undefined;
+
+  const numeratorStart = digitRunStart(tokens, slashIndex);
+  const after = tokens[slashIndex + 1];
+  let denominatorEnd: number;
+  let fixedDenominator = 0;
+  if (after?.kind === 'digit') {
+    denominatorEnd = slashIndex + 1;
+    while (tokens[denominatorEnd]?.kind === 'digit') denominatorEnd++;
+  } else if (after?.kind === 'literal' && /^\d+$/.test(after.text)) {
+    denominatorEnd = slashIndex + 2;
+    fixedDenominator = Number(after.text);
+    if (fixedDenominator === 0) return undefined;
+  } else {
+    return undefined;
+  }
+
+  let wholeEnd = -1;
+  let wholeStart = -1;
+  for (let i = numeratorStart - 1; i >= 0; i--) {
+    if (tokens[i]?.kind !== 'digit') continue;
+    wholeEnd = i + 1;
+    wholeStart = digitRunStart(tokens, wholeEnd);
+    break;
+  }
+
+  return {
+    kind: 'fraction',
+    tokens,
+    slashIndex,
+    wholeStart,
+    wholeEnd,
+    numeratorStart,
+    denominatorEnd,
+    denominatorDigits: fixedDenominator > 0 ? 0 : placeholdersIn(tokens, slashIndex + 1, denominatorEnd).length,
+    fixedDenominator,
+  };
+};
+
+const nextDateToken = (tokens: readonly Token[], index: number, step: number): DatePartToken | ElapsedToken | undefined => {
+  for (let i = index + step; i >= 0 && i < tokens.length; i += step) {
+    const token = tokens[i];
+    if (token === undefined) return undefined;
+    if (token.kind === 'datePart' || token.kind === 'elapsed') return token;
+  }
+  return undefined;
+};
+
+const resolveDateSection = (tokens: readonly Token[]): DateFormatSection | undefined => {
+  // `.0` right after a seconds token is fractional seconds, not a decimal point.
+  const withSubseconds: Token[] = [];
+  let subsecondDigits = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    if (token === undefined) continue;
+    if (token.kind !== 'point') {
+      withSubseconds.push(token);
+      continue;
+    }
+    let digits = 0;
+    for (let j = i + 1; j < tokens.length; j++) {
+      const next = tokens[j];
+      if (next?.kind !== 'digit' || next.placeholder !== '0') break;
+      digits++;
+    }
+    const previous = withSubseconds[withSubseconds.length - 1];
+    const afterSeconds = previous?.kind === 'datePart' || previous?.kind === 'elapsed' ? previous.part === 'second' : false;
+    if (digits === 0 || !afterSeconds) {
+      pushLiteral(withSubseconds, '.');
+      continue;
+    }
+    withSubseconds.push({ kind: 'subsecond', digits });
+    subsecondDigits = digits;
+    i += digits;
+  }
+
+  // Excel reads `m` as a minute next to an hour or a second, and as a month
+  // everywhere else. `mmm` and wider are always month or weekday names.
+  const resolved: Token[] = withSubseconds.map((token, index) => {
+    if (token.kind !== 'datePart' || token.part !== 'monthOrMinute') return token;
+    if (token.width >= NAME_TOKEN_WIDTH) return { kind: 'datePart', part: 'month', width: token.width };
+    const previous = nextDateToken(withSubseconds, index, -1);
+    const next = nextDateToken(withSubseconds, index, 1);
+    const minute = previous?.part === 'hour' || next?.part === 'second';
+    return { kind: 'datePart', part: minute ? 'minute' : 'month', width: token.width };
+  });
+
+  const elapsed = resolved.some((t) => t.kind === 'elapsed');
+  const calendarPart = resolved.some(
+    (t) => t.kind === 'datePart' && (t.part === 'year' || t.part === 'month' || t.part === 'day'),
+  );
+  // A leftover digit placeholder means the code mixes a numeric layout into a
+  // date layout, and an elapsed duration has no calendar date to print.
+  if (resolved.some((t) => t.kind === 'digit' || t.kind === 'exponent')) return undefined;
+  if (elapsed && calendarPart) return undefined;
+
+  return {
+    kind: 'date',
+    tokens: resolved,
+    elapsed,
+    hasMeridiem: resolved.some((t) => t.kind === 'meridiem'),
+    subsecondDigits,
+  };
+};
+
+const parseSection = (src: string): FormatSection | undefined => {
+  const tokens = tokenizeSection(src);
+  if (tokens === undefined) return undefined;
+  if (tokens.length === 0) return { kind: 'blank' };
+  if (tokens.some((t) => t.kind === 'general')) {
+    // `General` is a whole format, not a placeholder that combines with others.
+    return tokens.length === 1 ? { kind: 'general' } : undefined;
+  }
+  const hasText = tokens.some((t) => t.kind === 'textPlaceholder');
+  const hasDate = tokens.some((t) => t.kind === 'datePart' || t.kind === 'elapsed' || t.kind === 'meridiem');
+  if (hasText && hasDate) return undefined;
+  if (hasText) return { kind: 'text', tokens };
+  if (hasDate) return resolveDateSection(tokens);
+  const resolved = resolveCommas(tokens);
+  return resolveFractionSection(resolved.tokens) ?? resolveNumberSection(resolved);
+};
+
+/**
+ * Distinct format codes in a workbook number in the tens while cells number in
+ * the millions, so the parse is memoised. The cap keeps a caller that feeds
+ * generated codes from growing the map without bound.
+ */
+const PARSE_CACHE_LIMIT = 256;
+const parseCache = new Map<string, { readonly format: ParsedFormat | undefined }>();
+
+const buildFormat = (code: string): ParsedFormat | undefined => {
+  const raw = splitSections(code);
+  if (raw === undefined || raw.length > MAX_SECTIONS) return undefined;
+  const sections: FormatSection[] = [];
+  for (const src of raw) {
+    const section = parseSection(src);
+    if (section === undefined) return undefined;
+    sections.push(section);
+  }
+  return { sections };
+};
+
+/** Parse a `numFmt` format code, or `undefined` when it is out of scope. */
+export function parseFormatCode(code: string): ParsedFormat | undefined {
+  const cached = parseCache.get(code);
+  if (cached !== undefined) return cached.format;
+  const format = buildFormat(code);
+  if (parseCache.size >= PARSE_CACHE_LIMIT) parseCache.clear();
+  parseCache.set(code, { format });
+  return format;
+}
+
+// ---- rendering: numeric layouts -------------------------------------------
+
+const padFor = (placeholder: DigitPlaceholder): string => {
+  if (placeholder === '0') return '0';
+  return placeholder === '?' ? ' ' : '';
+};
+
+const withGrouping = (digits: string, grouped: boolean): string => {
+  if (!grouped || digits.length <= GROUP_SIZE) return digits;
+  const groups: string[] = [];
+  for (let end = digits.length; end > 0; end -= GROUP_SIZE) {
+    groups.unshift(digits.slice(Math.max(0, end - GROUP_SIZE), end));
+  }
+  return groups.join(GROUP_SEPARATOR);
+};
+
+/**
+ * Render `[from, to)` right to left, feeding `digits` into the placeholders from
+ * the low-order end. The leftmost placeholder absorbs whatever is left over,
+ * which is how `#,##0` still prints all seven digits of 1,234,567.
+ */
+const renderDigitsRightToLeft = (tokens: readonly Token[], from: number, to: number, digits: string): string => {
+  const leftmost = placeholderIndex(tokens, from, to);
+  const pieces: string[] = [];
+  let pos = digits.length;
+  for (let i = to - 1; i >= from; i--) {
+    const token = tokens[i];
+    if (token === undefined) continue;
+    if (token.kind !== 'digit') {
+      pieces.push(literalFor(token));
+      continue;
+    }
+    if (i === leftmost) {
+      pieces.push(pos > 0 ? digits.slice(0, pos) : padFor(token.placeholder));
+      pos = 0;
+      continue;
+    }
+    if (pos === 0) {
+      pieces.push(padFor(token.placeholder));
+      continue;
+    }
+    let take = pos - 1;
+    // A grouping separator belongs to the digit on its right.
+    while (take > 0 && digits.charAt(take - 1) === GROUP_SEPARATOR) take--;
+    pieces.push(digits.slice(take, pos));
+    pos = take;
+  }
+  pieces.reverse();
+  return pieces.join('');
+};
+
+const placeholderIndex = (tokens: readonly Token[], from: number, to: number): number => {
+  for (let i = from; i < to; i++) {
+    if (tokens[i]?.kind === 'digit') return i;
+  }
+  return -1;
+};
+
+/** `#` drops trailing zeros, `?` blanks them, `0` keeps them. */
+const renderFracDigits = (placeholders: readonly DigitPlaceholder[], digits: string): string => {
+  const pieces: string[] = [];
+  let trailing = true;
+  for (let i = placeholders.length - 1; i >= 0; i--) {
+    const placeholder = placeholders[i];
+    if (placeholder === undefined) continue;
+    const digit = digits.charAt(i);
+    if (trailing && digit === '0' && placeholder !== '0') {
+      pieces.push(placeholder === '?' ? ' ' : '');
+      continue;
+    }
+    trailing = false;
+    pieces.push(digit);
+  }
+  pieces.reverse();
+  return pieces.join('');
+};
+
+const assembleNumber = (section: NumberFormatSection, parts: DecimalParts, exponentText: string): string => {
+  const minIntDigits = section.intPlaceholders.filter((p) => p === '0').length;
+  const intDigits = withGrouping(parts.int.replace(/^0+/, '').padStart(minIntDigits, '0'), section.grouped);
+  const head = renderDigitsRightToLeft(section.tokens, 0, section.intEnd, intDigits);
+  const fracText = renderFracDigits(section.fracPlaceholders, parts.frac);
+
+  const tail: string[] = [];
+  let fracEmitted = false;
+  for (let i = section.intEnd; i < section.tokens.length; i++) {
+    const token = section.tokens[i];
+    if (token === undefined) continue;
+    if (token.kind === 'point') {
+      tail.push(fracText.length > 0 ? '.' : '');
+      continue;
+    }
+    if (token.kind === 'exponent') {
+      tail.push(exponentText);
+      continue;
+    }
+    if (token.kind === 'digit') {
+      // Exponent digits already went into `exponentText`.
+      if (section.exponentIndex !== -1 && i > section.exponentIndex) continue;
+      if (!fracEmitted) {
+        tail.push(fracText);
+        fracEmitted = true;
+      }
+      continue;
+    }
+    tail.push(literalFor(token));
+  }
+  return head + tail.join('');
+};
+
+interface RenderedSection {
+  readonly text: string;
+  /** True when every digit the section printed is a zero. */
+  readonly zero: boolean;
+}
+
+const partsAreZero = (parts: DecimalParts): boolean => !/[1-9]/.test(parts.int + parts.frac);
+
+const renderScientificSection = (section: NumberFormatSection, magnitude: number): RenderedSection => {
+  const decimals = section.fracPlaceholders.length;
+  // `##0.0E+0` asks for up to three integer digits, so the exponent moves in
+  // steps of three: engineering notation.
+  const step = Math.max(1, section.intPlaceholders.length);
+  let digits = significantDigits(magnitude);
+  let order = decimalOrder(magnitude);
+  for (;;) {
+    const exponent = magnitude === 0 ? 0 : Math.floor(order / step) * step;
+    const intWidth = order - exponent + 1;
+    const parts = roundParts(digits.slice(0, intWidth).padEnd(intWidth, '0') || '0', digits.slice(intWidth), decimals);
+    if (parts.int.length > intWidth) {
+      // Rounding pushed the mantissa to the next power of ten (9.99 became
+      // 10.0 at one integer digit); step the exponent instead of widening.
+      order += 1;
+      digits = '1';
+      continue;
+    }
+    const sign = exponent < 0 ? '-' : section.exponentExplicitSign ? '+' : '';
+    const exponentText = `E${sign}${String(Math.abs(exponent)).padStart(section.exponentDigits, '0')}`;
+    return { text: assembleNumber(section, parts, exponentText), zero: partsAreZero(parts) };
+  }
+};
+
+const renderNumberSection = (section: NumberFormatSection, magnitude: number): RenderedSection => {
+  const scaled = (magnitude * PERCENT_MULTIPLIER ** section.percents) / SCALE_DIVISOR ** section.scale;
+  if (section.exponentIndex !== -1) return renderScientificSection(section, scaled);
+  const parts = roundDecimal(scaled, section.fracPlaceholders.length);
+  return { text: assembleNumber(section, parts, ''), zero: partsAreZero(parts) };
+};
+
+/**
+ * Closest `p/q` with `q <= maxDenominator`. Continued-fraction convergents alone
+ * are not always the closest (0.7 gives 2/3 before 5/7), so the last step also
+ * weighs the best semiconvergent.
+ */
+const bestFraction = (value: number, maxDenominator: number): { numerator: number; denominator: number } => {
+  let numeratorPrev = 0;
+  let numerator = 1;
+  let denominatorPrev = 1;
+  let denominator = 0;
+  let best = { numerator: Math.round(value), denominator: 1 };
+  let x = value;
+  for (let term = 0; term < FRACTION_MAX_TERMS; term++) {
+    const a = Math.floor(x);
+    const nextNumerator = a * numerator + numeratorPrev;
+    const nextDenominator = a * denominator + denominatorPrev;
+    if (nextDenominator > maxDenominator) {
+      const steps = Math.floor((maxDenominator - denominatorPrev) / denominator);
+      if (steps > 0) {
+        const candidate = { numerator: steps * numerator + numeratorPrev, denominator: steps * denominator + denominatorPrev };
+        if (Math.abs(value - candidate.numerator / candidate.denominator) < Math.abs(value - best.numerator / best.denominator)) {
+          best = candidate;
+        }
+      }
+      break;
+    }
+    numeratorPrev = numerator;
+    numerator = nextNumerator;
+    denominatorPrev = denominator;
+    denominator = nextDenominator;
+    best = { numerator, denominator };
+    const remainder = x - a;
+    if (remainder < FRACTION_EPSILON) break;
+    x = 1 / remainder;
+  }
+  return best;
+};
+
+const blankFor = (placeholder: DigitPlaceholder): string => (placeholder === '#' ? '' : ' ');
+
+const renderDigitsLeftToRight = (tokens: readonly Token[], from: number, to: number, digits: string): string => {
+  const pieces: string[] = [];
+  let pos = 0;
+  const lastPlaceholder = lastPlaceholderIndex(tokens, from, to);
+  for (let i = from; i < to; i++) {
+    const token = tokens[i];
+    if (token === undefined) continue;
+    if (token.kind !== 'digit') {
+      pieces.push(literalFor(token));
+      continue;
+    }
+    if (i === lastPlaceholder) {
+      pieces.push(pos < digits.length ? digits.slice(pos) : padFor(token.placeholder));
+      pos = digits.length;
+      continue;
+    }
+    if (pos < digits.length) {
+      pieces.push(digits.charAt(pos));
+      pos++;
+      continue;
+    }
+    pieces.push(padFor(token.placeholder));
+  }
+  return pieces.join('');
+};
+
+const lastPlaceholderIndex = (tokens: readonly Token[], from: number, to: number): number => {
+  for (let i = to - 1; i >= from; i--) {
+    if (tokens[i]?.kind === 'digit') return i;
+  }
+  return -1;
+};
+
+const blankRange = (tokens: readonly Token[], from: number, to: number): string => {
+  const pieces: string[] = [];
+  for (let i = from; i < to; i++) {
+    const token = tokens[i];
+    if (token === undefined) continue;
+    pieces.push(token.kind === 'digit' ? blankFor(token.placeholder) : token.kind === 'slash' ? ' ' : literalFor(token));
+  }
+  return pieces.join('');
+};
+
+const renderFractionSection = (section: FractionFormatSection, magnitude: number): RenderedSection => {
+  const hasWhole = section.wholeStart !== -1;
+  const maxDenominator =
+    section.fixedDenominator > 0 ? section.fixedDenominator : 10 ** section.denominatorDigits - 1;
+  let whole = hasWhole ? Math.floor(magnitude) : 0;
+  const remainder = magnitude - whole;
+  const approximation =
+    section.fixedDenominator > 0
+      ? { numerator: Math.round(remainder * section.fixedDenominator), denominator: section.fixedDenominator }
+      : bestFraction(remainder, Math.max(1, maxDenominator));
+  const denominator = approximation.denominator;
+  let numerator = approximation.numerator;
+  if (hasWhole && numerator === denominator && numerator !== 0) {
+    whole += 1;
+    numerator = 0;
+  }
+
+  const pieces: string[] = [];
+  if (hasWhole) {
+    pieces.push(renderDigitsRightToLeft(section.tokens, 0, section.wholeStart, ''));
+    const wholeDigits = whole === 0 ? '' : String(whole);
+    pieces.push(renderDigitsRightToLeft(section.tokens, section.wholeStart, section.wholeEnd, wholeDigits));
+    pieces.push(blankRange(section.tokens, section.wholeEnd, section.numeratorStart));
+  } else {
+    pieces.push(renderDigitsRightToLeft(section.tokens, 0, section.numeratorStart, ''));
+  }
+
+  if (numerator === 0 && hasWhole) {
+    // An exact whole number leaves the fraction blank, the way Excel does.
+    pieces.push(blankRange(section.tokens, section.numeratorStart, section.denominatorEnd));
+  } else {
+    pieces.push(renderDigitsRightToLeft(section.tokens, section.numeratorStart, section.slashIndex, String(numerator)));
+    pieces.push('/');
+    if (section.fixedDenominator > 0) pieces.push(String(section.fixedDenominator));
+    else
+      pieces.push(
+        renderDigitsLeftToRight(section.tokens, section.slashIndex + 1, section.denominatorEnd, String(denominator)),
+      );
+  }
+  pieces.push(renderDigitsRightToLeft(section.tokens, section.denominatorEnd, section.tokens.length, ''));
+  return { text: pieces.join(''), zero: whole === 0 && numerator === 0 };
+};
+
+/**
+ * Excel's `General`: the value at the 15 significant digits Excel stores, which
+ * is what turns `1.1 + 2.2` into `3.3` instead of `3.3000000000000003`. How
+ * many of those digits Excel shows, and where it gives up and switches to
+ * scientific notation, also depends on the column width, which is not part of
+ * the cell data, so every stored digit is kept and the notation switches where
+ * JavaScript's own shortest round-trip form does.
+ */
+const renderGeneral = (magnitude: number): string => {
+  const plain = String(Number(magnitude.toPrecision(EXCEL_SIGNIFICANT_DIGITS)));
+  const exponential = /^(\d(?:\.\d+)?)e([+-])(\d+)$/.exec(plain);
+  if (exponential === null) return plain;
+  return `${exponential[1] ?? ''}E${exponential[2] ?? ''}${(exponential[3] ?? '').padStart(GENERAL_EXPONENT_DIGITS, '0')}`;
+};
+
+// ---- rendering: date layouts ----------------------------------------------
+
+interface DateFields {
+  readonly year: number;
+  readonly month: number;
+  readonly day: number;
+  readonly weekday: number;
+  readonly hour: number;
+  readonly minute: number;
+  readonly second: number;
+  readonly totalSeconds: number;
+  readonly subsecond: string;
+}
+
+const twoDigits = (value: number, width: number): string => (width === 1 ? String(value) : String(value).padStart(2, '0'));
+
+const renderDatePart = (token: DatePartToken, fields: DateFields, hasMeridiem: boolean): string => {
+  switch (token.part) {
+    case 'year':
+      return token.width <= 2
+        ? String(fields.year % 100).padStart(2, '0')
+        : String(fields.year).padStart(FULL_YEAR_DIGITS, '0');
+    case 'month': {
+      if (token.width < NAME_TOKEN_WIDTH) return twoDigits(fields.month, token.width);
+      const name = MONTH_NAMES[fields.month - 1] ?? '';
+      if (token.width === NAME_TOKEN_WIDTH) return name.slice(0, NAME_TOKEN_WIDTH);
+      return token.width === MONTH_FULL_WIDTH ? name : name.slice(0, 1);
+    }
+    case 'day': {
+      if (token.width < NAME_TOKEN_WIDTH) return twoDigits(fields.day, token.width);
+      const name = WEEKDAY_NAMES[fields.weekday] ?? '';
+      return token.width === NAME_TOKEN_WIDTH ? name.slice(0, NAME_TOKEN_WIDTH) : name;
+    }
+    case 'hour': {
+      const hour = hasMeridiem ? fields.hour % HOURS_PER_HALF_DAY || HOURS_PER_HALF_DAY : fields.hour;
+      return twoDigits(hour, token.width);
+    }
+    case 'minute':
+      return twoDigits(fields.minute, token.width);
+    case 'second':
+      return twoDigits(fields.second, token.width);
+    default:
+      return '';
+  }
+};
+
+const renderElapsed = (token: ElapsedToken, fields: DateFields): string => {
+  const total =
+    token.part === 'hour'
+      ? Math.floor(fields.totalSeconds / SECONDS_PER_HOUR)
+      : token.part === 'minute'
+        ? Math.floor(fields.totalSeconds / SECONDS_PER_MINUTE)
+        : fields.totalSeconds;
+  return String(total).padStart(token.width, '0');
+};
+
+const renderDateTokens = (section: DateFormatSection, fields: DateFields): string => {
+  const pieces: string[] = [];
+  for (const token of section.tokens) {
+    switch (token.kind) {
+      case 'datePart':
+        pieces.push(renderDatePart(token, fields, section.hasMeridiem));
+        break;
+      case 'elapsed':
+        pieces.push(renderElapsed(token, fields));
+        break;
+      case 'meridiem':
+        pieces.push(fields.hour < HOURS_PER_HALF_DAY ? (token.short ? 'A' : 'AM') : token.short ? 'P' : 'PM');
+        break;
+      case 'subsecond':
+        pieces.push(`.${fields.subsecond.padEnd(token.digits, '0')}`);
+        break;
+      default:
+        pieces.push(literalFor(token));
+    }
+  }
+  return pieces.join('');
+};
+
+const renderDateSection = (section: DateFormatSection, serial: number, epoch: ExcelEpoch): string | undefined => {
+  const subDigits = Math.min(section.subsecondDigits, MAX_SUBSECOND_DIGITS);
+  const subUnits = 10 ** subDigits;
+  const unitsPerDay = SECONDS_PER_DAY * subUnits;
+  const units = Math.round(serial * unitsPerDay);
+  if (!Number.isSafeInteger(units)) return undefined;
+  const totalSeconds = Math.floor(units / subUnits);
+  const subsecond = String(units % subUnits).padStart(subDigits, '0');
+
+  if (section.elapsed) {
+    return renderDateTokens(section, {
+      year: 0,
+      month: 1,
+      day: 1,
+      weekday: 0,
+      hour: Math.floor(totalSeconds / SECONDS_PER_HOUR) % HOURS_PER_DAY,
+      minute: Math.floor(totalSeconds / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR,
+      second: totalSeconds % SECONDS_PER_MINUTE,
+      totalSeconds,
+      subsecond,
+    });
+  }
+
+  const date = excelToDate(units / unitsPerDay, { epoch });
+  return renderDateTokens(section, {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    weekday: date.getUTCDay(),
+    hour: date.getUTCHours(),
+    minute: date.getUTCMinutes(),
+    second: date.getUTCSeconds(),
+    totalSeconds,
+    subsecond,
+  });
+};
+
+// ---- rendering: entry points ----------------------------------------------
+
+interface PickedSection {
+  readonly section: FormatSection;
+  /** True when the caller has to supply the minus sign itself. */
+  readonly signed: boolean;
+}
+
+/**
+ * Excel picks the section by sign: one section covers everything, two split
+ * at zero, three or four add a dedicated zero branch. Only a lone section has
+ * to be handed the sign, because the others spell their own.
+ */
+const pickSection = (sections: readonly FormatSection[], value: number): PickedSection | undefined => {
+  const first = sections[0];
+  if (first === undefined) return undefined;
+  if (sections.length === 1) return { section: first, signed: value < 0 };
+  if (value < 0) {
+    const negative = sections[1];
+    return negative === undefined ? undefined : { section: negative, signed: false };
+  }
+  if (value === 0 && sections.length > 2) {
+    const zero = sections[2];
+    return zero === undefined ? undefined : { section: zero, signed: false };
+  }
+  return { section: first, signed: false };
+};
+
+const renderSection = (section: FormatSection, magnitude: number, epoch: ExcelEpoch): RenderedSection | undefined => {
+  switch (section.kind) {
+    case 'blank':
+      return { text: '', zero: true };
+    // A numeric value in a text-formatted cell falls back to General.
+    case 'general':
+    case 'text':
+      return { text: renderGeneral(magnitude), zero: magnitude === 0 };
+    case 'number':
+      return renderNumberSection(section, magnitude);
+    case 'fraction':
+      return renderFractionSection(section, magnitude);
+    case 'date': {
+      const text = renderDateSection(section, magnitude, epoch);
+      return text === undefined ? undefined : { text, zero: false };
+    }
+  }
+};
+
+/**
+ * Render a numeric cell value (a plain number, or a date / duration already
+ * converted to its Excel serial). `undefined` means the value has no reading
+ * under this format and the caller should degrade.
+ */
+export function renderNumericValue(format: ParsedFormat, value: number, epoch: ExcelEpoch): string | undefined {
+  if (!Number.isFinite(value)) return undefined;
+  const picked = pickSection(format.sections, value);
+  if (picked === undefined) return undefined;
+  // A negative serial is not a date. Excel fills the cell with `#` characters,
+  // and how many depends on the column width, so there is nothing to print.
+  if (picked.section.kind === 'date' && value < 0) return undefined;
+  const rendered = renderSection(picked.section, Math.abs(value), epoch);
+  if (rendered === undefined) return undefined;
+  if (!picked.signed || rendered.zero) return rendered.text;
+  return `-${rendered.text}`;
+}
+
+/**
+ * Render a string cell value. Only the fourth section of a code applies to
+ * text, plus a lone section that is itself a text layout (`@" pcs"`); under any
+ * other code Excel prints the string unchanged.
+ */
+export function renderTextValue(format: ParsedFormat, text: string): string {
+  const section =
+    format.sections.length === MAX_SECTIONS
+      ? format.sections[MAX_SECTIONS - 1]
+      : format.sections.length === 1
+        ? format.sections[0]
+        : undefined;
+  if (section === undefined) return text;
+  if (section.kind === 'blank') return '';
+  if (section.kind !== 'text') return text;
+  return section.tokens.map((token) => (token.kind === 'textPlaceholder' ? text : literalFor(token))).join('');
+}
