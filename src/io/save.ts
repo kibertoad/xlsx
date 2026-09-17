@@ -1,18 +1,18 @@
 // Public `saveWorkbook` entry point.
 //
-// **Stage 1 minimum**: emits the bare set of parts a Workbook needs to
-// round-trip through `loadWorkbook`:
+// Part names and workbook rIds are settled in one cheap pass over `wb.sheets`
+// before anything is serialised, so `xl/workbook.xml` can go out first. Each
+// sheet is then serialised straight into its ZIP entry and released, so
+// worksheet XML no longer scales the heap: one flush buffer is live at a time
+// instead of the sum of every sheet's part.
 //
-//     [Content_Types].xml
-//     _rels/.rels
-//     xl/workbook.xml
-//     xl/_rels/workbook.xml.rels
-//     xl/worksheets/sheetN.xml ...
-//     xl/styles.xml
-//     xl/sharedStrings.xml             (only when sst is non-empty)
+// The side parts a sheet discovers along the way (tables, comments, drawings,
+// charts, images) are still collected whole and written after the sheets, and
+// the shared-strings table still grows with the workbook. Those two are what
+// bound a large save now.
 //
-// docProps / theme / VBA / drawings / charts are reserved for later iterations
-// — load tolerates their absence.
+// `xl/_rels/workbook.xml.rels` trails the sheet parts because its contents
+// depend on whether serialisation produced any shared strings.
 
 import { escapeXmlAttr, escapeXmlText } from '../utils/escape.js';
 import { chartToBytes } from '../chart/chart-xml.js';
@@ -25,6 +25,7 @@ import { IMAGE_FORMAT_EXTENSION, IMAGE_FORMAT_MIME, type XlsxImageFormat } from 
 import type { XlsxSink } from '../io/sink.js';
 import { OpenXmlIoError, OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
+import { utf8ByteLength } from '../utils/utf8.js';
 import { corePropsToBytes } from '../packaging/core.js';
 import { customPropsToBytes } from '../packaging/custom.js';
 import { extendedPropsToBytes } from '../packaging/extended.js';
@@ -32,12 +33,12 @@ import { addDefault, addOverride, makeManifest, manifestToBytes } from '../packa
 import { makeRelationships, type Relationships, relsToBytes } from '../packaging/relationships.js';
 import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
 import { makeSharedStrings, sharedStringsToBytes } from '../workbook/shared-strings.js';
-import { type Workbook, validateSheetTitle } from '../workbook/workbook.js';
+import { type SheetRef, type Workbook, validateSheetTitle } from '../workbook/workbook.js';
 import type { LegacyComment } from '../worksheet/comments.js';
 import { commentsToBytes, placeholderVmlDrawing } from '../worksheet/comments-xml.js';
 import type { TableDefinition } from '../worksheet/table.js';
 import { tableToBytes } from '../worksheet/table-xml.js';
-import { worksheetToBytes } from '../worksheet/writer.js';
+import { type WorksheetXmlSink, writeWorksheetXml } from '../worksheet/writer.js';
 import { serializeXml as serializeXmlNode } from '../xml/serializer.js';
 import {
   ARC_APP,
@@ -158,6 +159,60 @@ const toUint8ArraySink = (): XlsxSink & { result(): Uint8Array } => {
   };
 };
 
+/** Flush threshold for a streamed part's pending text, in UTF-8 bytes. */
+const STREAM_FLUSH_THRESHOLD_BYTES = 64 * 1024;
+
+/**
+ * Open a ZIP entry and let `serialise` push XML fragments into it, flushing
+ * once the pending text crosses {@link STREAM_FLUSH_THRESHOLD_BYTES}.
+ *
+ * The threshold bounds what accumulates between fragments, not what a single
+ * fragment can be: a fragment is appended whole, so a one-string block such as
+ * `<cols>` or `<hyperlinks>` is still held entire however large it grows. The
+ * per-cell and per-row fragments that scale with sheet size are the ones this
+ * keeps bounded.
+ *
+ * The ZIP writer allows one streaming entry at a time, so this awaits `end()`
+ * before returning and the caller is free to write the next part.
+ */
+const writeStreamedEntry = async (
+  writer: ReturnType<typeof createZipWriter>,
+  archivePath: string,
+  serialise: (emit: WorksheetXmlSink) => void,
+): Promise<void> => {
+  const stream = writer.addStreamingEntry(archivePath);
+  try {
+    const encoder = new TextEncoder();
+    let pending = '';
+    let pendingBytes = 0;
+    serialise((chunk) => {
+      pending += chunk;
+      // UTF-8 byte length, computed without a full encode. `chunk.length`
+      // counts UTF-16 code units, which undercounts CJK by ~3x and would let
+      // the buffer balloon past the threshold on Japanese / Chinese workbooks.
+      pendingBytes += utf8ByteLength(chunk);
+      if (pendingBytes >= STREAM_FLUSH_THRESHOLD_BYTES) {
+        stream.write(encoder.encode(pending));
+        pending = '';
+        pendingBytes = 0;
+      }
+    });
+    if (pending.length > 0) stream.write(encoder.encode(pending));
+  } catch (err) {
+    // Seal the entry so the writer's one streaming slot is free again;
+    // otherwise every later call fails with "a streaming entry is still open"
+    // and buries the real cause. A failure from end() on top of a failed
+    // serialisation is noise, so the original error is the one that escapes.
+    try {
+      await stream.end();
+    } catch {
+      // ignore
+    }
+    throw err;
+  }
+  await stream.end();
+};
+
 /**
  * Validate every sheet title against Excel's character + length rules and
  * confirm titles are unique within the workbook. Catches bad state introduced
@@ -198,30 +253,30 @@ export async function saveWorkbook(wb: Workbook, sink: XlsxSink, opts: SaveOptio
     await saveWorkbookImpl(wb, writer);
   } catch (err) {
     // Release the sink so streaming destinations (`toFile` / `toWritable`)
-    // don't leave a half-written file looking valid. abort() is idempotent so
-    // a successful finalize() above is a no-op here.
-    writer.abort(err);
+    // don't leave a half-written file looking valid. Awaited because `toFile`
+    // cleans up asynchronously: unawaited, this rejects while the partial file
+    // is still on disk. abort() is idempotent so a successful finalize() above
+    // is a no-op here.
+    await writer.abort(err);
     throw err;
   }
 }
 
 async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZipWriter>): Promise<void> {
-  // ---- 1. assemble the per-sheet rels + serialise each worksheet ----------
+  // ---- 1. name every sheet part and claim its workbook rId ----------------
   const sst = makeSharedStrings();
-  interface SheetEmit {
+  interface SheetPlan {
+    ref: SheetRef;
     id: string;
     target: string;
-    bytes: Uint8Array;
     /** OOXML relationship type used in workbook.xml.rels. */
     relType: string;
-    /** ZIP archive path the bytes are written to. */
+    /** ZIP archive path the part is written to. */
     archivePath: string;
     /** Override content type for [Content_Types].xml. */
     contentType: string;
-    /** Per-sheet rels — populated only if the sheet has hyperlinks / drawings / etc. */
-    rels?: Relationships;
   }
-  const sheetEmits: SheetEmit[] = [];
+  const sheetPlans: SheetPlan[] = [];
   // Workbook-global table counter so xl/tables/tableN.xml ids stay unique.
   const tableEmits: Array<{ id: number; bytes: Uint8Array }> = [];
   let nextTableId = 1;
@@ -305,7 +360,11 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
     nextRIdCursor++;
     return id;
   };
-  wb.sheets.forEach((ref, _i) => {
+  // Part names and workbook-level rIds are pure counter arithmetic, so they are
+  // settled here, before anything is serialised. That is what lets workbook.xml
+  // (which needs every sheet's rId) go out ahead of the sheet parts while the
+  // sheets themselves stream one at a time below.
+  for (const ref of wb.sheets) {
     const isChartsheet = ref.kind === 'chartsheet';
     const target = isChartsheet ? `chartsheets/sheet${nextChartsheetId}.xml` : `worksheets/sheet${nextWorksheetId}.xml`;
     const archivePath = isChartsheet
@@ -313,6 +372,30 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
       : `xl/worksheets/sheet${nextWorksheetId}.xml`;
     if (isChartsheet) nextChartsheetId++;
     else nextWorksheetId++;
+    sheetPlans.push({
+      ref,
+      id: ref.rId ?? allocateRId(),
+      target,
+      relType: isChartsheet ? CHARTSHEET_REL : `${REL_NS}/worksheet`,
+      archivePath,
+      contentType: isChartsheet ? CHARTSHEET_TYPE : WORKSHEET_TYPE,
+    });
+  }
+
+  // ---- 2. workbook.xml ----------------------------------------------------
+  const workbookXml = serializeWorkbookXml(
+    wb,
+    sheetPlans.map((p) => p.id),
+  );
+  await writer.addEntry(ARC_WORKBOOK, new TextEncoder().encode(workbookXml));
+
+  // ---- 3. each worksheet / chartsheet (and its rels file when present) ----
+  // A named function rather than the loop body below: the register* callbacks
+  // close over the workbook-global part counters, and `no-loop-func` rejects a
+  // closure over a reassigned `let` when it is declared inside a loop. The
+  // callbacks are rebuilt per sheet either way.
+  const writeSheetPart = async (plan: SheetPlan): Promise<void> => {
+    const { ref, archivePath } = plan;
     const sheetRels = makeRelationships();
     // Pre-claim every captured relsExtras rId so freshly allocated modeled rels
     // never clash. The extras themselves are appended to sheetRels at the end
@@ -492,23 +575,28 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
       drawingEmits.push(emit);
       return { rId };
     };
-    let bytes: Uint8Array;
     if (ref.kind === 'worksheet') {
-      bytes = worksheetToBytes(ref.sheet, {
-        sharedStrings: sst,
-        styles: wb.styles,
-        date1904: wb.date1904,
-        rels: sheetRels,
-        registerTable,
-        registerComments,
-        registerDrawing,
+      // Streamed rather than materialised: a sheet with a million cells
+      // deflates to a few MB but would hold hundreds of MB as fragments plus
+      // the joined string plus the encoded bytes if built in one piece.
+      await writeStreamedEntry(writer, archivePath, (emit) => {
+        writeWorksheetXml(ref.sheet, {
+          sharedStrings: sst,
+          styles: wb.styles,
+          date1904: wb.date1904,
+          rels: sheetRels,
+          registerTable,
+          registerComments,
+          registerDrawing,
+        }, emit);
       });
     } else {
       // Chartsheet: register the drawing (if any), then emit the chartsheet
-      // part with the resulting r:id baked in.
+      // part with the resulting r:id baked in. Chartsheets carry no cell grid,
+      // so they stay small and go out in one piece.
       let drawingRId: string | undefined;
       if (ref.sheet.drawing) drawingRId = registerDrawing(ref.sheet.drawing).rId;
-      bytes = chartsheetToBytes(ref.sheet, drawingRId !== undefined ? { drawingRId } : {});
+      await writer.addEntry(archivePath, chartsheetToBytes(ref.sheet, drawingRId !== undefined ? { drawingRId } : {}));
     }
     // Append captured per-sheet rels passthrough (pivotTable / queryTable /
     // printerSettings / oleObject / customProperty / threadedComment …)
@@ -517,29 +605,29 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
     for (const e of sheetRelsExtras) {
       sheetRels.rels.push({ id: e.id, type: e.type, target: e.target });
     }
-    const sheetRId = ref.rId ?? allocateRId();
-    const emit: SheetEmit = {
-      id: sheetRId,
-      target,
-      bytes,
-      relType: isChartsheet ? CHARTSHEET_REL : `${REL_NS}/worksheet`,
-      archivePath,
-      contentType: isChartsheet ? CHARTSHEET_TYPE : WORKSHEET_TYPE,
-    };
-    if (sheetRels.rels.length > 0) emit.rels = sheetRels;
-    sheetEmits.push(emit);
-  });
+    if (sheetRels.rels.length > 0) {
+      // The rels file sits alongside its part: `xl/<dir>/_rels/<file>.rels`.
+      const slash = archivePath.lastIndexOf('/');
+      const dir = archivePath.slice(0, slash);
+      const file = archivePath.slice(slash + 1);
+      await writer.addEntry(`${dir}/_rels/${file}.rels`, relsToBytes(sheetRels));
+    }
+  };
+  // One sheet at a time: the ZIP writer permits a single open streaming entry
+  // and rejects a second one, so this is what keeps a sheet's bytes from having
+  // to be held while another sheet is written.
+  for (const plan of sheetPlans) await writeSheetPart(plan);
 
-  // ---- 2. workbook rels -- sheets first, then sst (if any), then styles, then
+  // ---- 4. workbook rels -- sheets first, then sst (if any), then styles, then
   // theme / vbaProject, then any captured workbookRelsExtras (e.g.
   // pivotCacheDefinition rels referenced by `<pivotCaches>`). Modeled non-sheet
   // rels prefer the rId captured at load time so any captured extras XML using
   // that Id still resolves after the round-trip.
   const wbRels = makeRelationships();
-  wbRels.rels = sheetEmits.map((e) => ({
-    id: e.id,
-    type: e.relType,
-    target: e.target,
+  wbRels.rels = sheetPlans.map((p) => ({
+    id: p.id,
+    type: p.relType,
+    target: p.target,
   }));
   const orig = wb.workbookRelOriginalIds;
   if (sst.entries.length > 0) {
@@ -574,25 +662,12 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
     }
   }
 
-  // ---- 3. workbook.xml ----------------------------------------------------
-  const workbookXml = serializeWorkbookXml(
-    wb,
-    sheetEmits.map((e) => e.id),
-  );
-  await writer.addEntry(ARC_WORKBOOK, new TextEncoder().encode(workbookXml));
+  // Written after the sheet parts, not before them: whether a
+  // `sharedStrings.xml` rel belongs here is only known once every sheet has
+  // been serialised, since that is what fills the shared-strings table. OPC
+  // resolves parts by name, so the position of a rels entry in the archive
+  // carries no meaning.
   await writer.addEntry(ARC_WORKBOOK_RELS, relsToBytes(wbRels));
-
-  // ---- 4. each worksheet / chartsheet (and its rels file when present) --
-  for (const e of sheetEmits) {
-    await writer.addEntry(e.archivePath, e.bytes);
-    if (e.rels) {
-      // The rels file sits alongside its part: `xl/<dir>/_rels/<file>.rels`.
-      const slash = e.archivePath.lastIndexOf('/');
-      const dir = e.archivePath.slice(0, slash);
-      const file = e.archivePath.slice(slash + 1);
-      await writer.addEntry(`${dir}/_rels/${file}.rels`, relsToBytes(e.rels));
-    }
-  }
 
   // ---- 4b. table parts ----------------------------------------------------
   for (const t of tableEmits) {
@@ -700,8 +775,8 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
     ? 'application/vnd.ms-excel.sheet.macroEnabled.main+xml'
     : XLSX_TYPE;
   addOverride(manifest, `/${ARC_WORKBOOK}`, workbookContentType);
-  for (const e of sheetEmits) {
-    addOverride(manifest, `/${e.archivePath}`, e.contentType);
+  for (const p of sheetPlans) {
+    addOverride(manifest, `/${p.archivePath}`, p.contentType);
   }
   addOverride(manifest, `/${ARC_STYLE}`, STYLES_TYPE);
   if (sst.entries.length > 0) {

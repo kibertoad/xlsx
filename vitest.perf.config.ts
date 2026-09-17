@@ -12,9 +12,8 @@ export default defineConfig({
     include: ['tests/perf/**/*.test.ts'],
     // Bench files run via `pnpm bench` (vitest bench), not the test runner.
     exclude: ['tests/perf/**/*.bench.ts', 'node_modules', 'dist', 'reference'],
-    // The heap gate measures a delta against a baseline taken right after a
-    // collection; without --expose-gc the baseline still holds the fixture
-    // builder's garbage and the delta means nothing.
+    // Heap and retention gates require a collected baseline in each worker.
+    pool: 'forks',
     execArgv: ['--expose-gc'],
   },
 });
