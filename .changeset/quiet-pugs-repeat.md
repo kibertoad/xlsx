@@ -13,8 +13,8 @@ and fed in 64 KB slices, whatever the producer hands over, and the event queue
 drains between writes.
 
 On a 200k-row, 5-column sheet, peak heap for `iterRows({ minRow: 2 })` drops
-from about 1250 MB to about 165 MB, and for a full-sheet walk from about
-220 MB to about 155 MB.
+from about 1240 MB to about 70 MB, and for a full-sheet walk from about
+200 MB to about 60 MB.
 
 Three changes in behavior come with it:
 
