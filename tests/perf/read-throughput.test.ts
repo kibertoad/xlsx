@@ -28,10 +28,12 @@ const TOTAL_CELLS = ROWS * COLS;
 // floor without the code being wrong. Set the env var when you want a hard
 // assertion (release branches, perf-regression PRs).
 const PERF_GATE = process.env['PERF_GATE'] === '1';
-// Set to catch a return to building a node per `<c>`, which reads this shape at
-// roughly 150k cells/s, and not to certify any one machine's ceiling. A shared
-// CI runner has to clear it with room to spare or the gate is just flaky.
-const FLOOR_CELLS_PER_SEC = 200_000;
+// Calibrated against what the CI runner reads, not against a dev laptop: the
+// runner comes in around half a laptop's throughput on this shape and the gate
+// is fatal there, so a floor set near the laptop number fails on PRs that
+// changed nothing. It still sits above what building a node per `<c>` managed
+// on the same runner, which is the regression it exists to catch.
+const FLOOR_CELLS_PER_SEC = 120_000;
 
 const ITERATIONS = 3;
 

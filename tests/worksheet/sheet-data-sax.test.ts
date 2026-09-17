@@ -183,3 +183,125 @@ describe('cell shapes the walk has to keep apart', () => {
     expect(cell?.styleId).toBe(3);
   });
 });
+
+describe('text that looks like the span but is not markup', () => {
+  // Each of these reads the same cell as a part with no decoy in it. Getting
+  // the span wrong here would not throw: both halves of the split would accept
+  // what it produced, and the sheet would come back empty.
+  const cell = '<row r="1"><c r="A1"><v>7</v></c></row>';
+
+  it('steps over a self-closing <sheetData/> quoted in a comment', () => {
+    const ws = read(`<worksheet xmlns="${MAIN_NS}"><!-- <sheetData/> --><sheetData>${cell}</sheetData></worksheet>`);
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('steps over an open <sheetData> quoted in a comment', () => {
+    const ws = read(`<worksheet xmlns="${MAIN_NS}"><!-- <sheetData> --><sheetData>${cell}</sheetData></worksheet>`);
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('steps over a <sheetData> quoted in a prolog processing instruction', () => {
+    const ws = read(
+      `<?mso-application progid="<sheetData/>"?><worksheet xmlns="${MAIN_NS}"><sheetData>${cell}</sheetData></worksheet>`,
+    );
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('does not take an element whose name merely starts with sheetData', () => {
+    const ws = read(
+      `<worksheet xmlns="${MAIN_NS}"><sheetDataFoo><bar/></sheetDataFoo><sheetData>${cell}</sheetData></worksheet>`,
+    );
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('keeps a </sheetData> a cell value carries in a CDATA section', () => {
+    const ws = read(sheet('<row r="1"><c r="A1" t="str"><v><![CDATA[x</sheetData>y]]></v></c></row>'));
+    expect(getCell(ws, 1, 1)?.value).toBe('x</sheetData>y');
+  });
+
+  it('keeps reading past a </sheetData> quoted in a comment inside the body', () => {
+    const ws = read(sheet(`<!-- </sheetData> -->${cell}`));
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('takes the first close tag, not the last', () => {
+    const ws = read(`<worksheet xmlns="${MAIN_NS}"><sheetData>${cell}</sheetData><!-- </sheetData> --></worksheet>`);
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('matches the close tag to the prefix the open tag used', () => {
+    const ws = read(
+      `<x:worksheet xmlns:x="${MAIN_NS}"><!-- <x:sheetData/> -->` +
+        '<x:sheetData><x:row r="1"><x:c r="A1"><x:v>7</x:v></x:c></x:row></x:sheetData>' +
+        '</x:worksheet>',
+    );
+    expect(getCell(ws, 1, 1)?.value).toBe(7);
+  });
+
+  it('reads no rows when the only <sheetData> in the part is a quoted one', () => {
+    const ws = read(`<worksheet xmlns="${MAIN_NS}"><!-- <sheetData><row r="1"/></sheetData> --></worksheet>`);
+    expect(ws.rows.size).toBe(0);
+  });
+
+  it('refuses a comment that is never closed rather than scanning into it', () => {
+    expect(() => read(`<worksheet xmlns="${MAIN_NS}"><!-- <sheetData>${cell}</sheetData></worksheet>`)).toThrow(
+      OpenXmlSchemaError,
+    );
+  });
+
+  it('refuses a CDATA section in the body that is never closed', () => {
+    expect(() => read(sheet('<row r="1"><c r="A1" t="str"><v><![CDATA[x</v></c></row>'))).toThrow(OpenXmlSchemaError);
+  });
+});
+
+describe('mixed content inside a cell', () => {
+  // The node tree refused these before the walk existed. Ignoring the child
+  // and keeping the text produces a plausible wrong value, which is the one
+  // outcome this reader prefers a failed load to.
+  it('refuses an element interleaved with the text of a <v>', () => {
+    expect(() => read(sheet('<row r="1"><c r="A1" t="str"><v>a<b/>c</v></c></row>'))).toThrow(
+      /mixed content not supported \(<b> inside <v> of <c r="A1">\)/,
+    );
+  });
+
+  it('refuses an element inside a <v> that holds no text of its own', () => {
+    expect(() => read(sheet('<row r="1"><c r="A1" t="str"><v><b/></v></c></row>'))).toThrow(OpenXmlSchemaError);
+  });
+
+  it('refuses an element interleaved with the text of an <f>', () => {
+    expect(() => read(sheet('<row r="1"><c r="A1"><f>B1<b/>+1</f></c></row>'))).toThrow(OpenXmlSchemaError);
+  });
+
+  it('refuses text interleaved with the runs of an <is>', () => {
+    expect(() => read(sheet('<row r="1"><c r="A1" t="inlineStr"><is>lead<t>x</t>trail</is></c></row>'))).toThrow(
+      /mixed content not supported \(text between elements under <is>\)/,
+    );
+  });
+
+  it('ignores the whitespace of a pretty-printed <is>', () => {
+    const ws = read(sheet('<row r="1"><c r="A1" t="inlineStr"><is>\n  <t>x</t>\n</is></c></row>'));
+    expect(getCell(ws, 1, 1)?.value).toBe('x');
+  });
+
+  it('refuses a processing instruction inside the body', () => {
+    expect(() => read(sheet('<row r="1"><?pick?><c r="A1"><v>1</v></c></row>'))).toThrow(
+      /processing instructions are not supported/,
+    );
+  });
+});
+
+describe('the DTD prescan still covers the whole part', () => {
+  // `parseXml` runs the prescan, and it no longer sees the cell span. These
+  // pin the error identity a caller matches on, not just that it throws.
+  it('names a DOCTYPE inside the body as a DTD declaration', () => {
+    expect(() => read(sheet('<!DOCTYPE row><row r="1"/>'))).toThrow(
+      'DTD declarations are not permitted in OOXML payloads',
+    );
+  });
+
+  it('names an ENTITY declaration inside the body', () => {
+    expect(() => read(sheet('<!ENTITY x "y"><row r="1"/>'))).toThrow(
+      'Entity declarations are not permitted in OOXML payloads',
+    );
+  });
+});
