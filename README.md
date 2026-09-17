@@ -169,17 +169,52 @@ see the [Recipes](https://baseballyama.github.io/@office-kit/xlsx/docs/recipes).
 
 ```ts
 import { loadWorkbook, workbookToBytes } from '@office-kit/xlsx/io';
+import { getSheetByIndex } from '@office-kit/xlsx/workbook';
 import { setCell } from '@office-kit/xlsx/worksheet';
 import { fromBuffer } from '@office-kit/xlsx/node';
 import { readFile, writeFile } from 'node:fs/promises';
 
 const wb = await loadWorkbook(fromBuffer(await readFile('input.xlsx')));
-const sheet = wb.sheets[0];
-if (sheet?.kind === 'worksheet') {
-  setCell(sheet.sheet, /* row */ 1, /* col */ 1, 'Hello from @office-kit/xlsx');
+const sheet = getSheetByIndex(wb, 0);
+if (sheet) {
+  setCell(sheet, /* row */ 1, /* col */ 1, 'Hello from @office-kit/xlsx');
 }
 await writeFile('output.xlsx', await workbookToBytes(wb));
 ```
+
+`getSheetByIndex` returns `undefined` for an out-of-range index and for a tab
+holding a chartsheet rather than a worksheet, so the one check above covers
+both. Look sheets up by name with `getSheet(wb, 'Sheet1')`.
+
+### Two answers to "where does the data end"
+
+A sheet often carries formatting past its content: someone formats 200 rows and
+types into 4. Excel keeps the two readings of that sheet apart, and so does
+this library.
+
+`getDataExtent` counts every cell the file materialises, including one that
+exists only to carry a style. That is Excel's used range and the `<dimension>`
+element Excel writes, and it is what bounds `iterRows` / `iterValues` by
+default. `getValueExtent` counts only cells whose `value` is not `null`, which
+is what a caller mapping rows to records means by "the data". Pass
+`extent: 'values'` to iterate that box instead:
+
+```ts
+import { getDataExtent, getValueExtent, iterValues } from '@office-kit/xlsx/worksheet';
+
+getDataExtent(ws)?.maxRow; // 200, the used range
+getValueExtent(ws)?.maxRow; // 4
+
+for (const row of iterValues(ws, { extent: 'values' })) {
+  // four rows, not 200
+}
+```
+
+Both extents pad the same way: every yielded row has the full extent width,
+position `i` is column `minCol + i` for the whole iteration, and a position
+with no cell is `null`. Blank rows inside the box are still yielded, so drop
+them with `filter((row) => row.some((v) => v !== null))` when only rows
+carrying something are wanted.
 
 ### Read directly from disk (Node)
 

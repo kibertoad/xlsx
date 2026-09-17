@@ -338,14 +338,6 @@ export function getSheetIndex(wb: Workbook, title: string): number {
 }
 
 /**
- * True iff the workbook has a sheet (worksheet *or* chartsheet) with the given
- * title. Thin shortcut over {@link getSheetIndex}.
- */
-export function hasSheet(wb: Workbook, title: string): boolean {
-  return getSheetIndex(wb, title) >= 0;
-}
-
-/**
  * Count sheets in the workbook, with optional kind/state filters. Mirrors the
  * filter shape of {@link getSheetTitles} but skips the array allocation when
  * the caller only needs the count.
@@ -382,28 +374,6 @@ export function getSheetTitles(
   return out;
 }
 
-/**
- * True iff the workbook has a **worksheet** (not a chartsheet) with the given
- * title. Distinct from {@link hasSheet} (matches either kind) and {@link
- * hasChartsheet} (chartsheets only).
- */
-export function hasWorksheet(wb: Workbook, title: string): boolean {
-  return getSheet(wb, title) !== undefined;
-}
-
-/**
- * True iff the workbook has a **chartsheet** (not a worksheet) with the given
- * title. Distinct from {@link hasSheet}, which matches either kind. Use this
- * when the caller needs to discriminate before calling chartsheet-only
- * operations.
- */
-export function hasChartsheet(wb: Workbook, title: string): boolean {
-  for (const ref of wb.sheets) {
-    if (ref.kind === 'chartsheet' && ref.sheet.title === title) return true;
-  }
-  return false;
-}
-
 /** Look up a Worksheet by title. Returns undefined for missing names or chartsheets. */
 export function getSheet(wb: Workbook, title: string): Worksheet | undefined {
   for (const s of wb.sheets) {
@@ -412,7 +382,13 @@ export function getSheet(wb: Workbook, title: string): Worksheet | undefined {
   return undefined;
 }
 
-/** Look up a Worksheet by index in the sheets array. Returns undefined for chartsheet slots. */
+/**
+ * Look up a Worksheet by its 0-based tab-strip index. Returns `undefined` for
+ * an out-of-range index and for a slot holding a chartsheet, so
+ * `getSheetByIndex(wb, 0)` is the whole of "give me the first worksheet of
+ * this upload": it discriminates the sheet union and bounds-checks the index,
+ * neither of which `wb.sheets[0]` does for the caller.
+ */
 export function getSheetByIndex(wb: Workbook, idx: number): Worksheet | undefined {
   const ref = wb.sheets[idx];
   return ref?.kind === 'worksheet' ? ref.sheet : undefined;
@@ -460,7 +436,12 @@ export function addChartsheet(
   return cs;
 }
 
-/** All worksheet titles, in display order. */
+/**
+ * Every sheet title in tab-strip order, chartsheets included. `sheetNames`
+ * answers "what tabs does this workbook have", so `sheetNames(wb).includes(t)`
+ * is the containment test; a title in the list is not necessarily a worksheet,
+ * which is why {@link getSheet} still returns `undefined` for some of them.
+ */
 export function sheetNames(wb: Workbook): string[] {
   return wb.sheets.map((s) => s.sheet.title);
 }
