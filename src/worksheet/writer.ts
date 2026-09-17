@@ -1,13 +1,11 @@
 // Worksheet XML writer.
 //
-// **Stage 1**: hand-rolled serialiser for `<sheetData>/<row>/<c>` covering the
-// common cell-value shapes — number / string (via shared strings) / boolean /
-// error / formula. Streaming through XmlStreamWriter + dimension / sheetView /
-// cols / mergeCells lands in later iterations of the loop.
-//
-// The acceptance criterion (1M cell write in ~5s on M1) needs SAX, but stage-1
-// prioritises correctness — once loadWorkbook → saveWorkbook round-trips, we
-// can swap the body for a streaming writer without callers noticing.
+// Hand-rolled serialiser for the worksheet part. The body is emitted as a
+// stream of XML fragments (see `writeWorksheetXml`) rather than returned as one
+// string, so `saveWorkbook` can deflate a sheet as it is built instead of
+// holding the whole part in memory. String building rather than an XML node
+// tree because a cell is a handful of attributes with no nesting: a tree would
+// cost an object per cell and buy no structure the strings don't already have.
 
 import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell.js';
 import type { Relationships } from '../packaging/relationships.js';
@@ -93,36 +91,59 @@ export interface WorksheetWriteContext {
 const XML_HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 /**
- * Serialise a worksheet to its `xl/worksheets/sheetN.xml` payload. The function
- * mutates `ctx.sharedStrings` — every plain-string cell adds (or dedupes) into
- * the table; the caller is responsible for emitting the resulting sst at the
- * end of the package write.
+ * Serialise a worksheet to its complete `xl/worksheets/sheetN.xml` payload.
+ * Prefer {@link writeWorksheetXml} when the bytes are headed straight for a
+ * stream: this holds the whole part in memory to hand it back in one piece.
  */
 export function worksheetToBytes(ws: Worksheet, ctx: WorksheetWriteContext): Uint8Array {
-  return new TextEncoder().encode(serializeWorksheet(ws, ctx));
+  const parts: string[] = [];
+  writeWorksheetXml(ws, ctx, (chunk) => {
+    parts.push(chunk);
+  });
+  return new TextEncoder().encode(parts.join(''));
 }
 
-function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
+/**
+ * Receives the worksheet XML as a sequence of fragments, in document order.
+ * Concatenating every fragment yields the complete part; no fragment is ever
+ * revisited, so a consumer can encode and forward each one and keep nothing.
+ */
+export type WorksheetXmlSink = (chunk: string) => void;
+
+/**
+ * Serialise a worksheet into `emit`, one XML fragment at a time.
+ *
+ * Emitting rather than returning is what lets `saveWorkbook` push a sheet
+ * through the ZIP deflate stream as it is built: a sheet with a million cells
+ * would otherwise hold a million-entry fragment array, the joined string and
+ * the encoded bytes live at once, all to produce a part that deflates to a few
+ * MB. `worksheetToBytes` keeps the collect-and-join behaviour for callers that
+ * genuinely want the whole part in hand.
+ *
+ * Mutates `ctx.sharedStrings`: every plain-string cell adds (or dedupes) into
+ * the table, so the caller must emit the resulting sst after the last sheet.
+ */
+export function writeWorksheetXml(ws: Worksheet, ctx: WorksheetWriteContext, emit: WorksheetXmlSink): void {
   // `Requires="x14"` on the oleObjects / controls wrapper names a prefix, so
-  // the namespace has to be declared on the root — where Excel declares it.
+  // the namespace has to be declared on the root, where Excel declares it.
   const x14Decl = ws.oleObjects.length > 0 || ws.controls.length > 0 ? ` xmlns:mc="${MARKUP_COMPAT_NS}" xmlns:x14="${X14_NS}"` : '';
-  const parts: string[] = [
-    XML_HEADER,
+  emit(XML_HEADER);
+  emit(
     `<worksheet xmlns="${SHEET_MAIN_NS}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"${x14Decl}>`,
-  ];
+  );
   if (ws.sheetProperties) {
     const sp = serializeSheetProperties(ws.sheetProperties);
-    if (sp) parts.push(sp);
+    if (sp) emit(sp);
   }
   if (ws.bodyExtras?.beforeSheetData) {
-    for (const node of ws.bodyExtras.beforeSheetData) parts.push(serializeBodyExtraNode(node));
+    for (const node of ws.bodyExtras.beforeSheetData) emit(serializeBodyExtraNode(node));
   }
-  parts.push(serializeDimension(ws));
-  if (ws.views.length > 0) parts.push(serializeSheetViews(ws.views));
+  emit(serializeDimension(ws));
+  if (ws.views.length > 0) emit(serializeSheetViews(ws.views));
   const sheetFormatPr = serializeSheetFormatPr(ws);
-  if (sheetFormatPr) parts.push(sheetFormatPr);
-  if (ws.columnDimensions.size > 0) parts.push(serializeCols(ws.columnDimensions));
-  parts.push('<sheetData>');
+  if (sheetFormatPr) emit(sheetFormatPr);
+  if (ws.columnDimensions.size > 0) emit(serializeCols(ws.columnDimensions));
+  emit('<sheetData>');
   // Iterate rows in numeric order so writer output is deterministic.
   const rowKeys = [...ws.rows.keys()].sort((a, b) => a - b);
   // Walk the union of populated rows + rowDimension entries so dimension-only
@@ -136,11 +157,11 @@ function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
     if ((!row || row.size === 0) && !dim) continue;
     const dimAttrs = dim ? serializeRowDimensionAttrs(dim) : '';
     if (!row || row.size === 0) {
-      parts.push(`<row r="${rowIdx}"${dimAttrs}/>`);
+      emit(`<row r="${rowIdx}"${dimAttrs}/>`);
       continue;
     }
     const colKeys = [...row.keys()].sort((a, b) => a - b);
-    parts.push(`<row r="${rowIdx}"${dimAttrs}>`);
+    emit(`<row r="${rowIdx}"${dimAttrs}>`);
     for (const colIdx of colKeys) {
       const cell = row.get(colIdx);
       if (!cell) continue;
@@ -150,49 +171,49 @@ function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
           (!Number.isInteger(cell.styleId) || cell.styleId < 0 || cell.styleId >= ctx.styles.cellXfs.length)) {
         throw unknownStyleId(cell, ws.title, ctx.styles.cellXfs.length);
       }
-      parts.push(serializeCell(cell, ctx));
+      emit(serializeCell(cell, ctx));
     }
-    parts.push('</row>');
+    emit('</row>');
   }
-  parts.push('</sheetData>');
+  emit('</sheetData>');
   // sheetProtection sits between sheetData and mergeCells per ECMA-376
   // §18.3.1.85.
   if (ws.sheetProtection) {
     const sp = serializeSheetProtection(ws.sheetProtection);
-    if (sp) parts.push(sp);
+    if (sp) emit(sp);
   }
-  if (ws.protectedRanges.length > 0) parts.push(serializeProtectedRanges(ws.protectedRanges));
+  if (ws.protectedRanges.length > 0) emit(serializeProtectedRanges(ws.protectedRanges));
   if (ws.scenarios) {
     const sc = serializeScenarioList(ws.scenarios);
-    if (sc) parts.push(sc);
+    if (sc) emit(sc);
   }
   // Excel's element order: autoFilter sits between sheetData and mergeCells.
-  if (ws.autoFilter) parts.push(serializeAutoFilter(ws.autoFilter));
-  if (ws.sortState) parts.push(serializeSortState(ws.sortState));
+  if (ws.autoFilter) emit(serializeAutoFilter(ws.autoFilter));
+  if (ws.sortState) emit(serializeSortState(ws.sortState));
   if (ws.dataConsolidate) {
     const dc = serializeDataConsolidate(ws.dataConsolidate);
-    if (dc) parts.push(dc);
+    if (dc) emit(dc);
   }
   if (ws.mergedCells.length > 0) {
-    parts.push(`<mergeCells count="${ws.mergedCells.length}">`);
+    emit(`<mergeCells count="${ws.mergedCells.length}">`);
     for (const range of ws.mergedCells) {
-      parts.push(`<mergeCell ref="${rangeToString(range)}"/>`);
+      emit(`<mergeCell ref="${rangeToString(range)}"/>`);
     }
-    parts.push('</mergeCells>');
+    emit('</mergeCells>');
   }
-  if (ws.customSheetViews.length > 0) parts.push(serializeCustomSheetViews(ws.customSheetViews));
+  if (ws.customSheetViews.length > 0) emit(serializeCustomSheetViews(ws.customSheetViews));
   if (ws.phoneticPr) {
     const pp = serializePhoneticPr(ws.phoneticPr);
-    if (pp) parts.push(pp);
+    if (pp) emit(pp);
   }
   for (const cf of ws.conditionalFormatting) {
-    parts.push(serializeConditionalFormatting(cf));
+    emit(serializeConditionalFormatting(cf));
   }
   if (ws.dataValidations.length > 0) {
-    parts.push(serializeDataValidations(ws.dataValidations));
+    emit(serializeDataValidations(ws.dataValidations));
   }
   if (ws.hyperlinks.length > 0) {
-    parts.push(serializeHyperlinks(ws.hyperlinks, ctx.rels));
+    emit(serializeHyperlinks(ws.hyperlinks, ctx.rels));
   }
   // afterSheetData extras live between hyperlinks and the drawing/
   // legacyDrawing/tableParts tail. ECMA-376 puts printOptions / pageMargins /
@@ -203,59 +224,58 @@ function serializeWorksheet(ws: Worksheet, ctx: WorksheetWriteContext): string {
   // Excel-compatible without requiring fine-grained positional tracking.
   if (ws.printOptions) {
     const po = serializePrintOptions(ws.printOptions);
-    if (po) parts.push(po);
+    if (po) emit(po);
   }
-  if (ws.pageMargins) parts.push(serializePageMargins(ws.pageMargins));
+  if (ws.pageMargins) emit(serializePageMargins(ws.pageMargins));
   if (ws.pageSetup) {
     const ps = serializePageSetup(ws.pageSetup);
-    if (ps) parts.push(ps);
+    if (ps) emit(ps);
   }
   if (ws.headerFooter) {
     const hf = serializeHeaderFooter(ws.headerFooter);
-    if (hf) parts.push(hf);
+    if (hf) emit(hf);
   }
-  if (ws.rowBreaks.length > 0) parts.push(serializePageBreaks(ws.rowBreaks, 'rowBreaks'));
-  if (ws.colBreaks.length > 0) parts.push(serializePageBreaks(ws.colBreaks, 'colBreaks'));
-  if (ws.customProperties.length > 0) parts.push(serializeWorksheetCustomProperties(ws.customProperties));
+  if (ws.rowBreaks.length > 0) emit(serializePageBreaks(ws.rowBreaks, 'rowBreaks'));
+  if (ws.colBreaks.length > 0) emit(serializePageBreaks(ws.colBreaks, 'colBreaks'));
+  if (ws.customProperties.length > 0) emit(serializeWorksheetCustomProperties(ws.customProperties));
   if (ws.bodyExtras?.afterSheetData) {
-    for (const node of ws.bodyExtras.afterSheetData) parts.push(serializeBodyExtraNode(node));
+    for (const node of ws.bodyExtras.afterSheetData) emit(serializeBodyExtraNode(node));
   }
   if (ws.cellWatches.length > 0) {
-    parts.push(serializeCellWatches(ws.cellWatches));
+    emit(serializeCellWatches(ws.cellWatches));
   }
   if (ws.ignoredErrors.length > 0) {
-    parts.push(serializeIgnoredErrors(ws.ignoredErrors));
+    emit(serializeIgnoredErrors(ws.ignoredErrors));
   }
-  if (ws.smartTags.length > 0) parts.push(serializeSmartTags(ws.smartTags));
+  if (ws.smartTags.length > 0) emit(serializeSmartTags(ws.smartTags));
   if (ws.drawing && ctx.registerDrawing) {
     const { rId } = ctx.registerDrawing(ws.drawing);
-    parts.push(`<drawing r:id="${escapeXmlAttr(rId)}"/>`);
+    emit(`<drawing r:id="${escapeXmlAttr(rId)}"/>`);
   }
   if (ws.legacyComments.length > 0 && ctx.registerComments) {
     const { vmlRelId } = ctx.registerComments(ws.legacyComments);
-    parts.push(`<legacyDrawing r:id="${escapeXmlAttr(vmlRelId)}"/>`);
+    emit(`<legacyDrawing r:id="${escapeXmlAttr(vmlRelId)}"/>`);
   } else if (ws.legacyDrawingRId !== undefined) {
-    parts.push(`<legacyDrawing r:id="${escapeXmlAttr(ws.legacyDrawingRId)}"/>`);
+    emit(`<legacyDrawing r:id="${escapeXmlAttr(ws.legacyDrawingRId)}"/>`);
   }
   if (ws.legacyDrawingHFRId !== undefined) {
-    parts.push(`<legacyDrawingHF r:id="${escapeXmlAttr(ws.legacyDrawingHFRId)}"/>`);
+    emit(`<legacyDrawingHF r:id="${escapeXmlAttr(ws.legacyDrawingHFRId)}"/>`);
   }
-  if (ws.oleObjects.length > 0) parts.push(wrapInX14Choice(serializeOleObjects(ws.oleObjects)));
-  if (ws.controls.length > 0) parts.push(wrapInX14Choice(serializeControls(ws.controls)));
+  if (ws.oleObjects.length > 0) emit(wrapInX14Choice(serializeOleObjects(ws.oleObjects)));
+  if (ws.controls.length > 0) emit(wrapInX14Choice(serializeControls(ws.controls)));
   if (ws.backgroundPictureRId !== undefined) {
-    parts.push(`<picture r:id="${escapeXmlAttr(ws.backgroundPictureRId)}"/>`);
+    emit(`<picture r:id="${escapeXmlAttr(ws.backgroundPictureRId)}"/>`);
   }
-  if (ws.webPublishItems.length > 0) parts.push(serializeWebPublishItems(ws.webPublishItems));
+  if (ws.webPublishItems.length > 0) emit(serializeWebPublishItems(ws.webPublishItems));
   if (ws.tables.length > 0 && ctx.registerTable) {
-    parts.push(`<tableParts count="${ws.tables.length}">`);
+    emit(`<tableParts count="${ws.tables.length}">`);
     for (const t of ws.tables) {
       const { rId } = ctx.registerTable(t);
-      parts.push(`<tablePart r:id="${escapeXmlAttr(rId)}"/>`);
+      emit(`<tablePart r:id="${escapeXmlAttr(rId)}"/>`);
     }
-    parts.push('</tableParts>');
+    emit('</tableParts>');
   }
-  parts.push('</worksheet>');
-  return parts.join('');
+  emit('</worksheet>');
 }
 
 const escapeXmlText = escapeXmlTextShared;

@@ -173,18 +173,22 @@ export function toFile(path: string): XlsxSink & { toBytes(): BufferedSinkWriter
           })();
           return finalised;
         },
-        abort(): void {
+        async abort(): Promise<void> {
           // Idempotent: subsequent finish() / abort() calls become no-ops.
           if (finalised) return;
           finalised = Promise.resolve(EMPTY_BYTES);
-          if (stream) {
-            // destroy() releases the fd synchronously without flushing the
-            // pending buffer — exactly what we want for an aborted save.
-            stream.destroy();
+          const s = stream;
+          if (s && !s.closed) {
+            // destroy() drops the pending buffer but only queues the fd close,
+            // so unlinking straight after it races that close and fails with
+            // EBUSY on Windows, leaving the partial file exactly where the
+            // caller was told it would not be. Wait for 'close' first.
+            await new Promise<void>((resolve) => {
+              s.once('close', resolve);
+              s.destroy();
+            });
           }
-          // Fire-and-forget unlink — abort() is sync (void), and the caller
-          // is already on a failure path so any unlink error is noise.
-          void cleanupOnFailure();
+          await cleanupOnFailure();
         },
       };
     },

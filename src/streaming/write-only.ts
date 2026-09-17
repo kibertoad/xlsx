@@ -301,8 +301,9 @@ const makeWriteOnlyWorkbook = (sink: XlsxSink, zipOpts: ZipWriterOptions): Write
       await finalizeImpl(state, writer);
     } catch (err) {
       // Release the sink so the half-emitted archive doesn't linger as a
-      // valid-looking file on disk. abort() is idempotent.
-      writer.abort(err);
+      // valid-looking file on disk. Awaited so `toFile` has finished removing
+      // it by the time the caller sees the error. abort() is idempotent.
+      await writer.abort(err);
       throw err;
     }
   };
@@ -310,7 +311,10 @@ const makeWriteOnlyWorkbook = (sink: XlsxSink, zipOpts: ZipWriterOptions): Write
   const abort = (cause?: unknown): void => {
     if (state.finalised) return;
     state.finalised = true;
-    state.writer.abort(cause);
+    // Sync by contract, so a `toFile` sink's unlink can still be in flight when
+    // this returns. The failure paths that have to guarantee cleanup before the
+    // caller sees an error await the writer's abort themselves.
+    void state.writer.abort(cause);
   };
 
   return { addWorksheet, finalize, abort };

@@ -93,11 +93,15 @@ export interface ZipWriter {
   /**
    * Release the sink and underlying writer without producing a valid archive.
    * Use this from a surrounding catch block when serialization fails part-way
-   * through — without it, streaming sinks (`toFile` / `toWritable`) keep their
+   * through. Without it, streaming sinks (`toFile` / `toWritable`) keep their
    * file descriptors / writables open and the half-written xlsx looks valid on
    * disk. Idempotent; safe to call after `finalize()`.
+   *
+   * Await the result before reporting the failure: `toFile` removes its partial
+   * file asynchronously, so an unawaited abort can still have the file on disk
+   * when the caller sees the error.
    */
-  abort(cause?: unknown): void;
+  abort(cause?: unknown): void | Promise<void>;
 }
 
 /** Writer handle for a single streaming entry. */
@@ -337,16 +341,16 @@ export function createZipWriter(sink: XlsxSink, opts: ZipWriterOptions = {}): Zi
       return finalised;
     },
 
-    abort(cause?: unknown): void {
+    abort(cause?: unknown): void | Promise<void> {
       if (finalised !== undefined) return;
       // Mark finalised so any subsequent addEntry / finalize short-circuits.
       finalised = Promise.resolve(new Uint8Array(0));
-      // Drop fflate's listener — we don't care about further `ondata` callbacks.
+      // Drop fflate's listener: further `ondata` callbacks no longer matter.
       if (zipFinishResolve) {
         zipFinishResolve();
         zipFinishResolve = undefined;
       }
-      writer.abort?.(cause);
+      return writer.abort?.(cause);
     },
   };
 }
