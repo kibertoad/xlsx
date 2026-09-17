@@ -10,6 +10,7 @@ import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } fro
 import { ARC_CONTENT_TYPES, ARC_ROOT_RELS } from '../xml/namespaces.js';
 import { findById, findByType, makeRelationships, relsFromBytes } from '../packaging/relationships.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
+import { parseCellNumber } from '../utils/cell-number.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
 import { type ZipArchive, openZip } from '../zip/reader.js';
@@ -78,10 +79,16 @@ const decodeCellValue = (
   vText: string | undefined,
   inlineText: string | undefined,
   sst: ReadonlyArray<string>,
+  sheet: string,
+  col: number,
+  row: number,
 ): CellValue => {
   switch (t) {
     case 'n':
-      return vText !== undefined && vText !== '' ? Number.parseFloat(vText) : null;
+      // Throws on text or an exponent past the double range, as loadWorkbook
+      // does: the two entry points have to answer the same bytes the same way,
+      // and a null here would be indistinguishable from an empty cell.
+      return parseCellNumber(vText, sheet, col, row);
     case 's': {
       if (vText === undefined) return null;
       const idx = Number.parseInt(vText, 10);
@@ -89,10 +96,8 @@ const decodeCellValue = (
       return sst[idx] ?? null;
     }
     case 'b':
-      // Unlike `loadWorkbook`, this reader never throws on a value it cannot
-      // read: an iterator that dies on row 900,000 leaves the caller no way to
-      // finish the pass. A value outside xsd:boolean's lexical space reads as
-      // empty, the way an out-of-range shared-string index does.
+      // Invalid boolean values stay empty in this reader, like out-of-range
+      // shared-string indexes. Numeric values have stricter validation.
       return parseXsdBoolean(vText) ?? null;
     case 'e': {
       if (!vText || !ERROR_CODES.has(vText)) return null;
@@ -103,6 +108,9 @@ const decodeCellValue = (
     case 'inlineStr':
       return inlineText ?? '';
     default:
+      // An unhandled `t` (`"d"`, or something not in ST_CellType at all). The
+      // type says nothing about what the text holds, so there is no finiteness
+      // rule to apply; loadWorkbook rejects the cell type outright instead.
       return vText !== undefined && vText !== '' ? Number.parseFloat(vText) : null;
   }
 };
@@ -113,6 +121,7 @@ const decodeCellValue = (
  * `opts`.
  */
 async function* iterSheetRows(
+  title: string,
   sheetInput: SaxInput,
   sst: ReadonlyArray<string>,
   opts: IterRowsOptions,
@@ -136,7 +145,7 @@ async function* iterSheetRows(
     nextRow = Math.max(nextRow, row + 1);
     if (row >= minRow && row <= maxRow) {
       for (const cell of pendingCells) {
-        currentCells.push({ row, col: cell.col, value: decodeCellValue(cell.type, cell.text, cell.inline, sst), styleId: cell.styleId });
+        currentCells.push({ row, col: cell.col, value: decodeCellValue(cell.type, cell.text, cell.inline, sst, title, cell.col, row), styleId: cell.styleId });
       }
     }
     pendingCells = [];
@@ -257,7 +266,7 @@ async function* iterSheetRows(
         if (cellOpen && cellRow === 0 && cellCol >= minCol && cellCol <= maxCol) {
           pendingCells.push({ col: cellCol, type: cellType, text: vText, inline: isText, styleId: cellStyleId });
         } else if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
-          const value = decodeCellValue(cellType, vText, isText, sst);
+          const value = decodeCellValue(cellType, vText, isText, sst, title, cellCol, cellRow);
           currentCells.push({ row: cellRow, col: cellCol, value, styleId: cellStyleId });
         }
         cellOpen = false;
@@ -570,7 +579,7 @@ const makeStreamingReadOnlyWorksheet = (
       // archive's streaming inflate path so the worksheet's inflated payload
       // is never fully resident. Peak memory for the walk drops to the
       // inflate window + SAX state instead of the entire `<sheetData>` body.
-      return iterSheetRows(archive.readStream(partPath), sst, opts);
+      return iterSheetRows(title, archive.readStream(partPath), sst, opts);
     }
     // Band query (minRow > 1): the row-offset index needs the full inflated
     // bytes so we can binary-search to the byte offset of the first matching
@@ -578,17 +587,17 @@ const makeStreamingReadOnlyWorksheet = (
     const seek = ensureIndexed();
     // Rows the index cannot number: walk the part instead of seeking into it,
     // which is the only way the derived numbers stay the SAX walk's.
-    if (!seek.seekable) return iterSheetRows(archive.readStream(partPath), sst, opts);
+    if (!seek.seekable) return iterSheetRows(title, archive.readStream(partPath), sst, opts);
     const { bytes, index, sheetDataEnd, sheetDataTagEnd } = seek;
-    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(bytes, sst, opts);
+    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(title, bytes, sst, opts);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {
       // Every row is below minRow, so there is nothing to yield.
       return (async function* () {})();
     }
     const target = index[pos];
-    if (!target) return iterSheetRows(bytes, sst, opts);
-    return iterSheetRows(replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
+    if (!target) return iterSheetRows(title, bytes, sst, opts);
+    return iterSheetRows(title, replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
   };
   const iterValues = async function* (opts: IterRowsOptions = {}): AsyncIterableIterator<CellValue[]> {
     for await (const row of iterRows(opts)) {

@@ -381,10 +381,7 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
   }
 
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) {
-      throw new OpenXmlSchemaError(`worksheet: cannot serialise non-finite number at ${ref}`);
-    }
-    return `<c r="${ref}"${styleAttr}><v>${serializeNumber(value)}</v></c>`;
+    return `<c r="${ref}"${styleAttr}><v>${serializeNumber(value, ref)}</v></c>`;
   }
   if (typeof value === 'boolean') {
     return `<c r="${ref}"${styleAttr} t="b"><v>${value ? '1' : '0'}</v></c>`;
@@ -403,17 +400,23 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
     // code — caller-managed; openpyxl behaves the same way. We just emit the
     // serial.
     const serial = dateToExcel(value, { epoch: ctx.date1904 ? 'mac' : 'windows' });
-    return `<c r="${ref}"${styleAttr}><v>${serializeNumber(serial)}</v></c>`;
+    return `<c r="${ref}"${styleAttr}><v>${serializeNumber(serial, ref)}</v></c>`;
   }
   if (typeof value === 'object' && value !== null && (value as { kind?: string }).kind === 'duration') {
     const ms = (value as { kind: 'duration'; ms: number }).ms;
     const serial = durationToExcel(ms);
-    return `<c r="${ref}"${styleAttr}><v>${serializeNumber(serial)}</v></c>`;
+    return `<c r="${ref}"${styleAttr}><v>${serializeNumber(serial, ref)}</v></c>`;
   }
   throw new OpenXmlSchemaError(`worksheet: unsupported cell value kind at ${ref}: ${describeValue(value)}`);
 };
 
-const serializeNumber = (n: number): string => {
+const serializeNumber = (n: number, ref: string): string => {
+  // Every numeric `<v>` in a worksheet passes through here: a plain value, a
+  // date or duration serial, and a formula's cached result. `NaN` and
+  // `Infinity` cannot be used as numeric cell values in Excel.
+  if (!Number.isFinite(n)) {
+    throw new OpenXmlSchemaError(`worksheet: cannot serialise non-finite number at ${ref}`);
+  }
   // Match Excel's round-trip preference: integers stay as integers, doubles use
   // the JS default representation. We don't need scientific-notation tweaking
   // here — Excel reads either form fine.
@@ -465,7 +468,7 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
     vEl = `<v>${cached}</v>`;
   } else if (cached !== undefined) {
     if (typeof cached === 'number') {
-      vEl = `<v>${serializeNumber(cached)}</v>`;
+      vEl = `<v>${serializeNumber(cached, ref)}</v>`;
     } else if (typeof cached === 'boolean') {
       valueAttr = ' t="b"';
       vEl = `<v>${cached ? '1' : '0'}</v>`;

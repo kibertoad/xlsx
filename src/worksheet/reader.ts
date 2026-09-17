@@ -21,6 +21,7 @@ import type { Drawing } from '../drawing/drawing.js';
 import { translateFormula } from '../formula/translate.js';
 import type { Relationships } from '../packaging/relationships.js';
 import { findById } from '../packaging/relationships.js';
+import { parseCellNumber } from '../utils/cell-number.js';
 import { coordinateToTuple, derivedRowNumber, rowNumberFromAttr, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
@@ -1428,7 +1429,7 @@ const readCell = (
     // into a workbook it cannot reach), and that cached value is the only
     // thing it has to display until the link resolves.
     const cachedRaw = vNode === undefined ? undefined : (vNode.text ?? '');
-    const cached = decodeCachedValue(cachedRaw, t, ctx, coord);
+    const cached = decodeCachedValue(cachedRaw, t, ctx, ws.title, coord);
     handleFormula(cell, fNode, coord, cached, sharedFormulas, t);
     return;
   }
@@ -1437,7 +1438,7 @@ const readCell = (
   let value: CellValue = null;
   switch (t) {
     case 'n':
-      value = vNode?.text !== undefined && vNode.text !== '' ? Number.parseFloat(vNode.text) : null;
+      value = parseCellNumber(vNode?.text, ws.title, coord.col, coord.row);
       break;
     case 's': {
       if (vNode?.text === undefined) {
@@ -1534,13 +1535,14 @@ const decodeCachedValue = (
   raw: string | undefined,
   t: string,
   ctx: WorksheetReadContext,
+  sheet: string,
   coord: { row: number; col: number },
 ): number | string | boolean | undefined => {
   if (raw === undefined) return undefined;
   switch (t) {
     case 'n':
       // An empty `<v/>` under the (default) numeric type carries no number.
-      return raw === '' ? undefined : Number.parseFloat(raw);
+      return parseCellNumber(raw, sheet, coord.col, coord.row) ?? undefined;
     case 'b': {
       const text = raw.trim();
       if (text === '') return undefined;
