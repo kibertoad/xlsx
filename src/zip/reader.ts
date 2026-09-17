@@ -2,8 +2,9 @@
 //
 // `openZip(source)` walks the central directory once and inflates each entry on
 // demand inside `read(path)` (see `./random-access-reader.ts`). That keeps peak
-// memory at compressed-archive size + per-entry inflate scratch, instead of
-// holding every uncompressed entry resident at once the way the old `unzipSync`
+// memory at compressed-archive size + per-entry inflate scratch + the bounded
+// cache of small re-read entries (`./inflate-cache.ts`), instead of holding
+// every uncompressed entry resident at once the way the old `unzipSync`
 // shortcut did. The fallback path through fflate's `unzipSync` is preserved for
 // ZIP64 / non-standard archives.
 
@@ -25,7 +26,11 @@ const isCfbCompoundDocument = (bytes: Uint8Array): boolean => {
 export interface ZipArchive {
   /** Sorted list of all entry paths in the archive. */
   list(): string[];
-  /** Synchronous read; throws OpenXmlIoError when the path is unknown. */
+  /**
+   * Synchronous read; throws OpenXmlIoError when the path is unknown. Each
+   * call returns an array the caller owns: mutating it changes neither the
+   * archive nor what a later read of the same path returns.
+   */
   read(path: string): Uint8Array;
   /** Promise variant for symmetry with the future streaming reader. */
   readAsync(path: string): Promise<Uint8Array>;
@@ -60,11 +65,12 @@ export interface OpenZipOptions {
 /**
  * Open a zip archive from any {@link XlsxSource}. The source is fully
  * materialised in memory, the central directory is parsed once, and each
- * entry is inflated on demand by {@link openRandomAccessArchive} — peak memory
- * stays at compressed-archive size plus per-entry inflate scratch rather than
- * holding every uncompressed entry resident. The fflate `unzipSync` fallback
- * is preserved internally for ZIP64 / non-standard archives the random-access
- * reader rejects.
+ * entry is inflated on demand by {@link openRandomAccessArchive}: peak memory
+ * stays at compressed-archive size, plus per-entry inflate scratch, plus a few
+ * MB at most of small entries kept for re-reads, rather than holding every
+ * uncompressed entry resident. The fflate `unzipSync` fallback is preserved
+ * internally for ZIP64 / non-standard archives the random-access reader
+ * rejects, and it does hold every entry inflated.
  */
 export async function openZip(source: XlsxSource, opts: OpenZipOptions = {}): Promise<ZipArchive> {
   let bytes: Uint8Array;

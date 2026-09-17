@@ -6,11 +6,11 @@
 // archive bytes resident, parses the central directory once (cheap, about 46 B
 // per entry plus the filename), and inflates each entry lazily on `read(path)`.
 //
-// Inflated payloads are cached only while they are small enough to be worth it
-// (see CACHE_MAX_ENTRY_BYTES). Caching every entry would put the whole
-// uncompressed package back in memory, which is the cost this reader exists to
-// avoid: across the fixture corpus a load re-reads nothing but `.rels` parts,
-// and never more than twice.
+// Small inflated payloads are kept for re-reads (see ./inflate-cache.ts).
+// Keeping every one of them would put the whole uncompressed package back in
+// memory, which is the cost this reader exists to avoid, so that cache is
+// bounded in both entry size and total and anything outside those bounds
+// inflates again on the next read.
 //
 // Limitations:
 // - ZIP64 reads only when the standard ZIP32 fields fit. EOCD with
@@ -23,16 +23,16 @@
 import { Inflate, unzipSync } from 'fflate';
 import { OpenXmlDecompressionBombError, OpenXmlIoError } from '../utils/exceptions.js';
 import {
+  beginEntryInflate,
   checkDeclaredTotals,
   createBudget,
   type DecompressionBudget,
   type DecompressionLimitsInput,
   entryInflateCap,
   entryOverflowError,
-  recordInflated,
   resolveDecompressionLimits,
-  startEntryInflate,
 } from './decompression-guard.js';
+import { createInflateCache } from './inflate-cache.js';
 import type { ZipArchive } from './reader.js';
 
 /**
@@ -43,20 +43,9 @@ import type { ZipArchive } from './reader.js';
 const INFLATE_CHUNK_BYTES = 64 * 1024;
 
 /**
- * Largest inflated entry worth keeping in the re-read cache. Only `.rels` parts
- * are ever read more than once during a load, and those run to a few KB; sheets,
- * styles and media are read once and would just sit there.
+ * `decode()` without `{ stream: true }` resets the decoder's state on every
+ * call, so one instance is safe to share across entries and across archives.
  */
-const CACHE_MAX_ENTRY_BYTES = 64 * 1024;
-
-/**
- * Ceiling on everything the re-read cache holds. An archive with thousands of
- * small parts would otherwise accumulate without limit; past this the oldest
- * entries are dropped and simply re-inflate if asked for again.
- */
-const CACHE_MAX_TOTAL_BYTES = 4 * 1024 * 1024;
-
-/** Central-directory filenames are decoded per entry, so the decoder is shared. */
 const CD_NAME_DECODER = new TextDecoder('utf-8');
 
 const singleChunkStream = (bytes: Uint8Array): ReadableStream<Uint8Array> =>
@@ -353,23 +342,8 @@ export function openRandomAccessArchive(
   }
 
   // Re-read cache for small entries, so the `.rels` parts the passthrough walk
-  // revisits do not inflate twice. Insertion-ordered, which makes the oldest
-  // key the first one `keys()` yields when the total has to come back down.
-  const inflateCache = new Map<string, Uint8Array>();
-  let cachedBytes = 0;
-
-  const cacheEntry = (path: string, out: Uint8Array): void => {
-    if (out.byteLength > CACHE_MAX_ENTRY_BYTES) return;
-    inflateCache.set(path, out);
-    cachedBytes += out.byteLength;
-    while (cachedBytes > CACHE_MAX_TOTAL_BYTES) {
-      const oldest = inflateCache.keys().next();
-      if (oldest.done === true) break;
-      const evicted = inflateCache.get(oldest.value);
-      inflateCache.delete(oldest.value);
-      cachedBytes -= evicted?.byteLength ?? 0;
-    }
-  };
+  // revisits do not inflate twice.
+  const inflateCache = createInflateCache();
   let live = true;
   let archiveBytes: Uint8Array | undefined = bytes;
 
@@ -397,8 +371,8 @@ export function openRandomAccessArchive(
         if (compressed.byteLength > budget.limits.maxEntryUncompressedBytes) {
           throw entryOverflowError(path, budget.limits.maxEntryUncompressedBytes);
         }
-        startEntryInflate(budget, path);
-        recordInflated(budget, path, compressed.byteLength);
+        const record = beginEntryInflate(budget, path);
+        record(compressed.byteLength);
       }
       // Copy so callers can safely mutate the returned bytes without perturbing
       // the underlying archive view.
@@ -408,7 +382,7 @@ export function openRandomAccessArchive(
     } else {
       throw new OpenXmlIoError(`openZip: unsupported compression method ${entry.compMethod} for "${path}"`);
     }
-    cacheEntry(path, out);
+    inflateCache.set(path, out);
     return out;
   };
 
@@ -431,8 +405,8 @@ export function openRandomAccessArchive(
         if (compressed.byteLength > budget.limits.maxEntryUncompressedBytes) {
           throw entryOverflowError(path, budget.limits.maxEntryUncompressedBytes);
         }
-        startEntryInflate(budget, path);
-        recordInflated(budget, path, compressed.byteLength);
+        const record = beginEntryInflate(budget, path);
+        record(compressed.byteLength);
       }
       // Copy because callers may mutate the returned bytes.
       return singleChunkStream(compressed.slice());
@@ -446,7 +420,7 @@ export function openRandomAccessArchive(
     // input — never both — so the ReadableStream internal queue stays at
     // depth 1 and the producer can't race ahead of the consumer.
     const entryCap = budget ? entryInflateCap(budget, compressed.byteLength) : Number.POSITIVE_INFINITY;
-    if (budget) startEntryInflate(budget, path);
+    const record = budget ? beginEntryInflate(budget, path) : null;
     let entryEmitted = 0;
     const pending: Uint8Array[] = [];
     let pushedOffset = 0;
@@ -460,9 +434,9 @@ export function openRandomAccessArchive(
           inflateError = entryOverflowError(path, entryCap);
           return;
         }
-        if (budget) {
+        if (record) {
           try {
-            recordInflated(budget, path, chunk.byteLength);
+            record(chunk.byteLength);
           } catch (err) {
             inflateError = err as Error;
             return;
@@ -561,7 +535,7 @@ export function openRandomAccessArchive(
       live = false;
       archiveBytes = undefined;
       inflateCache.clear();
-      cachedBytes = 0;
+      budget?.chargedByPath.clear();
       byPath.clear();
     },
   };
@@ -579,7 +553,7 @@ function inflateBounded(
   budget: DecompressionBudget | null,
 ): Uint8Array {
   const cap = budget ? entryInflateCap(budget, compressed.byteLength) : Number.POSITIVE_INFINITY;
-  if (budget) startEntryInflate(budget, path);
+  const record = budget ? beginEntryInflate(budget, path) : null;
   const acc: Uint8Array[] = [];
   let emitted = 0;
   let aborted: Error | undefined;
@@ -591,9 +565,9 @@ function inflateBounded(
       aborted = entryOverflowError(path, cap);
       return;
     }
-    if (budget) {
+    if (record) {
       try {
-        recordInflated(budget, path, chunk.byteLength);
+        record(chunk.byteLength);
       } catch (err) {
         aborted = err as Error;
         return;
@@ -656,7 +630,8 @@ function openViaUnzipSync(
             ` (decompression-bomb guard).`,
         );
       }
-      recordInflated(budget, path, payload.byteLength);
+      const record = beginEntryInflate(budget, path);
+      record(payload.byteLength);
     }
   }
   let live = true;
@@ -673,7 +648,9 @@ function openViaUnzipSync(
       if (!live || !entries) throw new OpenXmlIoError('openZip: archive is closed');
       const e = entries[path];
       if (!e) throw new OpenXmlIoError(`openZip: no entry at "${path}"`);
-      return e;
+      // Copy, as the random-access path does: `read` hands the caller an array
+      // of its own, and this one holds every entry for the archive's lifetime.
+      return e.slice();
     },
     async readAsync(path: string): Promise<Uint8Array> {
       return this.read(path);
