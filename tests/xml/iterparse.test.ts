@@ -141,3 +141,85 @@ describe('iterParse — openpyxl genuine/sample.xlsx sheet1.xml', () => {
     expect(starts).toBeGreaterThan(0);
   });
 });
+
+describe('iterParse: chunked feeding', () => {
+  const repeat = (n: number, body: (i: number) => string): string =>
+    Array.from({ length: n }, (_, i) => body(i)).join('');
+
+  it('yields events before it has parsed the tail of the document', async () => {
+    // saxes reports the mismatched close tag part-way through. Written in one
+    // call, every event ahead of it is queued behind the throw and the consumer
+    // sees none of them; fed in chunks, the leading elements come out first.
+    const xml = `<root>${repeat(8000, (i) => `<c r="A${i}"><v>${i}</v></c>`)}</wrong>`;
+    expect(xml.length).toBeGreaterThan(64 * 1024);
+
+    let seen = 0;
+    await expect(
+      (async () => {
+        for await (const _e of iterParse(xml)) seen++;
+      })(),
+    ).rejects.toThrow();
+    expect(seen).toBeGreaterThan(0);
+  });
+
+  it('produces identical events for string, byte and stream input', async () => {
+    // Multi-byte and surrogate-pair characters straddle the chunk boundaries,
+    // which is where a naive slice splits a codepoint in half.
+    const xml = `<root>${repeat(4000, (i) => `<t k="\u{1F600}${i}">日本語-${i}-\u{1F680}</t>`)}</root>`;
+    expect(xml.length).toBeGreaterThan(64 * 1024);
+    const bytes = new TextEncoder().encode(xml);
+
+    const fromString = await collect(xml);
+    const fromBytes = await collect(bytes);
+    const fromStream = await collect(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          // 1000-byte chunks land mid-codepoint far more often than 64 KB ones.
+          for (let i = 0; i < bytes.length; i += 1000) controller.enqueue(bytes.subarray(i, i + 1000));
+          controller.close();
+        },
+      }),
+    );
+
+    expect(fromBytes).toEqual(fromString);
+    expect(fromStream).toEqual(fromString);
+    const text = fromString.filter((e) => e.kind === 'text').map((e) => (e.kind === 'text' ? e.text : ''));
+    expect(text.join('')).toContain('日本語-3999-\u{1F680}');
+  });
+
+  it('keeps a surrogate pair intact when it lands exactly on a chunk boundary', async () => {
+    // Chunked feeding splits at arbitrary offsets and relies on saxes holding
+    // back a lone high surrogate until the next write. Pin the pair across the
+    // boundary so that dependency fails loudly if saxes ever stops doing it.
+    const CHUNK = 64 * 1024;
+    const open = '<r><t>';
+    const text = `${'a'.repeat(CHUNK - 1 - open.length)}\u{1F600}b`;
+    const xml = `${open}${text}</t></r>`;
+    expect(xml.indexOf('\u{1F600}')).toBe(CHUNK - 1);
+
+    const joined = (await collect(xml))
+      .filter((e) => e.kind === 'text')
+      .map((e) => (e.kind === 'text' ? e.text : ''))
+      .join('');
+    expect(joined).toBe(text);
+    expect([...joined].at(-2)).toBe('\u{1F600}');
+  });
+
+  it('rejects an <!ENTITY declaration that straddles a feed-chunk boundary', async () => {
+    // A loose `<!ENTITY` is caught by the prescan alone: saxes reports it as a
+    // plain syntax error, so only the prescan turns it into an
+    // OpenXmlSchemaError. Landing the token across the 64 KB boundary means no
+    // single chunk contains all of it, which is what the carry is for.
+    const CHUNK = 64 * 1024;
+    // Four characters of the token fall in the first chunk, the rest in the next.
+    const comment = `<!--${' '.repeat(CHUNK - 4 - '<!---->'.length)}-->`;
+    expect(comment.length).toBe(CHUNK - 4);
+
+    const err = await collect(`${comment}<!ENTITY foo "bar"><x/>`).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(OpenXmlSchemaError);
+    expect((err as Error).message).toContain('Entity declarations');
+  });
+});

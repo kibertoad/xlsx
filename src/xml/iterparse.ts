@@ -9,9 +9,9 @@
 // this layer just produces the events.
 //
 // DOCTYPE / external entity declarations are forbidden. saxes does not expand
-// external entities, but a prescan also rejects DTDs in non-streaming inputs.
-// Streaming inputs are checked on the first chunk before being fed to the
-// parser.
+// external entities, but a prescan also rejects DTDs. Every input shape is fed
+// to the parser in chunks, and each chunk is prescanned before it is fed, so
+// the rejection happens before saxes sees the declaration.
 
 import { SaxesParser } from 'saxes';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
@@ -32,6 +32,9 @@ export type SaxInput = Uint8Array | string | ReadableStream<Uint8Array>;
 const DOCTYPE_RE = /<!DOCTYPE\b/;
 const ENTITY_RE = /<!ENTITY\b/;
 
+/** Longest token {@link checkDoctype} matches, in code units. */
+const DTD_TOKEN_LENGTH = '<!DOCTYPE'.length;
+
 const checkDoctype = (text: string): void => {
   if (DOCTYPE_RE.test(text)) {
     throw new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
@@ -46,6 +49,52 @@ const isReadableStream = (v: unknown): v is ReadableStream<Uint8Array> => {
 };
 
 const decoder = (): TextDecoder => new TextDecoder('utf-8', { fatal: false });
+
+/**
+ * Feed size for byte and string inputs, in bytes / code units respectively.
+ * saxes runs its handlers synchronously inside `write()`, so one `write()` of a
+ * whole worksheet queues every event that worksheet produces before the
+ * consumer sees the first one. 64 KB matches the chunk size the zip reader's
+ * inflate stream emits, so all three input shapes queue a comparable batch.
+ */
+const FEED_CHUNK_SIZE = 64 * 1024;
+
+/**
+ * Decode any supported input into a sequence of bounded text chunks.
+ *
+ * Chunk boundaries fall on arbitrary offsets. That is safe because saxes holds
+ * back a lone high surrogate at the end of a `write()` and rejoins it with the
+ * next one, so a split codepoint still surfaces as a single text event.
+ */
+async function* decodedChunks(input: SaxInput): AsyncIterableIterator<string> {
+  if (typeof input === 'string') {
+    for (let i = 0; i < input.length; i += FEED_CHUNK_SIZE) {
+      yield input.slice(i, i + FEED_CHUNK_SIZE);
+    }
+    return;
+  }
+  // `stream: true` holds back a codepoint split across a chunk boundary
+  // instead of emitting a replacement character for each half.
+  const td = decoder();
+  if (input instanceof Uint8Array) {
+    for (let i = 0; i < input.byteLength; i += FEED_CHUNK_SIZE) {
+      const text = td.decode(input.subarray(i, Math.min(i + FEED_CHUNK_SIZE, input.byteLength)), { stream: true });
+      if (text.length > 0) yield text;
+    }
+  } else if (isReadableStream(input)) {
+    const reader = input.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = td.decode(value, { stream: true });
+      if (text.length > 0) yield text;
+    }
+  } else {
+    throw new OpenXmlSchemaError('iterParse: unsupported input type');
+  }
+  const tail = td.decode();
+  if (tail.length > 0) yield tail;
+}
 
 interface SaxesOpenTag {
   name: string;
@@ -90,7 +139,8 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   // cells flushes one opentag + one text + one closetag per cell). `shift()`
   // is O(n) per element in V8, so a single-batch drain of N events would be
   // O(N²) before iteration. The head advances on yield; the queue is reset
-  // (head + length) once it drains so memory stays bounded.
+  // (head + length) once it drains. Peak depth is one chunk's worth of events,
+  // which is what keeps the queue bounded on a multi-GB sheet.
   let queue: SaxEvent[] = [];
   let head = 0;
   let pending: Error | undefined;
@@ -130,54 +180,19 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
     if (pending !== undefined) throw pending;
   };
 
-  if (typeof input === 'string') {
-    checkDoctype(input);
-    feed(input);
-  } else if (input instanceof Uint8Array) {
-    const text = decoder().decode(input);
-    checkDoctype(text);
-    feed(text);
+  // Carry the tail of each chunk into the next scan so a `<!DOCTYPE` straddling
+  // a chunk boundary is still matched.
+  let dtdCarry = '';
+  const scanForDtd = (chunk: string): void => {
+    const window = dtdCarry.length === 0 ? chunk : dtdCarry + chunk;
+    checkDoctype(window);
+    dtdCarry = window.slice(-(DTD_TOKEN_LENGTH - 1));
+  };
+
+  for await (const chunk of decodedChunks(input)) {
+    scanForDtd(chunk);
+    feed(chunk);
     yield* drain();
-  } else if (isReadableStream(input)) {
-    const reader = input.getReader();
-    const td = decoder();
-    let firstChunkChecked = false;
-    let firstChunkBuffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = td.decode(value, { stream: true });
-      if (!firstChunkChecked) {
-        // We need to see enough of the prologue to be sure no DOCTYPE is
-        // hiding. Buffer until we have ~256 chars; if the stream ends before
-        // we reach the threshold the tail handler below runs `checkDoctype`
-        // on the accumulated prologue. (The previous `|| done` here was dead:
-        // a true `done` short-circuits at the top of the loop.)
-        firstChunkBuffer += chunk;
-        if (firstChunkBuffer.length >= 256) {
-          checkDoctype(firstChunkBuffer);
-          firstChunkChecked = true;
-          feed(firstChunkBuffer);
-          yield* drain();
-        }
-      } else {
-        feed(chunk);
-        yield* drain();
-      }
-    }
-    // Stream ended; flush decoder + any buffered prologue.
-    const tail = td.decode();
-    if (!firstChunkChecked) {
-      const all = firstChunkBuffer + tail;
-      checkDoctype(all);
-      feed(all);
-      yield* drain();
-    } else if (tail.length > 0) {
-      feed(tail);
-      yield* drain();
-    }
-  } else {
-    throw new OpenXmlSchemaError('iterParse: unsupported input type');
   }
 
   parser.close();
