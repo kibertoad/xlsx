@@ -201,6 +201,32 @@ const response = await fetch('/sheet.xlsx');
 const wb = await loadWorkbook(fromResponse(response));
 ```
 
+### Add hyperlinks and comments in bulk
+
+Use `setHyperlinks` and `setComments` when many cells need links or notes. Each
+batch runs in linear time over the existing entries and additions.
+
+```ts
+import { createWorkbook, addWorksheet } from '@office-kit/xlsx/workbook';
+import { setHyperlinks, setComments } from '@office-kit/xlsx/worksheet';
+
+const wb = createWorkbook();
+const ws = addWorksheet(wb, 'Report');
+setHyperlinks(ws, [
+  { ref: 'A2', target: 'https://example.com/items/1' },
+  { ref: 'A3', target: 'https://example.com/items/2' },
+]);
+setComments(ws, [
+  { ref: 'A2', author: 'Reviewer', text: 'Verified' },
+  { ref: 'A3', author: 'Reviewer', text: 'Check the source' },
+]);
+```
+
+Entries are applied in order: replacing a hyperlink moves it to the end;
+replacing a comment keeps its position. Hyperlink entries must supply `target`
+or `location`; the entire batch is validated before the sheet is changed.
+Both APIs preserve the public arrays and allow direct edits between calls.
+
 ### Streaming write — millions of rows in a fixed memory budget
 
 ```ts

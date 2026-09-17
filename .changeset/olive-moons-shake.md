@@ -1,5 +1,5 @@
 ---
-'@office-kit/xlsx': patch
+'@office-kit/xlsx': minor
 ---
 
 feat: setHyperlinks and setComments, for sheets that carry one per row
