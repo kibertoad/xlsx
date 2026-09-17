@@ -105,6 +105,33 @@ function normalizePath(path: string): string {
   return out.join('/');
 }
 
+/**
+ * Read an optional workbook-level part such as sharedStrings or styles.
+ *
+ * Excel writes both at a fixed path, but the path is only a convention: what
+ * actually binds a part to the workbook is its relationship. Producers that
+ * name them differently are rare and entirely legal, so check the
+ * conventional path first (one `has` call, and the answer for almost every
+ * file) and fall back to whatever the workbook rels point at.
+ *
+ * Both loaders go through here. The streaming one used to look only at the
+ * conventional path, which made every `t="s"` cell in such a workbook read
+ * back as `null` with no error raised.
+ */
+export function readOptionalWorkbookPart(
+  archive: ZipArchive,
+  workbookPath: string,
+  wbRels: { rels: ReadonlyArray<Relationship> },
+  relType: string,
+  conventionalPath: string,
+): Uint8Array | undefined {
+  if (archive.has(conventionalPath)) return archive.read(conventionalPath);
+  const rel = wbRels.rels.find((r) => r.type === relType);
+  if (!rel) return undefined;
+  const path = resolveRelTarget(workbookPath, rel.target);
+  return archive.has(path) ? archive.read(path) : undefined;
+}
+
 /** Sibling rels-part path for a given part. `xl/workbook.xml` → `xl/_rels/workbook.xml.rels`. */
 function relsPathFor(partPath: string): string {
   const i = partPath.lastIndexOf('/');
@@ -273,40 +300,26 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
   }
   const wbRels = archive.has(wbRelsPath) ? relsFromBytes(archive.read(wbRelsPath)) : { rels: [] };
 
-  // 4b. sharedStrings.xml — optional. The workbook rels can also point at a
-  // non-default location; for the minimum-skeleton stage we look at the
-  // canonical `xl/sharedStrings.xml` path first, then fall back to the rels
-  // entry if present.
-  let sharedStrings: SharedStringsTable | undefined;
-  if (archive.has(ARC_SHARED_STRINGS)) {
-    sharedStrings = parseSharedStringsXml(archive.read(ARC_SHARED_STRINGS));
-  } else {
-    const sstRel = wbRels.rels.find((r) => r.type === `${REL_NS}/sharedStrings`);
-    if (sstRel) {
-      const sstPath = resolveRelTarget(workbookPath, sstRel.target);
-      if (archive.has(sstPath)) {
-        sharedStrings = parseSharedStringsXml(archive.read(sstPath));
-      }
-    }
-  }
+  // 4b. sharedStrings.xml: optional, at the conventional path or wherever
+  // the workbook rels point.
+  const sstBytes = readOptionalWorkbookPart(
+    archive,
+    workbookPath,
+    wbRels,
+    `${REL_NS}/sharedStrings`,
+    ARC_SHARED_STRINGS,
+  );
+  const sharedStrings: SharedStringsTable | undefined =
+    sstBytes === undefined ? undefined : parseSharedStringsXml(sstBytes);
   // Entries reach the worksheet reader as-is: a rich-text `<si>` becomes a
   // rich-text cell value, so the per-run formatting Excel stored survives the
   // round-trip instead of collapsing into the concatenated text body.
   const sst = sharedStrings?.entries ?? [];
 
-  // 4c. styles.xml — optional. Same default-or-rels lookup as sst.
-  let styles: ReturnType<typeof parseStylesheetXml> | undefined;
-  if (archive.has(ARC_STYLE)) {
-    styles = parseStylesheetXml(archive.read(ARC_STYLE));
-  } else {
-    const stylesRel = wbRels.rels.find((r) => r.type === `${REL_NS}/styles`);
-    if (stylesRel) {
-      const stylesPath = resolveRelTarget(workbookPath, stylesRel.target);
-      if (archive.has(stylesPath)) {
-        styles = parseStylesheetXml(archive.read(stylesPath));
-      }
-    }
-  }
+  // 4c. styles.xml: optional. Same lookup as sst.
+  const stylesBytes = readOptionalWorkbookPart(archive, workbookPath, wbRels, `${REL_NS}/styles`, ARC_STYLE);
+  const styles: ReturnType<typeof parseStylesheetXml> | undefined =
+    stylesBytes === undefined ? undefined : parseStylesheetXml(stylesBytes);
 
   // 4d. docProps/{core,app,custom}.xml — package-level metadata. Each part is
   // optional; absent ones leave the matching Workbook field undefined. We walk
