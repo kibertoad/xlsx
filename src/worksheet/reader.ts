@@ -1445,9 +1445,23 @@ const readCell = (
       value = typeof sst === 'string' ? sst : { kind: 'rich-text', runs: sst.runs };
       break;
     }
-    case 'b':
-      value = vNode?.text === '1';
+    case 'b': {
+      // xsd:boolean admits `true` / `false` alongside `1` / `0`, and
+      // producers other than Excel do write the long spelling. Comparing
+      // against `'1'` turned `<v>true</v>` into `false` with nothing to
+      // signal it. A missing `<v>` is an empty cell, as it is under `t="n"`.
+      const raw = vNode?.text;
+      if (raw === undefined || raw === '') {
+        value = null;
+        break;
+      }
+      const parsed = parseBoolXmlAttr(raw);
+      if (parsed === undefined) {
+        throw new OpenXmlSchemaError(`worksheet: <c t="b"><v>${raw}</v> is not a boolean`);
+      }
+      value = parsed;
       break;
+    }
     case 'e': {
       const code = vNode?.text;
       if (code === undefined || !ERROR_CODES.has(code)) {
@@ -1495,7 +1509,7 @@ const decodeCachedValue = (raw: string | undefined, t: string): number | string 
       // An empty `<v/>` under the (default) numeric type carries no number.
       return raw === '' ? undefined : Number.parseFloat(raw);
     case 'b':
-      return raw === '' ? undefined : raw === '1';
+      return raw === '' ? undefined : parseBoolXmlAttr(raw);
     case 'str':
       return raw;
     case 'e':

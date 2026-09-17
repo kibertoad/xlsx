@@ -92,6 +92,18 @@ const localName = (qname: string): string => {
   return i < 0 ? qname : qname.slice(i + 1);
 };
 
+/**
+ * xsd:boolean lexical space. `true` / `false` are as valid as `1` / `0` and
+ * producers other than Excel do write them, so comparing against `'1'` read
+ * `<v>true</v>` back as `false`. Anything else is not a boolean; this reader
+ * drops unreadable values rather than throwing, as it does everywhere else.
+ */
+const parseCellBool = (raw: string | undefined): boolean | null => {
+  if (raw === '1' || raw === 'true') return true;
+  if (raw === '0' || raw === 'false') return false;
+  return null;
+};
+
 const decodeCellValue = (
   t: string,
   vText: string | undefined,
@@ -108,7 +120,7 @@ const decodeCellValue = (
       return sst[idx] ?? null;
     }
     case 'b':
-      return vText === '1';
+      return parseCellBool(vText);
     case 'e': {
       if (!vText || !ERROR_CODES.has(vText)) return null;
       return { kind: 'error', code: vText as ExcelErrorCode };
