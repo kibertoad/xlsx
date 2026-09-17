@@ -52,6 +52,11 @@ describe('phase-4 perf — write-only throughput', () => {
   it(
     `writes ${ROWS} × ${COLS} = ${TOTAL_CELLS.toLocaleString()} cells and reports cells/s`,
     async () => {
+      // Warmup, discarded: the first pass pays JIT compile and heap growth for
+      // the whole write path and reads systematically low. `pnpm bench` warms
+      // this same workload up (throughput.bench.ts), so the gate has to as well
+      // for the two numbers to be comparable.
+      await measureOnce();
       // Best-of-N: shared CPUs / thermal throttling create wide variance in the
       // per-run number, but the best-case run reflects the pipeline's real
       // ceiling.
