@@ -251,3 +251,10 @@ describe('mixed located and unlocated cells', () => {
     expect(await streamCells(signed, { minRow: 2 })).toEqual(['2:1=b']);
   });
 });
+
+
+it('reports the resolved row for an invalid number before the first located cell', async () => {
+  const body = '<row><c><v>oops</v></c><c r="B3"><v>2</v></c></row>';
+  await expect(streamCells(body, { minRow: 3 })).rejects.toThrow('at S!A3 is not a finite number');
+  await expect(streamCells(body, { minRow: 4 })).resolves.toEqual([]);
+});

@@ -413,8 +413,7 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
 const serializeNumber = (n: number, ref: string): string => {
   // Every numeric `<v>` in a worksheet passes through here: a plain value, a
   // date or duration serial, and a formula's cached result. `NaN` and
-  // `Infinity` are outside the xsd:double lexical space, so a part carrying one
-  // is a part Excel refuses to open.
+  // `Infinity` cannot be used as numeric cell values in Excel.
   if (!Number.isFinite(n)) {
     throw new OpenXmlSchemaError(`worksheet: cannot serialise non-finite number at ${ref}`);
   }
