@@ -283,7 +283,9 @@ front**. A 200 MB compressed xlsx therefore needs ~200 MB resident, plus the
 inflate window + SAX state per active iterator — not the multi-GB inflated
 worksheet payload. Band queries (`minRow > 1`) build a row-offset index once
 per sheet, which does materialise that sheet's inflated bytes; subsequent
-band queries reuse the cached index.
+band queries reuse the cached index. A sheet whose `<row>` elements omit their
+optional `r` attribute cannot be indexed by row number, so its band queries
+keep streaming the sheet and retain nothing.
 
 The two readers differ on damaged input, deliberately. Handed a cell it cannot
 interpret (`<c t="b"><v>yes</v></c>`, an unknown error code, a shared-string
