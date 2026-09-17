@@ -48,6 +48,15 @@ const reload = async (bytes: Uint8Array): Promise<{ formula: string; cachedValue
 };
 
 describe('codepoints in formula text and cached results', () => {
+  it.each(['\uFFFE', '\uFFFF'])('rejects an XML-forbidden noncharacter (%s)', async (text) => {
+    await expect(save(`="${text}"`)).rejects.toThrow(OpenXmlSchemaError);
+    await expect(save('=A2', text)).rejects.toThrow(OpenXmlSchemaError);
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'S');
+    addDataValidation(ws, makeDataValidation({ type: 'custom', sqref: 'A1', formula1: `=A1="${text}"` }));
+    await expect(workbookToBytes(wb)).rejects.toThrow(OpenXmlSchemaError);
+  });
+
   it('round-trips CR, LF and tab in formula text', async () => {
     const formula = 'IF(A1,\r\n\t"yes",\n\t"no")';
     const bytes = await save(`=${formula}`);

@@ -1419,7 +1419,7 @@ const readCell = (
     // thing it has to display until the link resolves.
     const cachedRaw = vNode === undefined ? undefined : (vNode.text ?? '');
     const cached = decodeCachedValue(cachedRaw, t, ctx);
-    handleFormula(cell, fNode, coord, cached, sharedFormulas);
+    handleFormula(cell, fNode, coord, cached, sharedFormulas, t);
     return;
   }
 
@@ -1527,6 +1527,7 @@ const handleFormula = (
   coord: { row: number; col: number },
   cached: number | string | boolean | undefined,
   sharedFormulas: Map<number, SharedFormulaCache>,
+  cachedType: string,
 ): void => {
   const tAttr = fNode.attrs['t'] ?? 'normal';
   // Keep the formula text as stored, including the `_xlfn.` / `_xlfn._xlws.`
@@ -1540,7 +1541,10 @@ const handleFormula = (
   // shared-formula cache below has to hold the same text as the cell it came
   // from.
   const formula = normalizeFormulaText(fNode.text ?? '');
-  const opts = cached !== undefined ? { cachedValue: cached } : undefined;
+  const opts = cached !== undefined ? {
+    cachedValue: cached,
+    ...(cachedType === 'e' ? { cachedValueType: 'error' as const } : {}),
+  } : undefined;
   switch (tAttr as FormulaKind) {
     case 'normal':
       // Only a shared reference cell and a data table get their text from
@@ -1599,7 +1603,7 @@ const handleFormula = (
       }
       const dtOpts: import('../cell/cell.js').DataTableFormulaOpts = {
         ref,
-        ...(cached !== undefined ? { cachedValue: cached } : {}),
+        ...opts,
         ...(fNode.attrs['r1'] !== undefined ? { r1: fNode.attrs['r1'] } : {}),
         ...(fNode.attrs['r2'] !== undefined ? { r2: fNode.attrs['r2'] } : {}),
         ...(parseDataTableBool(fNode.attrs['dt2D']) ? { dt2D: true } : {}),

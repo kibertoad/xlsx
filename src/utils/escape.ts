@@ -91,13 +91,13 @@ export function escapeXmlAttr(s: string): string {
 }
 
 // The codepoints XML 1.0 cannot carry in a text node under any encoding: the
-// C0 controls apart from tab / LF / CR, and an unpaired surrogate. A character
+// C0 controls apart from tab / LF / CR, unpaired surrogates, and U+FFFE / U+FFFF. A character
 // reference is no help either, since `&#0;` is as illegal as the raw byte.
 // Matching on code points (`u` flag) is what keeps a well-formed surrogate
 // pair, and so every astral character, out of `\p{Cs}`.
 const UNREPRESENTABLE_RE =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: by design, these are the codepoints being rejected
-  /[\0-\x08\x0B\x0C\x0E-\x1F\p{Cs}]/u;
+  /[\0-\x08\x0B\x0C\x0E-\x1F\p{Cs}\uFFFE\uFFFF]/u;
 
 /**
  * Escape text for an OOXML text node the reader hands back verbatim: `<f>`,

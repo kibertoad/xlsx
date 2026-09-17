@@ -457,20 +457,18 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   let valueAttr = '';
   let vEl = '';
   const cached = f.cachedValue;
-  if (cached !== undefined) {
+  if (f.cachedValueType === 'error') {
+    if (typeof cached !== 'string' || !ERROR_CODES.has(cached)) {
+      throw new OpenXmlSchemaError(`worksheet: invalid cached formula error at ${ref}`);
+    }
+    valueAttr = ' t="e"';
+    vEl = `<v>${cached}</v>`;
+  } else if (cached !== undefined) {
     if (typeof cached === 'number') {
       vEl = `<v>${serializeNumber(cached)}</v>`;
     } else if (typeof cached === 'boolean') {
       valueAttr = ' t="b"';
       vEl = `<v>${cached ? '1' : '0'}</v>`;
-    } else if (ERROR_CODES.has(cached)) {
-      // `t="e"`, or the cell reads as ordinary text until Excel recalculates
-      // and ISERROR / IFERROR stop matching it. `cachedValue` has no error
-      // variant, so the code set is the only signal available, which is the
-      // inference `bindValue` already makes for a plain string cell. An error
-      // code carries no markup character, so there is nothing to escape.
-      valueAttr = ' t="e"';
-      vEl = `<v>${cached}</v>`;
     } else {
       // A string result takes t="str", not the sst path. An empty result still
       // needs both the type and the `<v/>`: that is what Excel displays for a

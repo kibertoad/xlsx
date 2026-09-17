@@ -8,7 +8,7 @@
 
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { isFormulaValue, makeFormula } from '../../src/cell/cell.js';
+import { isFormulaValue, makeFormula, makeArrayFormula, makeSharedFormula, makeDataTableFormula } from '../../src/cell/cell.js';
 import { makeRichText, makeTextRun } from '../../src/cell/rich-text.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
@@ -58,15 +58,41 @@ const resave = async (bytes: Uint8Array): Promise<Uint8Array> =>
   workbookToBytes(await loadWorkbook(fromBuffer(bytes)));
 
 describe('cached formula result of error type', () => {
+  it('preserves error-looking text across repeated saves', async () => {
+    let bytes = await build(makeFormula('="#N/A"', { cachedValue: '#N/A' }));
+    for (let cycle = 0; cycle < 3; cycle++) {
+      expect(sheetXml(bytes)).toContain('t="str"');
+      expect(await cachedValueOf(bytes)).toBe('#N/A');
+      bytes = await resave(bytes);
+    }
+  });
+
   it('is written as t="e"', async () => {
-    const xml = sheetXml(await build(makeFormula('=1/0', { cachedValue: '#DIV/0!' })));
+    const xml = sheetXml(await build(makeFormula('=1/0', { cachedValue: '#DIV/0!', cachedValueType: 'error' })));
     expect(xml).toContain('<c r="A1" t="e"><f>1/0</f><v>#DIV/0!</v></c>');
   });
 
-  it('keeps its type across a load and save cycle', async () => {
-    const bytes = await resave(await build(makeFormula('=NA()', { cachedValue: '#N/A' })));
+  it.each([
+    makeArrayFormula('A1:A2', '=NA()', { cachedValue: '#N/A', cachedValueType: 'error' }),
+    makeSharedFormula(0, '=NA()', 'A1:A2', { cachedValue: '#N/A', cachedValueType: 'error' }),
+    makeDataTableFormula('', { ref: 'A1:A2', cachedValue: '#N/A', cachedValueType: 'error' }),
+  ])('retains cached error typing on $t formulas', async (value) => {
+    const bytes = await resave(await build(value));
     expect(await cachedValueOf(bytes)).toBe('#N/A');
     expect(sheetXml(bytes)).toContain('t="e"');
+  });
+
+  it('keeps its type across a load and save cycle', async () => {
+    const bytes = await resave(await build(makeFormula('=NA()', { cachedValue: '#N/A', cachedValueType: 'error' })));
+    expect(await cachedValueOf(bytes)).toBe('#N/A');
+    expect(sheetXml(bytes)).toContain('t="e"');
+  });
+
+  it('rejects a cached error marker without a valid error code', async () => {
+    await expect(build(makeFormula('=NA()', { cachedValue: 'text', cachedValueType: 'error' })))
+      .rejects.toThrow(/invalid cached formula error/);
+    await expect(build(makeFormula('=NA()', { cachedValueType: 'error' })))
+      .rejects.toThrow(/invalid cached formula error/);
   });
 
   it('leaves a plain string result on t="str"', async () => {

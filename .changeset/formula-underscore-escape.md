@@ -18,11 +18,13 @@ Along the same paths:
 - A carriage return is written as `&#13;`, so it comes back as a CR instead of
   being normalised to a line feed.
 - A codepoint XML 1.0 cannot represent (a C0 control character other than tab /
-  LF / CR, or an unpaired surrogate) now throws `OpenXmlSchemaError` naming the
+  LF / CR, an unpaired surrogate, or U+FFFE / U+FFFF) now throws `OpenXmlSchemaError` naming the
   cell, rather than being encoded as an `_xHHHH_` sequence nothing reverses.
 - A cached error result keeps `t="e"` instead of being downgraded to `t="str"`,
   so `ISERROR` / `IFERROR` and error-keyed conditional formats still match it
-  before Excel recalculates.
+  before Excel recalculates. To create one, pass `cachedValueType: 'error'`
+  alongside a cached error token to the formula constructor. Plain cached
+  strings, including `"#N/A"`, stay strings; loaded errors retain their type.
 - A cached result stored in the shared-strings table (`t="s"`, which non-Excel
   producers write) resolves to its text. It used to load as the raw sst index
   and save back as that number.
