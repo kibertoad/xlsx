@@ -83,4 +83,14 @@ describe('loadWorkbook: workbook-level parts at the path the rels choose', () =>
 
     expect(getCell(onlySheet(wb), 1, 1)?.value).toBe('hello');
   });
+  it('preserves encoded entry names and gives an exact match precedence', async () => {
+    const parts = await relocatedPackage();
+    movePart(parts, 'xl/strings.xml', 'xl/shared%20strings.xml');
+    repointSharedStrings(parts, 'Target="shared%20strings.xml"');
+    expect(getCell(onlySheet(await load(parts)), 1, 1)?.value).toBe('hello');
+    const stale = await stalePackage();
+    parts['xl/shared strings.xml'] = part(stale, 'xl/sharedStrings.xml');
+    expect(getCell(onlySheet(await load(parts)), 1, 1)?.value).toBe('hello');
+  });
+
 });

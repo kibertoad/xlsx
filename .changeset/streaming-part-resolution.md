@@ -16,7 +16,9 @@ an absent part: both loaders throw an `OpenXmlSchemaError` when a
 workbook-level relationship targets a part the package does not contain or
 carries `TargetMode="External"`. Percent-encoded targets
 (`Target="shared%20strings.xml"` for the entry `xl/shared strings.xml`) resolve
-to the entry they name instead of reading as missing.
+to the entry they name instead of reading as missing. Exact ZIP entry names
+take precedence; decoding is a fallback for workbook-level optional parts,
+so existing percent-encoded entry names continue to load.
 
 `loadWorkbookStream` also rejects the malformed packages `loadWorkbook`
 rejects, rather than quietly returning less than the file declares:

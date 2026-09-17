@@ -86,19 +86,17 @@ export const OFFICE_DOC_REL_TYPE = `${REL_NS}/officeDocument`;
  * - `..` segments collapse normally.
  */
 export function resolveRelTarget(sourcePartPath: string, target: string): string {
-  const decoded = decodeTarget(target);
-  if (decoded.startsWith('/')) return decoded.slice(1);
+  if (target.startsWith('/')) return target.slice(1);
   const lastSlash = sourcePartPath.lastIndexOf('/');
   const parentDir = lastSlash >= 0 ? sourcePartPath.slice(0, lastSlash + 1) : '';
-  const joined = parentDir + decoded;
+  const joined = parentDir + target;
   return normalizePath(joined);
 }
 
 /**
- * A relationship target is a URI reference, so a part whose name holds a space
- * arrives as `shared%20strings.xml` while the zip entry keeps the literal
- * space. A bare `%` is legal in an entry name and makes `decodeURIComponent`
- * throw, so a target that is not valid percent-encoding is used as written.
+ * Some producers store literal spaces in ZIP entry names. Decode only as a
+ * fallback after looking for the exact package name, so encoded names retain
+ * their identity and existing relationship resolution stays compatible.
  */
 function decodeTarget(target: string): string {
   if (!target.includes('%')) return target;
@@ -184,7 +182,8 @@ export function readOptionalWorkbookPart(
       `workbook rels: the ${part.name} relationship is external ("${rel.target}"), and has to name a part inside the package`,
     );
   }
-  const path = resolveRelTarget(workbookPath, rel.target);
+  let path = resolveRelTarget(workbookPath, rel.target);
+  if (!archive.has(path)) path = resolveRelTarget(workbookPath, decodeTarget(rel.target));
   if (!archive.has(path)) {
     throw new OpenXmlSchemaError(
       `workbook rels: the ${part.name} relationship targets "${path}", which the package does not contain`,

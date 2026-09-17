@@ -10,6 +10,7 @@ import { fromBuffer } from '../../src/io/node.js';
 import { loadWorkbookStream, type ReadOnlyWorkbook } from '../../src/streaming/read-only.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import {
+  movePart,
   part,
   type Parts,
   relocatedPackage,
@@ -84,4 +85,16 @@ describe('loadWorkbookStream: parity with loadWorkbook on part and sheet resolut
 
     await bothReject(parts, /workbook has sheets but rels part "xl\/_rels\/workbook\.xml\.rels" is missing/);
   });
+  it.each(['shared%20strings.xml', 'shared strings.xml'])('resolves encoded targets to %s', async (entry) => {
+    const parts = await relocatedPackage();
+    movePart(parts, 'xl/strings.xml', `xl/${entry}`);
+    rewrite(parts, WB_RELS_PATH, (xml) => replaceOnce(xml, 'Target="strings.xml"', 'Target="shared%20strings.xml"'));
+    const wb = await open(parts);
+    try {
+      expect(await valuesOf(wb, 'S')).toEqual([['hello'], [42]]);
+    } finally {
+      await wb.close();
+    }
+  });
+
 });
