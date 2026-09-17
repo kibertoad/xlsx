@@ -17,8 +17,9 @@ docstring lists the boundary.
 
 `getCellDate(wb, cell)` reads a date-formatted cell as a `Date`. Excel stores a
 date as a plain day count, so the number format is the only evidence that
-`45365` means 2024-03-14; this resolves the format, checks it is a date format
-and not an elapsed-time one, and converts under the workbook epoch.
+`45365` means 2024-03-14; this resolves the format, checks that it names a
+calendar date rather than a time of day (`h:mm`) or an elapsed span
+(`[h]:mm:ss`), and converts under the workbook epoch.
 
 New guide at `docs/migrate-from-sheetjs.md`, and a recipe for reading a
 workbook somebody else produced.

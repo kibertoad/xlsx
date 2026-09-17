@@ -1,5 +1,5 @@
 // A sweep of the whole built-in format catalogue, so a change to the renderer
-// cannot quietly move any of the 38 codes Excel ships with. One numeric value
+// cannot quietly move any of the 36 codes Excel ships with. One numeric value
 // and one date serial exercise both halves of the catalogue.
 
 import { describe, expect, it } from 'vitest';

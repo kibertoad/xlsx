@@ -59,6 +59,37 @@ describe('thousands grouping keeps the digits it groups', () => {
   });
 });
 
+/** The coarsest denominator below is 16, so half a step of it bounds them all. */
+const FRACTION_TOLERANCE = 1 / 32;
+
+/** Read back `2  3/4 `, `1/02` or a blanked `3     ` as a number. */
+const fractionValue = (text: string): number => {
+  const slash = text.indexOf('/');
+  if (slash === -1) return Number(text.trim());
+  const left = text
+    .slice(0, slash)
+    .trim()
+    .split(/\s+/)
+    .filter((piece) => piece.length > 0);
+  const numerator = Number(left[left.length - 1]);
+  const whole = left.length > 1 ? Number(left[0]) : 0;
+  return whole + numerator / Number(text.slice(slash + 1).trim());
+};
+
+describe('a rendered fraction is worth what the cell holds', () => {
+  it('reads back to within half a step of the denominator the code allows', () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 0, max: MAX_MAGNITUDE, noNaN: true, noDefaultInfinity: true }),
+        fc.constantFrom('# ??/??', '# ??/00', '?/00', '# ?/16'),
+        (value, code) => {
+          expect(Math.abs(fractionValue(displayNumber(code, value)) - value)).toBeLessThanOrEqual(FRACTION_TOLERANCE);
+        },
+      ),
+    );
+  });
+});
+
 describe('the rendered date agrees with getCellDate', () => {
   it('yyyy-mm-dd hh:mm:ss prints the fields of the Date the reader hands back', () => {
     fc.assert(

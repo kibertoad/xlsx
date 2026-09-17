@@ -13,6 +13,7 @@
 // than print a guess.
 
 import { excelToDate, type ExcelEpoch } from '../utils/datetime.js';
+import { FORMAT_COLOR_NAMES } from './numbers.js';
 
 /** Excel carries 15 significant decimal digits and never shows more. */
 const EXCEL_SIGNIFICANT_DIGITS = 15;
@@ -60,8 +61,13 @@ const MONTH_NAMES = [
 
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
-const COLOR_NAMES = new Set(['black', 'blue', 'cyan', 'green', 'magenta', 'red', 'white', 'yellow']);
+const COLOR_NAMES: ReadonlySet<string> = new Set(FORMAT_COLOR_NAMES);
 const INDEXED_COLOR_RE = /^color\s*\d+$/i;
+/**
+ * The body of an elapsed-time bracket: one letter repeated, as in `[h]` or
+ * `[mm]`. `isTimedeltaFormat` in `./numbers.js` answers the different question
+ * of whether a whole code is a duration, so it cannot stand in here.
+ */
 const ELAPSED_RE = /^([hms])\1*$/i;
 
 // ---- tokens ----------------------------------------------------------------
@@ -93,7 +99,8 @@ type Token =
   | { readonly kind: 'exponent'; readonly explicitSign: boolean }
   | { readonly kind: 'slash' }
   | { readonly kind: 'textPlaceholder' }
-  | { readonly kind: 'meridiem'; readonly short: boolean }
+  /** Excel prints the meridiem in the case the code carries, so `am/pm` stays lowercase. */
+  | { readonly kind: 'meridiem'; readonly am: string; readonly pm: string }
   | { readonly kind: 'subsecond'; readonly digits: number }
   | DatePartToken
   | ElapsedToken;
@@ -122,7 +129,10 @@ interface DateFormatSection {
   readonly kind: 'date';
   readonly tokens: readonly Token[];
   readonly elapsed: boolean;
+  /** A year, month or day part: the section names a day, not just a time within one. */
+  readonly calendar: boolean;
   readonly hasMeridiem: boolean;
+  /** Widest fractional-second group in the section; the serial is rounded once at this precision. */
   readonly subsecondDigits: number;
 }
 
@@ -267,6 +277,11 @@ const tokenizeBracket = (body: string, tokens: Token[]): boolean => {
 const MERIDIEM_LONG = 'AM/PM';
 const MERIDIEM_SHORT = 'A/P';
 
+const meridiemToken = (raw: string): Token => {
+  const slash = raw.indexOf('/');
+  return { kind: 'meridiem', am: raw.slice(0, slash), pm: raw.slice(slash + 1) };
+};
+
 const tokenizeSection = (src: string): Token[] | undefined => {
   const tokens: Token[] = [];
   let i = 0;
@@ -333,14 +348,15 @@ const tokenizeSection = (src: string): Token[] | undefined => {
       i++;
       continue;
     }
-    const upperRest = src.slice(i, i + MERIDIEM_LONG.length).toUpperCase();
-    if (upperRest === MERIDIEM_LONG) {
-      tokens.push({ kind: 'meridiem', short: false });
+    const long = src.slice(i, i + MERIDIEM_LONG.length);
+    if (long.toUpperCase() === MERIDIEM_LONG) {
+      tokens.push(meridiemToken(long));
       i += MERIDIEM_LONG.length;
       continue;
     }
-    if (src.slice(i, i + MERIDIEM_SHORT.length).toUpperCase() === MERIDIEM_SHORT) {
-      tokens.push({ kind: 'meridiem', short: true });
+    const short = src.slice(i, i + MERIDIEM_SHORT.length);
+    if (short.toUpperCase() === MERIDIEM_SHORT) {
+      tokens.push(meridiemToken(short));
       i += MERIDIEM_SHORT.length;
       continue;
     }
@@ -479,8 +495,12 @@ const placeholdersIn = (tokens: readonly Token[], from: number, to: number): Dig
   return out;
 };
 
-const resolveNumberSection = (resolved: CommaResolution): NumberFormatSection => {
+const resolveNumberSection = (resolved: CommaResolution): NumberFormatSection | undefined => {
   const { tokens } = resolved;
+  // A second decimal point or exponent splices two numeric layouts into one
+  // section (`0.00" ("0.00")"`), leaving no single number to lay out.
+  if (tokens.filter((t) => t.kind === 'point').length > 1) return undefined;
+  if (tokens.filter((t) => t.kind === 'exponent').length > 1) return undefined;
   const pointIndex = tokens.findIndex((t) => t.kind === 'point');
   const exponentIndex = tokens.findIndex((t) => t.kind === 'exponent');
   const intEnd = pointIndex !== -1 ? pointIndex : exponentIndex !== -1 ? exponentIndex : tokens.length;
@@ -582,7 +602,7 @@ const resolveDateSection = (tokens: readonly Token[]): DateFormatSection | undef
       continue;
     }
     withSubseconds.push({ kind: 'subsecond', digits });
-    subsecondDigits = digits;
+    subsecondDigits = Math.max(subsecondDigits, digits);
     i += digits;
   }
 
@@ -610,6 +630,7 @@ const resolveDateSection = (tokens: readonly Token[]): DateFormatSection | undef
     kind: 'date',
     tokens: resolved,
     elapsed,
+    calendar: calendarPart,
     hasMeridiem: resolved.some((t) => t.kind === 'meridiem'),
     subsecondDigits,
   };
@@ -634,10 +655,14 @@ const parseSection = (src: string): FormatSection | undefined => {
 
 /**
  * Distinct format codes in a workbook number in the tens while cells number in
- * the millions, so the parse is memoised. The cap keeps a caller that feeds
- * generated codes from growing the map without bound.
+ * the millions, so the parse is memoised. Both bounds exist because the codes
+ * arrive from an untrusted `styles.xml`: a full map drops its oldest entry
+ * rather than every entry, so a workbook carrying more codes than fit loses one
+ * cached parse per new code instead of all of them, and a code longer than the
+ * 255 characters Excel itself allows is parsed on each call rather than stored.
  */
 const PARSE_CACHE_LIMIT = 256;
+const MAX_CACHED_CODE_LENGTH = 255;
 const parseCache = new Map<string, { readonly format: ParsedFormat | undefined }>();
 
 const buildFormat = (code: string): ParsedFormat | undefined => {
@@ -657,9 +682,23 @@ export function parseFormatCode(code: string): ParsedFormat | undefined {
   const cached = parseCache.get(code);
   if (cached !== undefined) return cached.format;
   const format = buildFormat(code);
-  if (parseCache.size >= PARSE_CACHE_LIMIT) parseCache.clear();
+  if (code.length > MAX_CACHED_CODE_LENGTH) return format;
+  if (parseCache.size >= PARSE_CACHE_LIMIT) {
+    const oldest = parseCache.keys().next().value;
+    if (oldest !== undefined) parseCache.delete(oldest);
+  }
   parseCache.set(code, { format });
   return format;
+}
+
+/**
+ * True when the format reads as a calendar date: a date section carrying a
+ * year, month or day, rather than a time of day (`h:mm`), an elapsed span
+ * (`[h]:mm`) or a numeric layout. The positive section decides.
+ */
+export function hasCalendarDate(format: ParsedFormat): boolean {
+  const first = format.sections[0];
+  return first?.kind === 'date' && first.calendar;
 }
 
 // ---- rendering: numeric layouts -------------------------------------------
@@ -743,6 +782,9 @@ const assembleNumber = (section: NumberFormatSection, parts: DecimalParts, expon
   const minIntDigits = section.intPlaceholders.filter((p) => p === '0').length;
   const intDigits = withGrouping(parts.int.replace(/^0+/, '').padStart(minIntDigits, '0'), section.grouped);
   const head = renderDigitsRightToLeft(section.tokens, 0, section.intEnd, intDigits);
+  // `.00` has no integer placeholder to feed the digits into, and Excel prints
+  // them anyway: immediately left of the point, with nothing for a zero.
+  const intText = section.intPlaceholders.length === 0 ? head + intDigits : head;
   const fracText = renderFracDigits(section.fracPlaceholders, parts.frac);
 
   const tail: string[] = [];
@@ -769,7 +811,7 @@ const assembleNumber = (section: NumberFormatSection, parts: DecimalParts, expon
     }
     tail.push(literalFor(token));
   }
-  return head + tail.join('');
+  return intText + tail.join('');
 };
 
 interface RenderedSection {
@@ -894,6 +936,25 @@ const blankRange = (tokens: readonly Token[], from: number, to: number): string 
   return pieces.join('');
 };
 
+/** The digits a code spells the denominator out as: `16` in `# ?/16`. */
+const fixedDenominatorText = (section: FractionFormatSection): string => {
+  const token = section.tokens[section.slashIndex + 1];
+  return token?.kind === 'literal' ? token.text : '';
+};
+
+/**
+ * `?` and `#` pad the denominator on the right, which is what lines the slash up
+ * down a column. A `0` cannot: a pad zero on the right would multiply the
+ * denominator by ten, so a run carrying one fills from the right instead.
+ */
+const denominatorText = (section: FractionFormatSection, denominator: number): string => {
+  const from = section.slashIndex + 1;
+  const digits = String(denominator);
+  return placeholdersIn(section.tokens, from, section.denominatorEnd).includes('0')
+    ? renderDigitsRightToLeft(section.tokens, from, section.denominatorEnd, digits)
+    : renderDigitsLeftToRight(section.tokens, from, section.denominatorEnd, digits);
+};
+
 const renderFractionSection = (section: FractionFormatSection, magnitude: number): RenderedSection => {
   const hasWhole = section.wholeStart !== -1;
   const maxDenominator =
@@ -922,16 +983,19 @@ const renderFractionSection = (section: FractionFormatSection, magnitude: number
   }
 
   if (numerator === 0 && hasWhole) {
-    // An exact whole number leaves the fraction blank, the way Excel does.
-    pieces.push(blankRange(section.tokens, section.numeratorStart, section.denominatorEnd));
+    // An exact whole number leaves the fraction blank, the way Excel does. A
+    // spelled-out denominator goes with it: it is a literal rather than a run of
+    // placeholders, so blanking only the placeholders leaves a stray `16` behind.
+    pieces.push(blankRange(section.tokens, section.numeratorStart, section.slashIndex + 1));
+    pieces.push(
+      section.fixedDenominator > 0
+        ? ' '.repeat(fixedDenominatorText(section).length)
+        : blankRange(section.tokens, section.slashIndex + 1, section.denominatorEnd),
+    );
   } else {
     pieces.push(renderDigitsRightToLeft(section.tokens, section.numeratorStart, section.slashIndex, String(numerator)));
     pieces.push('/');
-    if (section.fixedDenominator > 0) pieces.push(String(section.fixedDenominator));
-    else
-      pieces.push(
-        renderDigitsLeftToRight(section.tokens, section.slashIndex + 1, section.denominatorEnd, String(denominator)),
-      );
+    pieces.push(section.fixedDenominator > 0 ? fixedDenominatorText(section) : denominatorText(section, denominator));
   }
   pieces.push(renderDigitsRightToLeft(section.tokens, section.denominatorEnd, section.tokens.length, ''));
   return { text: pieces.join(''), zero: whole === 0 && numerator === 0 };
@@ -1008,6 +1072,21 @@ const renderElapsed = (token: ElapsedToken, fields: DateFields): string => {
   return String(total).padStart(token.width, '0');
 };
 
+/**
+ * A section can carry two fractional-second groups of different widths
+ * (`[ss].000" "ss.0`). The serial is rounded once, at the widest, so a narrower
+ * group rounds the digits that rounding already produced.
+ */
+const subsecondText = (subsecond: string, digits: number): string => {
+  if (digits >= subsecond.length) return subsecond.padEnd(digits, '0');
+  const kept = subsecond.slice(0, digits);
+  if (subsecond.charCodeAt(digits) < FIVE_CHAR_CODE) return kept;
+  const bumped = carryOne(kept);
+  // Carrying out of the leading digit would have to bump the second as well,
+  // which the wider group in the same section does not show.
+  return bumped.length > digits ? '9'.repeat(digits) : bumped;
+};
+
 const renderDateTokens = (section: DateFormatSection, fields: DateFields): string => {
   const pieces: string[] = [];
   for (const token of section.tokens) {
@@ -1019,10 +1098,10 @@ const renderDateTokens = (section: DateFormatSection, fields: DateFields): strin
         pieces.push(renderElapsed(token, fields));
         break;
       case 'meridiem':
-        pieces.push(fields.hour < HOURS_PER_HALF_DAY ? (token.short ? 'A' : 'AM') : token.short ? 'P' : 'PM');
+        pieces.push(fields.hour < HOURS_PER_HALF_DAY ? token.am : token.pm);
         break;
       case 'subsecond':
-        pieces.push(`.${fields.subsecond.padEnd(token.digits, '0')}`);
+        pieces.push(`.${subsecondText(fields.subsecond, token.digits)}`);
         break;
       default:
         pieces.push(literalFor(token));
@@ -1055,6 +1134,9 @@ const renderDateSection = (section: DateFormatSection, serial: number, epoch: Ex
   }
 
   const date = excelToDate(units / unitsPerDay, { epoch });
+  // A serial can be a safe integer of sub-second units and still land outside
+  // the range a `Date` covers, which would print NaN into every field.
+  if (Number.isNaN(date.getTime())) return undefined;
   return renderDateTokens(section, {
     year: date.getUTCFullYear(),
     month: date.getUTCMonth() + 1,
@@ -1124,9 +1206,11 @@ export function renderNumericValue(format: ParsedFormat, value: number, epoch: E
   if (!Number.isFinite(value)) return undefined;
   const picked = pickSection(format.sections, value);
   if (picked === undefined) return undefined;
-  // A negative serial is not a date. Excel fills the cell with `#` characters,
-  // and how many depends on the column width, so there is nothing to print.
-  if (picked.section.kind === 'date' && value < 0) return undefined;
+  // A negative serial is not a calendar date. Excel fills the cell with `#`
+  // characters, and how many depends on the column width, so there is nothing
+  // to print. An elapsed span is different: it has a sign, and `picked.signed`
+  // puts it in front.
+  if (picked.section.kind === 'date' && !picked.section.elapsed && value < 0) return undefined;
   const rendered = renderSection(picked.section, Math.abs(value), epoch);
   if (rendered === undefined) return undefined;
   if (!picked.signed || rendered.zero) return rendered.text;

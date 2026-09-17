@@ -137,11 +137,12 @@ import { getCellDate } from '@office-kit/xlsx/styles';
 const due = getCellDate(wb, cell); // Date, or undefined if the cell is not a date
 ```
 
-`getCellDate` resolves the cell's number format, checks that it is a date
-format, and converts the serial under the workbook epoch (`wb.date1904`). It
-returns `undefined` for a number the format says is a count, and for an
-elapsed-time format such as `[h]:mm:ss`, which measures a span rather than
-naming a moment.
+`getCellDate` resolves the cell's number format, checks that it names a
+calendar date, and converts the serial under the workbook epoch (`wb.date1904`).
+It returns `undefined` for a number the format says is a count, for a
+time-of-day format such as `h:mm`, which names a moment inside a day but not
+which day, and for an elapsed-time format such as `[h]:mm:ss`, which measures a
+span rather than naming a moment.
 
 **`codepage`**: not applicable. A code page is a legacy-format concern. The
 parts inside an xlsx package are UTF-8 XML, so the text arrives as Unicode with

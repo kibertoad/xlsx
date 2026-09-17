@@ -8,8 +8,13 @@ import { richTextToString } from '../cell/rich-text.js';
 import { dateToExcel, durationToExcel, excelToDate, type ExcelEpoch } from '../utils/datetime.js';
 import type { Workbook } from '../workbook/workbook.js';
 import { getCellNumberFormat } from './cell-style.js';
-import { parseFormatCode, renderNumericValue, renderTextValue, type ParsedFormat } from './format-code.js';
-import { isDateFormat, isTimedeltaFormat } from './numbers.js';
+import {
+  hasCalendarDate,
+  parseFormatCode,
+  renderNumericValue,
+  renderTextValue,
+  type ParsedFormat,
+} from './format-code.js';
 
 const epochOf = (wb: Workbook): ExcelEpoch => (wb.date1904 ? 'mac' : 'windows');
 
@@ -17,7 +22,11 @@ const renderValue = (format: ParsedFormat, value: CellValue, epoch: ExcelEpoch):
   if (isRichTextValue(value)) return renderTextValue(format, richTextToString(value.runs));
   if (typeof value === 'string') return renderTextValue(format, value);
   if (value instanceof Date) return renderNumericValue(format, dateToExcel(value, { epoch }), epoch);
-  if (isDurationValue(value)) return renderNumericValue(format, durationToExcel(value.ms), epoch);
+  // A span that is not a finite number of milliseconds has no serial to put
+  // through the format, and `durationToExcel` throws on one.
+  if (isDurationValue(value)) {
+    return Number.isFinite(value.ms) ? renderNumericValue(format, durationToExcel(value.ms), epoch) : undefined;
+  }
   if (typeof value === 'number') return renderNumericValue(format, value, epoch);
   return undefined;
 };
@@ -28,6 +37,9 @@ const displayText = (code: string, value: CellValue, epoch: ExcelEpoch): string 
   // the literal `TRUE` / `FALSE` and the error code whatever the format says.
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
   if (isErrorValue(value)) return value.code;
+  // An invalid Date has no serial either, and the `cellValueAsString` fallback
+  // would throw on it rather than degrade, so it reads as its own string form.
+  if (value instanceof Date && Number.isNaN(value.getTime())) return String(value);
   if (isFormulaValue(value)) {
     if (value.cachedValue === undefined) return '';
     if (value.cachedValueType === 'error') return String(value.cachedValue);
@@ -81,6 +93,7 @@ const displayText = (code: string, value: CellValue, epoch: ExcelEpoch): string 
  * a plain coercion rather than a guess:
  *
  * - Comparison sections (`[>=100]"over";[<0]"under";0`).
+ * - A section splicing two numeric layouts together (`0.00" ("0.00")"`).
  * - Calendar and numbering modifiers: era tokens (`g`, `e`, `b`) and bracket
  *   groups such as `[DBNum1]` that replace the digits themselves.
  * - More than four sections, or an unterminated `"` or `[`.
@@ -111,17 +124,21 @@ export function getCellDisplayText(wb: Workbook, c: Cell): string {
  * nothing in a loaded cell's value distinguishes `45365` the date from `45365`
  * the count: the cell's number format is the only evidence, and
  * `cellValueAsDate` deliberately does not consult it. This composes the three
- * steps that reading one otherwise takes, `getCellNumberFormat` then
- * {@link isDateFormat} then `excelToDate` with the epoch from `wb.date1904`,
+ * steps that reading one otherwise takes, `getCellNumberFormat` then the
+ * format's own reading then `excelToDate` with the epoch from `wb.date1904`,
  * into the call that reading a foreign workbook actually needs.
  *
  * - A `Date` value passes through, formatted or not.
- * - A number needs a date format on the cell. Without one it is a count, and
- *   the answer is `undefined`.
+ * - A number needs a format that names a day: a year, month or day part.
+ *   Without one it is a count, and the answer is `undefined`.
  * - A formula cell is read from the value Excel cached for it.
- * - An elapsed-time format ({@link isTimedeltaFormat}) measures a span, not a
- *   point in time, so it has no date reading. Neither does a `duration` value:
- *   its `ms` is already the span.
+ * - A time-of-day format (`h:mm`) names a moment inside a day but not which
+ *   day, and an elapsed-time format (`[h]:mm`) measures a span rather than
+ *   naming a moment, so neither has a date reading. Neither does a `duration`
+ *   value: its `ms` is already the span.
+ * - The format is read by the parser {@link getCellDisplayText} renders with,
+ *   so the two agree on what any one cell is. A code outside the subset that
+ *   one documents has no date reading here either.
  *
  * The returned `Date` is built in UTC, which is how `excelToDate` and
  * `dateToExcel` read every serial in this library. Use `getUTCFullYear` and
@@ -132,7 +149,9 @@ export function getCellDate(wb: Workbook, c: Cell): Date | undefined {
   const value = isFormulaValue(c.value) ? c.value.cachedValue : c.value;
   if (value instanceof Date) return value;
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
-  const code = getCellNumberFormat(wb, c);
-  if (isTimedeltaFormat(code) || !isDateFormat(code)) return undefined;
-  return excelToDate(value, { epoch: epochOf(wb) });
+  const format = parseFormatCode(getCellNumberFormat(wb, c));
+  if (format === undefined || !hasCalendarDate(format)) return undefined;
+  const date = excelToDate(value, { epoch: epochOf(wb) });
+  // A serial far outside the range a `Date` covers has no reading to hand back.
+  return Number.isNaN(date.getTime()) ? undefined : date;
 }

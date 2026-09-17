@@ -69,6 +69,10 @@ describe('getCellDisplayText: numeric codes', () => {
     ['"total: "0', 7, 'total: 7'],
     ['0"kg"', 12, '12kg'],
     ['#.##', 0.5, '.5'],
+    // No integer placeholder at all: Excel still prints the integer digits,
+    // and prints nothing where the integer part is zero.
+    ['.00', 123.456, '123.46'],
+    ['.00', 0.5, '.50'],
     ['0.##', 1.5, '1.5'],
     ['0.##', 1, '1'],
     ['0.??', 1, '1.  '],
@@ -115,8 +119,14 @@ describe('getCellDisplayText: fractions', () => {
     ['# ?/?', 1 / 3, ' 1/3'],
     // An exact whole number blanks the fraction.
     ['# ?/?', 2, '2    '],
-    // A spelled-out denominator is used as given.
+    // A spelled-out denominator is used as given, and goes blank with the rest
+    // of the fraction when the value is a whole number.
     ['# ?/16', 2.3125, '2 5/16'],
+    ['# ?/16', 3, '3     '],
+    // `?` pads the denominator on the right so the slash lines up. A `0` pads
+    // on the left: a zero on the right would multiply the denominator by ten.
+    ['# ??/00', 2.5, '2  1/02'],
+    ['?/00', 0.5, '1/02'],
   ])('%s + %j => %j', (code, value, expected) => {
     expect(display(code, value)).toBe(expected);
   });
@@ -189,6 +199,9 @@ describe('getCellDisplayText: dates and times', () => {
     ['h:mm AM/PM', 45_365.5, '12:00 PM'],
     ['h:mm:ss AM/PM', 45_365.02, '12:28:48 AM'],
     ['h:mm:ss A/P', 45_365.6, '2:24:00 P'],
+    // Excel prints the meridiem in the case the code spells it.
+    ['h:mm am/pm', 45_365.5, '12:00 pm'],
+    ['h:mm a/p', 45_365.5, '12:00 p'],
     // `m` is a minute next to an hour or a second, a month everywhere else.
     ['mm:ss', 0.5 + 61 / 86_400, '01:01'],
     ['h"h" mm"m"', 45_365.5, '12h 00m'],
@@ -207,6 +220,17 @@ describe('getCellDisplayText: dates and times', () => {
 
   it('a duration value renders through an elapsed code', () => {
     expect(display('[h]:mm', makeDurationValue(5_400_000))).toBe('1:30');
+  });
+
+  it('an elapsed span keeps its sign, unlike a calendar date', () => {
+    expect(display('[h]:mm', -0.0625)).toBe('-1:30');
+    expect(display('[h]:mm', makeDurationValue(-5_400_000))).toBe('-1:30');
+  });
+
+  it('renders each fractional-second group at its own width', () => {
+    // The serial is rounded once, at the widest group; the narrower group
+    // rounds those digits rather than reading the serial again.
+    expect(display('[ss].000" "ss.0', 43_201.234 / 86_400)).toBe('43201.234 01.2');
   });
 
   it('a Date value renders through a date code', () => {
@@ -282,6 +306,9 @@ describe('getCellDisplayText: codes outside the supported set', () => {
     // Unterminated quote and bracket.
     ['0.00"unterminated', 1.5, '1.5'],
     ['[Red0.00', 1.5, '1.5'],
+    // Two numeric layouts spliced into one section: there is no single number
+    // to lay out, so neither layout gets applied.
+    ['0.00" ("0.00")"', 1.5, '1.5'],
   ] satisfies Array<[string, CellValue, string]>)('%s degrades to the plain coercion', (code, value, expected) => {
     expect(display(code, value)).toBe(expected);
   });
@@ -289,6 +316,16 @@ describe('getCellDisplayText: codes outside the supported set', () => {
   it('degrades a Date to its ISO form, not to a serial', () => {
     const date = new Date(Date.UTC(2024, 2, 14));
     expect(display('[>=100]"big";0', date)).toBe(date.toISOString());
+  });
+
+  it('a serial past the range a Date covers degrades to the number', () => {
+    expect(display('yyyy-mm-dd', 1e9)).toBe('1000000000');
+  });
+
+  it('an invalid Date and a non-finite span degrade rather than throw', () => {
+    // Mapping a whole sheet to text cannot lose the sheet over one bad value.
+    expect(display('yyyy-mm-dd', new Date(Number.NaN))).toBe('Invalid Date');
+    expect(display('[h]:mm', { kind: 'duration', ms: Number.NaN })).toBe('NaN ms');
   });
 });
 

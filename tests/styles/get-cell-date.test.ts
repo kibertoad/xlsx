@@ -36,10 +36,6 @@ describe('getCellDate', () => {
     expect(read('yyyy-mm-dd', MARCH_14_2024, { date1904: true })?.toISOString()).toBe('2028-03-15T00:00:00.000Z');
   });
 
-  it('reads a time-only format as a time on the epoch day', () => {
-    expect(read('h:mm', 0.5)?.toISOString()).toBe('1899-12-31T12:00:00.000Z');
-  });
-
   it('reads the cached value of a formula cell', () => {
     expect(read('yyyy-mm-dd', makeFormula('TODAY()', { cachedValue: MARCH_14_2024 }))?.toISOString()).toBe(
       '2024-03-14T00:00:00.000Z',
@@ -71,6 +67,24 @@ describe('getCellDate: no date reading', () => {
   it('an elapsed-time format measures a span', () => {
     expect(read('[h]:mm:ss', 1.5)).toBeUndefined();
     expect(read('[mm]:ss', 0.5)).toBeUndefined();
+  });
+
+  it('a time-of-day format names a moment in a day but not which day', () => {
+    // The serial says 1899-12-31 12:00, which is the epoch day rather than a
+    // date anybody wrote down. A caller collecting due dates wants neither.
+    expect(read('h:mm', 0.5)).toBeUndefined();
+    expect(read('h:mm AM/PM', 0.5)).toBeUndefined();
+    expect(read('mm:ss', 0.5)).toBeUndefined();
+  });
+
+  it('a code the renderer cannot read has no date reading either', () => {
+    // `getCellDisplayText` prints the bare serial for a calendar modifier it
+    // cannot apply, so reading the same cell as a Date has to agree.
+    expect(read('[DBNum1]yyyy-mm-dd', MARCH_14_2024)).toBeUndefined();
+  });
+
+  it('a serial past the range a Date covers has no reading', () => {
+    expect(read('yyyy-mm-dd', 1e9)).toBeUndefined();
   });
 
   it('a duration value carries its own span', () => {
