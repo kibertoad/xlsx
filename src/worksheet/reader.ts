@@ -35,6 +35,7 @@ import { el, findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings.js';
 import type { AutoFilter, FilterColumn } from './auto-filter.js';
 import { parseMultiCellRange, parseRange } from './cell-range.js';
+import { chargeCell, chargeRow, type ContentBudget, makeContentBudget } from './content-budget.js';
 import type { LegacyComment } from './comments.js';
 import type {
   ConditionalFormatting,
@@ -194,6 +195,12 @@ export interface WorksheetReadContext {
    * inline carries `<drawing r:id="...">`.
    */
   loadDrawing?: (relId: string) => Drawing | undefined;
+  /**
+   * Running cell / row totals for the whole read. Shared across worksheets so
+   * a cap covers the workbook rather than each sheet separately. Absent means
+   * unlimited.
+   */
+  contentBudget?: ContentBudget;
 }
 
 /** Per-worksheet state for shared-formula expansion. */
@@ -1532,6 +1539,7 @@ const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xd
  * in `tests/worksheet/row-without-r-attribute.test.ts`.
  */
 const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: WorksheetReadContext): void => {
+  const budget = ctx.contentBudget ?? makeContentBudget(undefined);
   const sharedFormulas = new Map<number, SharedFormulaCache>();
   // High-water mark, not the previous row: an `@r` that jumps backwards must
   // not send a later row without `@r` onto a row already read.
@@ -1558,9 +1566,11 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
   const settleRow = (row: number): void => {
     rowIdx = row;
     nextRow = Math.max(nextRow, row + 1);
+    chargeRow(budget, ws.title, row);
     maybeRecordRowDimension(ws, rowAttrs, row);
     for (const heldCell of held) {
       const coord = parseCellCoord(heldCell.ref, row, nextCol);
+      chargeCell(budget, ws.title, coord.col, coord.row);
       readCell(ws, heldCell, coord, ctx, sharedFormulas);
       nextCol = coord.col + 1;
     }
@@ -1682,6 +1692,7 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
       }
       if (rowIdx > 0) {
         const coord = parseCellCoord(cell.ref, rowIdx, nextCol);
+        chargeCell(budget, ws.title, coord.col, coord.row);
         readCell(ws, cell, coord, ctx, sharedFormulas);
         nextCol = coord.col + 1;
       }
