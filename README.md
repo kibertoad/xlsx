@@ -192,29 +192,37 @@ A sheet often carries formatting past its content: someone formats 200 rows and
 types into 4. Excel keeps the two readings of that sheet apart, and so does
 this library.
 
-`getDataExtent` counts every cell the file materialises, including one that
+`getCellExtent` counts every cell the file materialises, including one that
 exists only to carry a style. That is Excel's used range and the `<dimension>`
-element Excel writes, and it is what bounds `iterRows` / `iterValues` by
-default. `getValueExtent` counts only cells whose `value` is not `null`, which
-is what a caller mapping rows to records means by "the data". Pass
-`extent: 'values'` to iterate that box instead:
+element Excel writes, and its max corner is what bounds `iterRows` /
+`iterValues` by default. `getValueExtent` counts only the cells holding a
+value, which is what a caller mapping rows to records means by "the data".
+Spread its box into the iteration to be bounded by it:
 
 ```ts
-import { getDataExtent, getValueExtent, iterValues } from '@office-kit/xlsx/worksheet';
+import { getCellExtent, getValueExtent, iterValues } from '@office-kit/xlsx/worksheet';
 
-getDataExtent(ws)?.maxRow; // 200, the used range
+getCellExtent(ws)?.maxRow; // 200, the used range
 getValueExtent(ws)?.maxRow; // 4
 
-for (const row of iterValues(ws, { extent: 'values' })) {
-  // four rows, not 200
+const box = getValueExtent(ws);
+if (box) {
+  for (const row of iterValues(ws, box)) {
+    // four rows, not 200, starting at the first row that holds a value
+  }
 }
 ```
 
-Both extents pad the same way: every yielded row has the full extent width,
-position `i` is column `minCol + i` for the whole iteration, and a position
-with no cell is `null`. Blank rows inside the box are still yielded, so drop
-them with `filter((row) => row.some((v) => v !== null))` when only rows
-carrying something are wanted.
+A cell counts towards the value extent when its `value` is neither `null` nor
+`''`, so formatting, a hyperlink, a comment and the empty strings a CSV
+converter leaves behind all stay outside the box. `getValueExtent` is
+`undefined` for a sheet with no values at all, which is the `if` above.
+
+Iteration pads the same way under either box: every yielded row has the full
+width, position `i` is column `minCol + i` throughout, and a position with no
+cell is `null`. Blank rows inside the box are still yielded, so drop them with
+`filter((row) => row.some((v) => v !== null))` when only rows carrying
+something are wanted.
 
 ### Read directly from disk (Node)
 

@@ -31,6 +31,7 @@ describe('README — full lib read+edit+write', () => {
     expect(typeof worksheet.ensureCell).toBe('function');
     expect(typeof workbook.createWorkbook).toBe('function');
     expect(typeof workbook.addWorksheet).toBe('function');
+    expect(typeof workbook.getSheetByIndex).toBe('function');
 
     // Build a synthetic workbook, edit a cell, round-trip.
     const wb = workbook.createWorkbook();
@@ -41,9 +42,34 @@ describe('README — full lib read+edit+write', () => {
     expect(worksheet.ensureCell(ws, 1, 1).value).toBe('Hello from @office-kit/xlsx');
     const bytes = await io.workbookToBytes(wb);
     const wb2 = await io.loadWorkbook(node.fromBuffer(bytes));
-    const ref0 = wb2.sheets[0];
-    if (ref0?.kind !== 'worksheet') throw new Error('expected worksheet');
-    expect(ref0.sheet.rows.get(1)?.get(1)?.value).toBe('Hello from @office-kit/xlsx');
+    // The README reaches the first sheet with getSheetByIndex, whose undefined
+    // covers both the out-of-range index and the chartsheet slot.
+    const sheet = workbook.getSheetByIndex(wb2, 0);
+    if (sheet === undefined) throw new Error('expected a worksheet at index 0');
+    expect(worksheet.getCell(sheet, 1, 1)?.value).toBe('Hello from @office-kit/xlsx');
+  });
+});
+
+describe('README: two answers to "where does the data end"', () => {
+  it('reports the used range and the value extent the documented way', async () => {
+    const workbook = await import('../../src/workbook/index.js');
+    const worksheet = await import('../../src/worksheet/index.js');
+    const styles = await import('../../src/styles/index.js');
+    expect(typeof worksheet.getCellExtent).toBe('function');
+    expect(typeof worksheet.getValueExtent).toBe('function');
+
+    // The README's own shape: values in 4 rows, formatting down to 200.
+    const wb = workbook.createWorkbook();
+    const ws = workbook.addWorksheet(wb, 'Data');
+    for (let r = 1; r <= 4; r++) worksheet.setCell(ws, r, 1, r);
+    const shaded = styles.registerCellStyle(wb, { numberFormat: '#,##0' });
+    for (let r = 5; r <= 200; r++) worksheet.setCell(ws, r, 1, null, shaded);
+    expect(worksheet.getCellExtent(ws)?.maxRow).toBe(200);
+    expect(worksheet.getValueExtent(ws)?.maxRow).toBe(4);
+
+    const box = worksheet.getValueExtent(ws);
+    if (box === undefined) throw new Error('expected a value extent');
+    expect([...worksheet.iterValues(ws, box)]).toEqual([[1], [2], [3], [4]]);
   });
 });
 

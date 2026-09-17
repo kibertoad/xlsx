@@ -138,16 +138,36 @@ Every style primitive has a `make*` constructor — `makeFont`,
 | `wb.active`               | `getActiveSheet(wb)`                  |
 | `wb.sheetnames`           | `sheetNames(wb)`                      |
 | `wb['Data']`              | `getSheet(wb, 'Data')`                |
+| `wb.worksheets[0]`        | `getSheetByIndex(wb, 0)`              |
 | `del wb['Data']`          | `removeSheet(wb, 'Data')`             |
 | `ws.merged_cells.ranges`  | `getMergedCells(ws)`                  |
 | `ws.merge_cells('A1:B2')` | `mergeCells(ws, 'A1:B2')`             |
 | `ws.freeze_panes = 'B2'`  | `setFreezePanes(ws, 'B2')`            |
+| `ws.max_row`              | `getMaxRow(ws)`                       |
+| `ws.max_column`           | `getMaxCol(ws)`                       |
+| `ws.dimensions`           | `getCellExtentRef(ws)`                |
 
 Sheet titles are validated at save time against Excel's rules (1–31 chars,
 forbidden `: \ / ? * [ ]`, no leading/trailing apostrophe, reserved name
 `History`, case-insensitive uniqueness). `addWorksheet` / `renameSheet`
 validate eagerly; direct mutation of `ws.title` falls through to the save-time
 gate.
+
+`max_row` counts every cell the file materialises, formatting-only ones
+included, and `getMaxRow` / `getCellExtent` match it: a sheet formatted 200
+rows deep with values in 4 reports 200 under both libraries, because that is
+Excel's used range. `getValueExtent(ws)` has no openpyxl equivalent. It
+returns the bounding box of the cells holding a value, and spreading it into
+`iterRows` / `iterValues` is how a row-to-record pass skips the blank tail:
+
+```ts
+const box = getValueExtent(ws);
+if (box) {
+  for (const row of iterValues(ws, box)) {
+    // 4 rows, starting at the first row that holds a value
+  }
+}
+```
 
 ## Streaming write (`write_only=True`)
 

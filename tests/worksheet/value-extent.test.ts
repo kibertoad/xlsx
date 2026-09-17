@@ -1,6 +1,6 @@
-// getValueExtent and iterRows({ extent: 'values' }) against the shape that
-// motivates them: a sheet formatted past its content, which every reading that
-// counts cell objects reports as taller and wider than its data.
+// getValueExtent against the shape that motivates it: a sheet formatted past
+// its content, which every reading that counts cell objects reports as taller
+// and wider than its data.
 
 import { describe, expect, it } from 'vitest';
 import { fromBuffer } from '../../src/io/node.js';
@@ -9,7 +9,8 @@ import { workbookToBytes } from '../../src/io/save.js';
 import { registerCellStyle } from '../../src/styles/cell-style.js';
 import { addWorksheet, createWorkbook, getSheetByIndex } from '../../src/workbook/workbook.js';
 import {
-  getDataExtent,
+  ensureCell,
+  getCellExtent,
   getMaxCol,
   getMaxRow,
   getValueExtent,
@@ -37,9 +38,9 @@ describe('getValueExtent', () => {
     expect(getValueExtent(ws)).toEqual({ minRow: 1, maxRow: 4, minCol: 1, maxCol: 2 });
   });
 
-  it('getDataExtent still counts the formatting-only cells', () => {
+  it('getCellExtent still counts the formatting-only cells', () => {
     const { ws } = makeFormattedPastItsData();
-    expect(getDataExtent(ws)).toEqual({ minRow: 1, maxRow: 6, minCol: 1, maxCol: 2 });
+    expect(getCellExtent(ws)).toEqual({ minRow: 1, maxRow: 6, minCol: 1, maxCol: 2 });
     expect(getMaxRow(ws)).toBe(6);
     expect(getMaxCol(ws)).toBe(2);
   });
@@ -53,12 +54,31 @@ describe('getValueExtent', () => {
     expect(getMaxCol(ws)).toBe(9);
   });
 
-  it('reports the leading blank band too, so the box is a true bounding box', () => {
+  it('starts at the first cell holding a value, so a leading blank band is outside the box', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'S');
     setCell(ws, 1, 1, null, registerCellStyle(wb, { numberFormat: '0.00' }));
     setCell(ws, 7, 3, 'only value');
     expect(getValueExtent(ws)).toEqual({ minRow: 7, maxRow: 7, minCol: 3, maxCol: 3 });
+  });
+
+  it('counts the empty string as no value, the shape a CSV converter leaves behind', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'S');
+    setCell(ws, 1, 1, 'header');
+    for (let r = 2; r <= 200; r++) setCell(ws, r, 1, '');
+    expect(getValueExtent(ws)).toEqual({ minRow: 1, maxRow: 1, minCol: 1, maxCol: 1 });
+    expect(getCellExtent(ws)?.maxRow).toBe(200);
+  });
+
+  it('excludes a cell whose only payload is a hyperlink or a comment', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'S');
+    setCell(ws, 1, 1, 'a');
+    ensureCell(ws, 4, 1).hyperlinkId = 0;
+    ensureCell(ws, 1, 6).commentId = 0;
+    expect(getValueExtent(ws)).toEqual({ minRow: 1, maxRow: 1, minCol: 1, maxCol: 1 });
+    expect(getCellExtent(ws)).toEqual({ minRow: 1, maxRow: 4, minCol: 1, maxCol: 6 });
   });
 
   it('returns undefined when the sheet holds formatting but no value', () => {
@@ -68,7 +88,7 @@ describe('getValueExtent', () => {
     setCell(ws, 1, 1, null, shaded);
     setCell(ws, 20, 5, null, shaded);
     expect(getValueExtent(ws)).toBeUndefined();
-    expect(getDataExtent(ws)).toEqual({ minRow: 1, maxRow: 20, minCol: 1, maxCol: 5 });
+    expect(getCellExtent(ws)).toEqual({ minRow: 1, maxRow: 20, minCol: 1, maxCol: 5 });
   });
 
   it('returns undefined for a sheet with no cells at all', () => {
@@ -77,10 +97,12 @@ describe('getValueExtent', () => {
   });
 });
 
-describe("iterValues with extent: 'values'", () => {
+describe('iterValues bounded by the value extent', () => {
   it('yields one row per row of data, with no phantom tail', () => {
     const { ws } = makeFormattedPastItsData();
-    expect([...iterValues(ws, { extent: 'values' })]).toEqual([
+    const box = getValueExtent(ws);
+    if (box === undefined) throw new Error('expected a value extent');
+    expect([...iterValues(ws, box)]).toEqual([
       ['a1', 1],
       ['a2', 2],
       ['a3', 3],
@@ -88,7 +110,7 @@ describe("iterValues with extent: 'values'", () => {
     ]);
   });
 
-  it("defaults to extent: 'cells', which keeps the formatted tail", () => {
+  it('the default bound keeps the formatted tail', () => {
     const { ws } = makeFormattedPastItsData();
     const rows = [...iterValues(ws)];
     expect(rows.length).toBe(6);
@@ -98,36 +120,27 @@ describe("iterValues with extent: 'values'", () => {
     ]);
   });
 
-  it('keeps position i on column minCol + i, so a blank leading band still pads', () => {
+  it('trims the leading blank band as well, so the first yielded row holds data', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'S');
     setCell(ws, 3, 3, 'c3');
+    setCell(ws, 3, 4, 'd3');
     setCell(ws, 9, 1, null, registerCellStyle(wb, { numberFormat: '0.00' }));
-    // Rows 1..3 x cols 1..3: the value extent trims the styled row 9 but the
-    // iteration still starts at A1, so 'c3' lands at index 2 of the third row.
-    expect([...iterValues(ws, { extent: 'values' })]).toEqual([
-      [null, null, null],
-      [null, null, null],
-      [null, null, 'c3'],
-    ]);
+    const box = getValueExtent(ws);
+    if (box === undefined) throw new Error('expected a value extent');
+    expect([...iterValues(ws, box)]).toEqual([['c3', 'd3']]);
+    // Unbounded, the same sheet pads out to the styled row 9 and column A.
+    expect([...iterValues(ws)].length).toBe(9);
   });
 
-  it('an explicit maxRow still wins over the selected extent', () => {
+  it('an explicit maxRow narrows the box further', () => {
     const { ws } = makeFormattedPastItsData();
-    expect([...iterValues(ws, { extent: 'values', maxRow: 2 })]).toEqual([
+    const box = getValueExtent(ws);
+    if (box === undefined) throw new Error('expected a value extent');
+    expect([...iterValues(ws, { ...box, maxRow: 2 })]).toEqual([
       ['a1', 1],
       ['a2', 2],
     ]);
-  });
-
-  it('yields nothing for a sheet whose cells are all formatting', () => {
-    const wb = createWorkbook();
-    const ws = addWorksheet(wb, 'S');
-    const shaded = registerCellStyle(wb, { numberFormat: '0.00' });
-    setCell(ws, 1, 1, null, shaded);
-    setCell(ws, 50, 4, null, shaded);
-    expect([...iterValues(ws, { extent: 'values' })]).toEqual([]);
-    expect([...iterValues(ws)].length).toBe(50);
   });
 });
 
@@ -139,6 +152,16 @@ describe('formatting-only cells survive a save / load round trip', () => {
     if (ws === undefined) throw new Error('expected a worksheet at index 0');
     expect(getMaxRow(ws)).toBe(6);
     expect(getValueExtent(ws)).toEqual({ minRow: 1, maxRow: 4, minCol: 1, maxCol: 2 });
-    expect([...iterValues(ws, { extent: 'values' })].length).toBe(4);
+  });
+
+  it('a reloaded empty-string cell is still outside the value extent', async () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    setCell(ws, 1, 1, 'header');
+    setCell(ws, 2, 1, '');
+    const reloaded = await loadWorkbook(fromBuffer(await workbookToBytes(wb)));
+    const sheet = getSheetByIndex(reloaded, 0);
+    if (sheet === undefined) throw new Error('expected a worksheet at index 0');
+    expect(getValueExtent(sheet)).toEqual({ minRow: 1, maxRow: 1, minCol: 1, maxCol: 1 });
   });
 });

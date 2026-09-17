@@ -323,57 +323,6 @@ export function addWorksheet(wb: Workbook, title: string, opts?: { index?: numbe
   return sheet;
 }
 
-/**
- * 0-based tab-strip index of the sheet (worksheet *or* chartsheet) with the
- * given title, or `-1` when not present. Useful when the caller wants to act on
- * the index for `setActiveSheet` / `swapSheets` / similar operations without
- * manually scanning `wb.sheets`.
- */
-export function getSheetIndex(wb: Workbook, title: string): number {
-  for (let i = 0; i < wb.sheets.length; i++) {
-    const ref = wb.sheets[i];
-    if (ref && ref.sheet.title === title) return i;
-  }
-  return -1;
-}
-
-/**
- * Count sheets in the workbook, with optional kind/state filters. Mirrors the
- * filter shape of {@link getSheetTitles} but skips the array allocation when
- * the caller only needs the count.
- */
-export function countSheets(
-  wb: Workbook,
-  opts: { kind?: 'worksheet' | 'chartsheet'; state?: SheetState } = {},
-): number {
-  let n = 0;
-  for (const ref of wb.sheets) {
-    if (opts.kind !== undefined && ref.kind !== opts.kind) continue;
-    if (opts.state !== undefined && ref.state !== opts.state) continue;
-    n++;
-  }
-  return n;
-}
-
-/**
- * Sheet titles in tab-strip order. By default returns titles for every sheet
- * (worksheets + chartsheets). Optional filters narrow to one kind
- * (`'worksheet'` / `'chartsheet'`) or one state (`'visible' | 'hidden' |
- * 'veryHidden'`).
- */
-export function getSheetTitles(
-  wb: Workbook,
-  opts: { kind?: 'worksheet' | 'chartsheet'; state?: SheetState } = {},
-): string[] {
-  const out: string[] = [];
-  for (const ref of wb.sheets) {
-    if (opts.kind !== undefined && ref.kind !== opts.kind) continue;
-    if (opts.state !== undefined && ref.state !== opts.state) continue;
-    out.push(ref.sheet.title);
-  }
-  return out;
-}
-
 /** Look up a Worksheet by title. Returns undefined for missing names or chartsheets. */
 export function getSheet(wb: Workbook, title: string): Worksheet | undefined {
   for (const s of wb.sheets) {
@@ -383,11 +332,9 @@ export function getSheet(wb: Workbook, title: string): Worksheet | undefined {
 }
 
 /**
- * Look up a Worksheet by its 0-based tab-strip index. Returns `undefined` for
- * an out-of-range index and for a slot holding a chartsheet, so
- * `getSheetByIndex(wb, 0)` is the whole of "give me the first worksheet of
- * this upload": it discriminates the sheet union and bounds-checks the index,
- * neither of which `wb.sheets[0]` does for the caller.
+ * Look up a Worksheet by its 0-based tab-strip index. Returns `undefined` both
+ * for an out-of-range index and for a slot holding a chartsheet, so one check
+ * on the result covers the bounds test and the sheet-kind discrimination.
  */
 export function getSheetByIndex(wb: Workbook, idx: number): Worksheet | undefined {
   const ref = wb.sheets[idx];
@@ -437,10 +384,8 @@ export function addChartsheet(
 }
 
 /**
- * Every sheet title in tab-strip order, chartsheets included. `sheetNames`
- * answers "what tabs does this workbook have", so `sheetNames(wb).includes(t)`
- * is the containment test; a title in the list is not necessarily a worksheet,
- * which is why {@link getSheet} still returns `undefined` for some of them.
+ * Every sheet title in tab-strip order, chartsheets included, so a title in
+ * the list is not necessarily one {@link getSheet} resolves.
  */
 export function sheetNames(wb: Workbook): string[] {
   return wb.sheets.map((s) => s.sheet.title);
