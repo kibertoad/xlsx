@@ -146,6 +146,21 @@ describe('iterParse: chunked feeding', () => {
   const repeat = (n: number, body: (i: number) => string): string =>
     Array.from({ length: n }, (_, i) => body(i)).join('');
 
+  /**
+   * Join adjacent text events. A chunk boundary inside a text node splits it
+   * across two `write()` calls and saxes reports one event per call, so this
+   * is the granularity at which chunked and unchunked parsing have to agree.
+   */
+  const joinText = (events: SaxEvent[]): SaxEvent[] => {
+    const out: SaxEvent[] = [];
+    for (const e of events) {
+      const prev = out[out.length - 1];
+      if (e.kind === 'text' && prev?.kind === 'text') out[out.length - 1] = { kind: 'text', text: prev.text + e.text };
+      else out.push(e);
+    }
+    return out;
+  };
+
   it('yields events before it has parsed the tail of the document', async () => {
     // saxes reports the mismatched close tag part-way through. Written in one
     // call, every event ahead of it is queued behind the throw and the consumer
@@ -158,7 +173,7 @@ describe('iterParse: chunked feeding', () => {
       (async () => {
         for await (const _e of iterParse(xml)) seen++;
       })(),
-    ).rejects.toThrow();
+    ).rejects.toThrow(OpenXmlSchemaError);
     expect(seen).toBeGreaterThan(0);
   });
 
@@ -185,7 +200,7 @@ describe('iterParse: chunked feeding', () => {
       (async () => {
         for await (const _e of iterParse(oneChunk)) seen++;
       })(),
-    ).rejects.toThrow();
+    ).rejects.toThrow(OpenXmlSchemaError);
     expect(seen).toBeGreaterThan(0);
   });
 
@@ -248,5 +263,60 @@ describe('iterParse: chunked feeding', () => {
     );
     expect(err).toBeInstanceOf(OpenXmlSchemaError);
     expect((err as Error).message).toContain('Entity declarations');
+  });
+
+  it('matches a hand-derived event list for a document larger than one chunk', async () => {
+    // Comparing the three input shapes against each other only proves they
+    // agree: all of them run through the same chunker, so a chunker that
+    // dropped or reordered events would corrupt all three identically. This
+    // pins the absolute expectation the chunking has to preserve.
+    const n = 4000;
+    const xml = `<root>${repeat(n, (i) => `<t k="${i}">text-${i}</t>`)}</root>`;
+    expect(xml.length).toBeGreaterThan(64 * 1024);
+
+    const expected: SaxEvent[] = [{ kind: 'start', name: 'root', attrs: {} }];
+    for (let i = 0; i < n; i++) {
+      expected.push({ kind: 'start', name: 't', attrs: { k: String(i) } });
+      expected.push({ kind: 'text', text: `text-${i}` });
+      expected.push({ kind: 'end', name: 't' });
+    }
+    expected.push({ kind: 'end', name: 'root' });
+
+    expect(joinText(await collect(xml))).toEqual(expected);
+  });
+
+  it('cancels the source stream when the consumer stops early', async () => {
+    // Abandoning the iteration is routine: `iterRows({ maxRow })` returns the
+    // moment the band ends. The zip reader drops its inflate state from
+    // `cancel()`, so a reader that is merely dereferenced keeps the whole
+    // decompression window alive for as long as the archive is open.
+    let cancelled = false;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('<root>'));
+      },
+      pull(controller) {
+        controller.enqueue(encoder.encode('<c/>'.repeat(1000)));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    let seen = 0;
+    for await (const _e of iterParse(stream)) {
+      if (++seen > 3) break;
+    }
+    expect(cancelled).toBe(true);
+  });
+
+  it('reports a syntax error as OpenXmlSchemaError with the saxes error as cause', async () => {
+    const err = await collect('<root><a></b></root>').then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(OpenXmlSchemaError);
+    expect((err as Error).cause).toBeInstanceOf(Error);
   });
 });

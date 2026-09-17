@@ -79,30 +79,53 @@ function* atFeedSize(text: string): IterableIterator<string> {
   }
 }
 
+/**
+ * Decode bytes in feed-sized slices. Slicing before the decode rather than
+ * after it also bounds the decoder's output string, which matters when the
+ * producer hands over a whole part at once. UTF-8 never expands, so a slice of
+ * FEED_CHUNK_SIZE bytes decodes to at most that many code units and needs no
+ * second split.
+ *
+ * `stream: true` holds back a codepoint split across a slice boundary instead
+ * of emitting a replacement character for each half.
+ */
+function* decodeAtFeedSize(bytes: Uint8Array, td: TextDecoder): IterableIterator<string> {
+  for (let i = 0; i < bytes.byteLength; i += FEED_CHUNK_SIZE) {
+    const text = td.decode(bytes.subarray(i, Math.min(i + FEED_CHUNK_SIZE, bytes.byteLength)), { stream: true });
+    if (text.length > 0) yield text;
+  }
+}
+
 /** Decode any supported input into a sequence of feed-sized text chunks. */
 async function* decodedChunks(input: SaxInput): AsyncIterableIterator<string> {
   if (typeof input === 'string') {
     yield* atFeedSize(input);
     return;
   }
-  // `stream: true` holds back a codepoint split across a chunk boundary
-  // instead of emitting a replacement character for each half.
   const td = decoder();
   if (input instanceof Uint8Array) {
-    for (let i = 0; i < input.byteLength; i += FEED_CHUNK_SIZE) {
-      yield* atFeedSize(td.decode(input.subarray(i, Math.min(i + FEED_CHUNK_SIZE, input.byteLength)), { stream: true }));
-    }
+    yield* decodeAtFeedSize(input, td);
   } else if (isReadableStream(input)) {
     const reader = input.getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      yield* atFeedSize(td.decode(value, { stream: true }));
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        yield* decodeAtFeedSize(value, td);
+      }
+    } finally {
+      // Consumers abandon the iteration routinely (`iterRows({ maxRow })`
+      // returns as soon as the band ends). Without this the source stays
+      // locked and its `cancel()` never runs, which is what releases the zip
+      // reader's inflate state. A cancel that rejects is cleanup on a stream
+      // nobody will read again, and must not mask why we left the loop.
+      await reader.cancel().catch(() => {});
     }
   } else {
     throw new OpenXmlSchemaError('iterParse: unsupported input type');
   }
-  yield* atFeedSize(td.decode());
+  const tail = td.decode();
+  if (tail.length > 0) yield tail;
 }
 
 interface SaxesOpenTag {
@@ -155,7 +178,9 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   let pending: Error | undefined;
 
   parser.on('error', (err: Error) => {
-    pending = err;
+    // saxes reports syntax errors as plain Error; consumers of this library
+    // only ever see OpenXmlError subclasses.
+    pending = new OpenXmlSchemaError(`Malformed XML: ${err.message}`, { cause: err });
   });
   parser.on('doctype', () => {
     pending = new OpenXmlSchemaError('DTD declarations are not permitted in OOXML payloads');
@@ -189,13 +214,19 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
     if (pending !== undefined) throw pending;
   };
 
-  // Carry the tail of each chunk into the next scan so a `<!DOCTYPE` straddling
-  // a chunk boundary is still matched.
+  // Scan each chunk on its own, then a short window spanning the boundary, so
+  // a `<!DOCTYPE` split across two chunks is still matched. Concatenating the
+  // carry onto the whole chunk instead would make V8 flatten a fresh copy of
+  // every chunk before the regex could run.
+  const CARRY_LENGTH = DTD_TOKEN_LENGTH - 1;
   let dtdCarry = '';
   const scanForDtd = (chunk: string): void => {
-    const window = dtdCarry.length === 0 ? chunk : dtdCarry + chunk;
-    checkDoctype(window);
-    dtdCarry = window.slice(-(DTD_TOKEN_LENGTH - 1));
+    checkDoctype(chunk);
+    // Chunks shorter than the carry can hide a token across three of them, so
+    // the next carry comes off the joined window rather than the chunk.
+    const window = dtdCarry + chunk.slice(0, CARRY_LENGTH);
+    if (dtdCarry.length > 0) checkDoctype(window);
+    dtdCarry = (chunk.length >= CARRY_LENGTH ? chunk : window).slice(-CARRY_LENGTH);
   };
 
   for await (const chunk of decodedChunks(input)) {
