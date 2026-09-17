@@ -11,9 +11,14 @@ import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getC
 import type { Relationships } from '../packaging/relationships.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
-import { escapeCellString, escapeXmlAttr as escapeXmlAttrShared, escapeXmlText as escapeXmlTextShared } from '../utils/escape.js';
+import {
+  escapeXmlAttr as escapeXmlAttrShared,
+  escapeXmlText as escapeXmlTextShared,
+  escapeXmlTextVerbatim,
+} from '../utils/escape.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
+import { ERROR_CODES } from '../utils/inference.js';
 import type { SharedStringEntry, SharedStringsTable } from '../workbook/shared-strings.js';
 import { addSharedRichText, addSharedString } from '../workbook/shared-strings.js';
 import { MARKUP_COMPAT_NS, SHEET_MAIN_NS, X14_NS } from '../xml/namespaces.js';
@@ -446,24 +451,30 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   if ((f.t === 'normal' || f.t === 'array') && normalized.length === 0) {
     throw new OpenXmlSchemaError(`worksheet: ${f.t} formula must not be empty at ${ref}`);
   }
-  const formulaText = escapeXmlText(escapeCellString(normalized));
+  const formulaText = escapeXmlTextVerbatim(normalized, 'worksheet: formula', ref);
   const fEl = formulaText.length > 0 ? `<f${fAttrStr}>${formulaText}</f>` : `<f${fAttrStr}/>`;
 
   let valueAttr = '';
   let vEl = '';
   const cached = f.cachedValue;
-  if (cached !== undefined) {
+  if (f.cachedValueType === 'error') {
+    if (typeof cached !== 'string' || !ERROR_CODES.has(cached)) {
+      throw new OpenXmlSchemaError(`worksheet: invalid cached formula error at ${ref}`);
+    }
+    valueAttr = ' t="e"';
+    vEl = `<v>${cached}</v>`;
+  } else if (cached !== undefined) {
     if (typeof cached === 'number') {
       vEl = `<v>${serializeNumber(cached)}</v>`;
     } else if (typeof cached === 'boolean') {
       valueAttr = ' t="b"';
       vEl = `<v>${cached ? '1' : '0'}</v>`;
     } else {
-      // String result of a formula — use t="str", not the sst path. An empty
-      // result still needs both the type and the `<v/>`: that is what Excel
-      // displays for a formula it cannot recalculate.
+      // A string result takes t="str", not the sst path. An empty result still
+      // needs both the type and the `<v/>`: that is what Excel displays for a
+      // formula it cannot recalculate.
       valueAttr = ' t="str"';
-      const text = escapeXmlText(escapeCellString(cached));
+      const text = escapeXmlTextVerbatim(cached, 'worksheet: cached formula result', ref);
       vEl = text.length > 0 ? `<v>${text}</v>` : '<v/>';
     }
   }
@@ -637,7 +648,11 @@ const serializeCfRule = (rule: ConditionalFormattingRule): string => {
   if (rule.timePeriod !== undefined) attrs += ` timePeriod="${rule.timePeriod}"`;
 
   const inner: string[] = [];
-  for (const f of rule.formulas) inner.push(`<formula>${escapeXmlText(normalizeFormulaText(f))}</formula>`);
+  for (const f of rule.formulas) {
+    const at = `priority ${rule.priority}`;
+    const text = escapeXmlTextVerbatim(normalizeFormulaText(f), 'worksheet: conditional-formatting formula', at);
+    inner.push(`<formula>${text}</formula>`);
+  }
   if (rule.innerXml) inner.push(rule.innerXml);
   if (inner.length === 0) return `<cfRule${attrs}/>`;
   return `<cfRule${attrs}>${inner.join('')}</cfRule>`;
@@ -662,11 +677,18 @@ const serializeDataValidation = (dv: DataValidation): string => {
   if (dv.error !== undefined) attrs += ` error="${escapeXmlAttr(dv.error)}"`;
   if (dv.promptTitle !== undefined) attrs += ` promptTitle="${escapeXmlAttr(dv.promptTitle)}"`;
   if (dv.prompt !== undefined) attrs += ` prompt="${escapeXmlAttr(dv.prompt)}"`;
-  attrs += ` sqref="${escapeXmlAttr(multiCellRangeToString(dv.sqref))}"`;
+  const sqref = multiCellRangeToString(dv.sqref);
+  attrs += ` sqref="${escapeXmlAttr(sqref)}"`;
 
   const formulas: string[] = [];
-  if (dv.formula1 !== undefined) formulas.push(`<formula1>${escapeXmlText(normalizeFormulaText(dv.formula1))}</formula1>`);
-  if (dv.formula2 !== undefined) formulas.push(`<formula2>${escapeXmlText(normalizeFormulaText(dv.formula2))}</formula2>`);
+  if (dv.formula1 !== undefined) {
+    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula1), 'worksheet: data-validation formula1', sqref);
+    formulas.push(`<formula1>${text}</formula1>`);
+  }
+  if (dv.formula2 !== undefined) {
+    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula2), 'worksheet: data-validation formula2', sqref);
+    formulas.push(`<formula2>${text}</formula2>`);
+  }
   if (formulas.length === 0) return `<dataValidation${attrs}/>`;
   return `<dataValidation${attrs}>${formulas.join('')}</dataValidation>`;
 };

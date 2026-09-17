@@ -24,6 +24,8 @@ export interface FormulaValue {
   readonly t: FormulaKind;
   /** Cached value Excel last computed for the cell, used when `data_only` reads it back. */
   readonly cachedValue?: number | string | boolean;
+  /** Mark an Excel error token as an error result. Without this, strings stay text, including "#N/A". */
+  readonly cachedValueType?: 'error';
   /** Range string (`"A1:A10"`) for array / shared / dataTable formulas. */
   readonly ref?: string;
   /** Shared-formula index. */
@@ -148,17 +150,20 @@ const requireFormulaText = (fn: string, formula: string): string => {
  * A cached value is optional. Without one, Excel, LibreOffice and Google
  * Sheets compute the result on open, but viewers that never calculate (Quick
  * Look, Outlook and SharePoint previews, most thumbnailers) render the cell
- * empty. Supply one whenever the producer can compute it.
+ * empty. Supply one whenever the producer can compute it. For an Excel error,
+ * supply `{ cachedValue: '#N/A', cachedValueType: 'error' }`; without the type,
+ * the same token is a string result.
  */
 export function makeFormula(
   formula: string,
-  opts?: { cachedValue?: FormulaValue['cachedValue'] },
+  opts?: Pick<FormulaValue, 'cachedValue' | 'cachedValueType'>,
 ): FormulaValue {
   return Object.freeze({
     kind: 'formula',
     t: 'normal',
     formula: requireFormulaText('makeFormula', formula),
     ...(opts?.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : {}),
+    ...(opts?.cachedValueType !== undefined ? { cachedValueType: opts.cachedValueType } : {}),
   });
 }
 
@@ -170,7 +175,7 @@ export function makeFormula(
 export function makeArrayFormula(
   ref: string,
   formula: string,
-  opts?: { cachedValue?: FormulaValue['cachedValue'] },
+  opts?: Pick<FormulaValue, 'cachedValue' | 'cachedValueType'>,
 ): FormulaValue {
   return Object.freeze({
     kind: 'formula',
@@ -178,6 +183,7 @@ export function makeArrayFormula(
     formula: requireFormulaText('makeArrayFormula', formula),
     ref,
     ...(opts?.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : {}),
+    ...(opts?.cachedValueType !== undefined ? { cachedValueType: opts.cachedValueType } : {}),
   });
 }
 
@@ -191,7 +197,7 @@ export function makeSharedFormula(
   si: number,
   formula?: string,
   ref?: string,
-  opts?: { cachedValue?: FormulaValue['cachedValue'] },
+  opts?: Pick<FormulaValue, 'cachedValue' | 'cachedValueType'>,
 ): FormulaValue {
   if (!Number.isInteger(si) || si < 0) {
     throw new OpenXmlSchemaError(`makeSharedFormula: si must be a non-negative integer; got ${si}`);
@@ -203,6 +209,7 @@ export function makeSharedFormula(
     si,
     ...(ref !== undefined ? { ref } : {}),
     ...(opts?.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : {}),
+    ...(opts?.cachedValueType !== undefined ? { cachedValueType: opts.cachedValueType } : {}),
   });
 }
 
@@ -210,7 +217,7 @@ export function makeSharedFormula(
  * Plain `A1+B1` style formula, applied in place. Same value as
  * {@link makeFormula}, for a cell you already hold.
  */
-export function setFormula(c: Cell, formula: string, opts?: { cachedValue?: FormulaValue['cachedValue'] }): void {
+export function setFormula(c: Cell, formula: string, opts?: Pick<FormulaValue, 'cachedValue' | 'cachedValueType'>): void {
   c.value = makeFormula(formula, opts);
 }
 
@@ -219,7 +226,7 @@ export function setArrayFormula(
   c: Cell,
   ref: string,
   formula: string,
-  opts?: { cachedValue?: FormulaValue['cachedValue'] },
+  opts?: Pick<FormulaValue, 'cachedValue' | 'cachedValueType'>,
 ): void {
   c.value = makeArrayFormula(ref, formula, opts);
 }
@@ -230,7 +237,7 @@ export function setSharedFormula(
   si: number,
   formula?: string,
   ref?: string,
-  opts?: { cachedValue?: FormulaValue['cachedValue'] },
+  opts?: Pick<FormulaValue, 'cachedValue' | 'cachedValueType'>,
 ): void {
   c.value = makeSharedFormula(si, formula, ref, opts);
 }
@@ -261,6 +268,7 @@ export interface DataTableFormulaOpts {
   aca?: boolean;
   ca?: boolean;
   cachedValue?: FormulaValue['cachedValue'];
+  cachedValueType?: FormulaValue['cachedValueType'];
 }
 
 /**
@@ -284,6 +292,7 @@ export function makeDataTableFormula(formula: string, opts: DataTableFormulaOpts
     ...(opts.aca !== undefined ? { aca: opts.aca } : {}),
     ...(opts.ca !== undefined ? { ca: opts.ca } : {}),
     ...(opts.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : {}),
+    ...(opts.cachedValueType !== undefined ? { cachedValueType: opts.cachedValueType } : {}),
   });
 }
 
