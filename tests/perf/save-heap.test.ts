@@ -12,8 +12,10 @@
 // while the memory ceiling drops; retention is the honest measure.
 //
 // Excluded from the default `pnpm test` run (see vitest.config.ts). CI runs it
-// via `PERF_GATE=1 pnpm test:perf`. Needs `--expose-gc` to assert; without it
-// the forced GC is unavailable and the gate skips rather than reporting noise.
+// via `PERF_GATE=1 pnpm test:perf`, whose config passes `--expose-gc` to the
+// worker. Under the gate a missing `globalThis.gc` fails the test: a forced GC
+// is what separates retention from allocation churn, so without it the number
+// is noise and a silent skip would leave the gate green forever.
 
 import { describe, expect, it } from 'vitest';
 import type { XlsxSink } from '../../src/io/sink.js';
@@ -83,9 +85,18 @@ describe('modelled save retention', () => {
     const sink = probingSink(1_500_000);
     await saveWorkbook(wb, sink);
 
-    const retainedMb = (sink.retained() - baseline) / 1048576;
-    console.log(`save retention over the workbook model: ${retainedMb.toFixed(1)} MB`);
-    if (PERF_GATE && typeof gcFn === 'function') {
+    // A sink that never crossed sampleAfterBytes reports 0, which would make
+    // the delta hugely negative and pass the gate on a measurement that never
+    // happened. Check the probe fired before reading anything into the number.
+    const sampled = sink.retained();
+    expect(sampled, 'the sink never reached sampleAfterBytes, so nothing was measured').toBeGreaterThan(0);
+
+    const retainedMb = (sampled - baseline) / 1048576;
+    // stderr, matching heap.test.ts: the runner swallows console output from a
+    // passing test, and the number is the whole point of the run.
+    process.stderr.write(`[perf-save-heap] save retention over the workbook model: ${retainedMb.toFixed(1)} MB\n`);
+    if (PERF_GATE) {
+      expect(typeof gcFn, 'PERF_GATE needs --expose-gc; vitest.perf.config.ts passes it').toBe('function');
       expect(retainedMb).toBeLessThan(MAX_RETAINED_MB);
     }
   }, 300_000);

@@ -2,10 +2,14 @@
 //
 // Part names and workbook rIds are settled in one cheap pass over `wb.sheets`
 // before anything is serialised, so `xl/workbook.xml` can go out first. Each
-// sheet is then serialised straight into its ZIP entry and released, which
-// keeps peak memory at one flush buffer rather than the sum of every sheet's
-// XML. The parts a sheet discovers along the way (tables, comments, drawings,
-// charts, images) are collected as it goes and written after the sheets.
+// sheet is then serialised straight into its ZIP entry and released, so
+// worksheet XML no longer scales the heap: one flush buffer is live at a time
+// instead of the sum of every sheet's part.
+//
+// The side parts a sheet discovers along the way (tables, comments, drawings,
+// charts, images) are still collected whole and written after the sheets, and
+// the shared-strings table still grows with the workbook. Those two are what
+// bound a large save now.
 //
 // `xl/_rels/workbook.xml.rels` trails the sheet parts because its contents
 // depend on whether serialisation produced any shared strings.
@@ -21,6 +25,7 @@ import { IMAGE_FORMAT_EXTENSION, IMAGE_FORMAT_MIME, type XlsxImageFormat } from 
 import type { XlsxSink } from '../io/sink.js';
 import { OpenXmlIoError, OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
+import { utf8ByteLength } from '../utils/utf8.js';
 import { corePropsToBytes } from '../packaging/core.js';
 import { customPropsToBytes } from '../packaging/custom.js';
 import { extendedPropsToBytes } from '../packaging/extended.js';
@@ -154,17 +159,18 @@ const toUint8ArraySink = (): XlsxSink & { result(): Uint8Array } => {
   };
 };
 
-/**
- * Flush threshold for a streamed part's pending text, in UTF-16 code units.
- * Counting units rather than UTF-8 bytes avoids re-scanning every fragment;
- * a unit is never more than 3 UTF-8 bytes, so the buffer stays bounded at a few
- * hundred KB in the worst case instead of growing with the sheet.
- */
-const STREAM_FLUSH_THRESHOLD_CHARS = 64 * 1024;
+/** Flush threshold for a streamed part's pending text, in UTF-8 bytes. */
+const STREAM_FLUSH_THRESHOLD_BYTES = 64 * 1024;
 
 /**
  * Open a ZIP entry and let `serialise` push XML fragments into it, flushing
- * once the pending text crosses {@link STREAM_FLUSH_THRESHOLD_CHARS}.
+ * once the pending text crosses {@link STREAM_FLUSH_THRESHOLD_BYTES}.
+ *
+ * The threshold bounds what accumulates between fragments, not what a single
+ * fragment can be: a fragment is appended whole, so a one-string block such as
+ * `<cols>` or `<hyperlinks>` is still held entire however large it grows. The
+ * per-cell and per-row fragments that scale with sheet size are the ones this
+ * keeps bounded.
  *
  * The ZIP writer allows one streaming entry at a time, so this awaits `end()`
  * before returning and the caller is free to write the next part.
@@ -175,16 +181,35 @@ const writeStreamedEntry = async (
   serialise: (emit: WorksheetXmlSink) => void,
 ): Promise<void> => {
   const stream = writer.addStreamingEntry(archivePath);
-  const encoder = new TextEncoder();
-  let pending = '';
-  serialise((chunk) => {
-    pending += chunk;
-    if (pending.length >= STREAM_FLUSH_THRESHOLD_CHARS) {
-      stream.write(encoder.encode(pending));
-      pending = '';
+  try {
+    const encoder = new TextEncoder();
+    let pending = '';
+    let pendingBytes = 0;
+    serialise((chunk) => {
+      pending += chunk;
+      // UTF-8 byte length, computed without a full encode. `chunk.length`
+      // counts UTF-16 code units, which undercounts CJK by ~3x and would let
+      // the buffer balloon past the threshold on Japanese / Chinese workbooks.
+      pendingBytes += utf8ByteLength(chunk);
+      if (pendingBytes >= STREAM_FLUSH_THRESHOLD_BYTES) {
+        stream.write(encoder.encode(pending));
+        pending = '';
+        pendingBytes = 0;
+      }
+    });
+    if (pending.length > 0) stream.write(encoder.encode(pending));
+  } catch (err) {
+    // Seal the entry so the writer's one streaming slot is free again;
+    // otherwise every later call fails with "a streaming entry is still open"
+    // and buries the real cause. A failure from end() on top of a failed
+    // serialisation is noise, so the original error is the one that escapes.
+    try {
+      await stream.end();
+    } catch {
+      // ignore
     }
-  });
-  if (pending.length > 0) stream.write(encoder.encode(pending));
+    throw err;
+  }
   await stream.end();
 };
 
@@ -228,9 +253,11 @@ export async function saveWorkbook(wb: Workbook, sink: XlsxSink, opts: SaveOptio
     await saveWorkbookImpl(wb, writer);
   } catch (err) {
     // Release the sink so streaming destinations (`toFile` / `toWritable`)
-    // don't leave a half-written file looking valid. abort() is idempotent so
-    // a successful finalize() above is a no-op here.
-    writer.abort(err);
+    // don't leave a half-written file looking valid. Awaited because `toFile`
+    // cleans up asynchronously: unawaited, this rejects while the partial file
+    // is still on disk. abort() is idempotent so a successful finalize() above
+    // is a no-op here.
+    await writer.abort(err);
     throw err;
   }
 }
@@ -363,9 +390,10 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
   await writer.addEntry(ARC_WORKBOOK, new TextEncoder().encode(workbookXml));
 
   // ---- 3. each worksheet / chartsheet (and its rels file when present) ----
-  // Declared once rather than inline in the loop: the register* callbacks below
-  // close over the workbook-global part counters, which have to keep counting
-  // across sheets.
+  // A named function rather than the loop body below: the register* callbacks
+  // close over the workbook-global part counters, and `no-loop-func` rejects a
+  // closure over a reassigned `let` when it is declared inside a loop. The
+  // callbacks are rebuilt per sheet either way.
   const writeSheetPart = async (plan: SheetPlan): Promise<void> => {
     const { ref, archivePath } = plan;
     const sheetRels = makeRelationships();
@@ -585,9 +613,9 @@ async function saveWorkbookImpl(wb: Workbook, writer: ReturnType<typeof createZi
       await writer.addEntry(`${dir}/_rels/${file}.rels`, relsToBytes(sheetRels));
     }
   };
-  // One sheet at a time by necessity: the ZIP writer permits a single open
-  // streaming entry, so running these concurrently interleaves two sheets'
-  // bytes into one entry and produces an archive Excel cannot open.
+  // One sheet at a time: the ZIP writer permits a single open streaming entry
+  // and rejects a second one, so this is what keeps a sheet's bytes from having
+  // to be held while another sheet is written.
   for (const plan of sheetPlans) await writeSheetPart(plan);
 
   // ---- 4. workbook rels -- sheets first, then sst (if any), then styles, then

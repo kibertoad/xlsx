@@ -3,9 +3,9 @@
 // Hand-rolled serialiser for the worksheet part. The body is emitted as a
 // stream of XML fragments (see `writeWorksheetXml`) rather than returned as one
 // string, so `saveWorkbook` can deflate a sheet as it is built instead of
-// holding the whole part in memory. String building beats an XML node tree
-// here: a cell is a handful of attributes with no nesting, and the node
-// allocation per cell dominated everything else when this was measured.
+// holding the whole part in memory. String building rather than an XML node
+// tree because a cell is a handful of attributes with no nesting: a tree would
+// cost an object per cell and buy no structure the strings don't already have.
 
 import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell.js';
 import type { Relationships } from '../packaging/relationships.js';
