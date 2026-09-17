@@ -29,6 +29,7 @@ import { makeLegacyComment } from './comments.js';
 import type { ConditionalFormatting } from './conditional-formatting.js';
 import type { DataValidation } from './data-validations.js';
 import { type ColumnDimension, makeColumnDimension, makeRowDimension, type RowDimension } from './dimensions.js';
+import { applyRefBatch } from './ref-batch.js';
 import type { DataConsolidate } from './data-consolidate.js';
 import type { ScenarioList } from './scenarios.js';
 import type { CellWatch, IgnoredError } from './errors.js';
@@ -1989,6 +1990,32 @@ export function setHyperlink(
   return hl;
 }
 
+/**
+ * Set many hyperlinks at once, with the same result as calling
+ * {@link setHyperlink} for each entry in order, and the same validation.
+ *
+ * Each single call scans the sheet's hyperlinks to find the ref it replaces, so
+ * putting a link on every row of a sheet costs time quadratic in the number of
+ * rows. A batch resolves every ref against one index instead, which it builds
+ * and drops inside this call, so the cost is linear in the two lengths.
+ *
+ * Nothing is written until every entry has been validated, so a bad `target`
+ * leaves the sheet untouched rather than half updated.
+ */
+export function setHyperlinks(
+  ws: Worksheet,
+  entries: ReadonlyArray<{ ref: string; target?: string; location?: string; display?: string; tooltip?: string }>,
+): Hyperlink[] {
+  const prepared = entries.map((entry, i) => {
+    if (entry.target === undefined && entry.location === undefined) {
+      throw new OpenXmlSchemaError(`setHyperlinks: entry ${i} ("${entry.ref}"): one of target / location is required`);
+    }
+    return makeHyperlink(entry);
+  });
+  applyRefBatch(ws.hyperlinks, prepared, 'move-to-end');
+  return prepared;
+}
+
 /** Remove the hyperlink registered against `ref`. Returns true if anything was removed. */
 export function removeHyperlink(ws: Worksheet, ref: string): boolean {
   const i = ws.hyperlinks.findIndex((h) => h.ref === ref);
@@ -2134,6 +2161,24 @@ export function setComment(ws: Worksheet, opts: { ref: string; author: string; t
   if (i < 0) ws.legacyComments.push(c);
   else ws.legacyComments[i] = c;
   return c;
+}
+
+/**
+ * Set many comments at once, with the same result as calling
+ * {@link setComment} for each entry in order.
+ *
+ * Each single call scans the sheet's comments to find the ref it replaces, so
+ * putting a note on every row costs time quadratic in the number of rows. A
+ * batch resolves every ref against one index instead, which it builds and drops
+ * inside this call, so the cost is linear in the two lengths.
+ */
+export function setComments(
+  ws: Worksheet,
+  entries: ReadonlyArray<{ ref: string; author: string; text: string }>,
+): LegacyComment[] {
+  const prepared = entries.map((entry) => makeLegacyComment(entry));
+  applyRefBatch(ws.legacyComments, prepared, 'in-place');
+  return prepared;
 }
 
 export function getComment(ws: Worksheet, ref: string): LegacyComment | undefined {
