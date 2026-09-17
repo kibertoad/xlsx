@@ -30,6 +30,7 @@ import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { MARKUP_COMPAT_NS, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { parseXml } from '../xml/parser.js';
 import { serializeXml } from '../xml/serializer.js';
+import { assertNotStrictRoot } from '../xml/strict-package.js';
 import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings.js';
 import type { AutoFilter, FilterColumn } from './auto-filter.js';
@@ -214,6 +215,7 @@ interface SharedFormulaCache {
 export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx: WorksheetReadContext): Worksheet {
   const root = parseXml(bytes);
   if (root.name !== WORKSHEET_TAG) {
+    assertNotStrictRoot(root.name);
     throw new OpenXmlSchemaError(`parseWorksheetXml: root is "${root.name}", expected worksheet`);
   }
   const ws = makeWorksheet(title);

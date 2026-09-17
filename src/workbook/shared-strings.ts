@@ -18,6 +18,7 @@ import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { stableStringify } from '../utils/stable-stringify.js';
 import { qname, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { parseXml } from '../xml/parser.js';
+import { assertNotStrictRoot } from '../xml/strict-package.js';
 import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 
 const SST_TAG = `{${SHEET_MAIN_NS}}sst`;
@@ -130,6 +131,7 @@ const collectText = (node: XmlNode): string => {
 export function parseSharedStringsXml(bytes: Uint8Array | string): SharedStringsTable {
   const root = parseXml(bytes);
   if (root.name !== SST_TAG) {
+    assertNotStrictRoot(root.name);
     throw new OpenXmlSchemaError(`parseSharedStringsXml: root is "${root.name}", expected sst`);
   }
   const table = makeSharedStrings();

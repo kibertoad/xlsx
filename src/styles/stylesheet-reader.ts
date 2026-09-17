@@ -12,6 +12,7 @@ import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { stableStringify } from '../utils/stable-stringify.js';
 import { qname, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { parseXml } from '../xml/parser.js';
+import { assertNotStrictRoot } from '../xml/strict-package.js';
 import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import { AlignmentSchema } from './alignment.schema.js';
 import type { Border } from './borders.js';
@@ -67,6 +68,7 @@ const PROTECTION_TAG = qname(SHEET_MAIN_NS, 'protection');
 export function parseStylesheetXml(bytes: Uint8Array | string): Stylesheet {
   const root = parseXml(bytes);
   if (root.name !== STYLESHEET_TAG) {
+    assertNotStrictRoot(root.name);
     throw new OpenXmlSchemaError(`parseStylesheetXml: root is "${root.name}", expected styleSheet`);
   }
 

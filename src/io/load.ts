@@ -31,7 +31,7 @@ import {
   relsFromBytes,
 } from '../packaging/relationships.js';
 import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
-import { OpenXmlNotImplementedError, OpenXmlSchemaError } from '../utils/exceptions.js';
+import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DefinedName } from '../workbook/defined-names.js';
 import { makeDefinedName } from '../workbook/defined-names.js';
 import { parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
@@ -50,13 +50,11 @@ import {
   ARC_THEME,
   ARC_WORKBOOK,
   MARKUP_COMPAT_NS,
-  parseQName,
   REL_NS,
   SHEET_MAIN_NS,
-  STRICT_REL_NS,
-  STRICT_SHEET_MAIN_NS,
 } from '../xml/namespaces.js';
 import { type ParsedDocument, parseXmlDocument } from '../xml/parser.js';
+import { assertNotStrictRelTypes, assertNotStrictRoot } from '../xml/strict-package.js';
 import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
 import { openZip, type ZipArchive } from '../zip/reader.js';
@@ -80,23 +78,8 @@ export interface LoadOptions {
 /** Office Document relationship type: the package-root pointer to `xl/workbook.xml`. */
 export const OFFICE_DOC_REL_TYPE = `${REL_NS}/officeDocument`;
 
-/** The same pointer as an ISO 29500 strict package declares it. */
-const STRICT_OFFICE_DOC_REL_TYPE = `${STRICT_REL_NS}/officeDocument`;
-
-/**
- * A strict package reaches the loader as a plain `.xlsx`, because that is the
- * extension Excel's "Strict Open XML Spreadsheet" entry writes. Every part
- * inside it uses the strict namespace family, so the transitional element
- * lookups this reader is built on match nothing: without this the failure
- * surfaces as a missing officeDocument relationship, or worse, as a workbook
- * that loads with no sheets in it.
- */
-const strictPackageError = (): OpenXmlNotImplementedError =>
-  new OpenXmlNotImplementedError(
-    'loadWorkbook: this file is ISO 29500 strict ("Strict Open XML Spreadsheet"), which this' +
-      ' library does not read yet. Re-save it from Excel as "Excel Workbook (.xlsx)" to get the' +
-      ' transitional form.',
-  );
+/** Root element of `xl/workbook.xml`. Shared with the streaming reader. */
+export const WORKBOOK_TAG = `{${SHEET_MAIN_NS}}workbook`;
 
 /**
  * Resolve an OPC relationship target against its source part path.
@@ -350,7 +333,7 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
   const rootRels = relsFromBytes(archive.read(ARC_ROOT_RELS));
   const officeRel = rootRels.rels.find((r) => r.type === OFFICE_DOC_REL_TYPE);
   if (!officeRel) {
-    if (rootRels.rels.some((r) => r.type === STRICT_OFFICE_DOC_REL_TYPE)) throw strictPackageError();
+    assertNotStrictRelTypes(rootRels.rels.map((r) => r.type));
     throw new OpenXmlSchemaError('loadWorkbook: root rels missing officeDocument relationship');
   }
   const workbookPath = resolveRelTarget('', officeRel.target);
@@ -365,11 +348,11 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
   // 3. workbook.xml — parse to extract sheet metadata only.
   const wbDoc = parseXmlDocument(archive.read(workbookPath));
   const wbRoot = wbDoc.root;
-  const wbRootName = parseQName(wbRoot.name);
-  // Reached when the package relationships are transitional but the parts are
-  // not, which no Excel build produces and some converters do.
-  if (wbRootName.ns === STRICT_SHEET_MAIN_NS) throw strictPackageError();
-  if (wbRootName.local !== 'workbook') {
+  // Compared with its namespace, not on local name alone: every `<sheets>`
+  // lookup below is a transitional QName, so a root in some other namespace
+  // would read as a workbook with no sheets rather than be rejected.
+  if (wbRoot.name !== WORKBOOK_TAG) {
+    assertNotStrictRoot(wbRoot.name);
     throw new OpenXmlSchemaError(`loadWorkbook: ${workbookPath} root is "${wbRoot.name}", expected workbook`);
   }
   const sheetEntries = parseSheetEntries(wbRoot);

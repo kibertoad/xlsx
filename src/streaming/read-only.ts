@@ -20,6 +20,7 @@ import { ERROR_CODES } from '../utils/inference.js';
 import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
 import { parseXml } from '../xml/parser.js';
+import { assertNotStrictRelTypes, assertNotStrictRoot } from '../xml/strict-package.js';
 import type { XlsxSource } from '../io/source.js';
 import { coordinateToTuple, derivedRowNumber, MAX_ROW, rowNumberFromAttr } from '../utils/coordinate.js';
 import { type Stylesheet, makeStylesheet } from '../styles/stylesheet.js';
@@ -32,6 +33,7 @@ import {
   resolveRelTarget,
   SHARED_STRINGS_PART,
   STYLES_PART,
+  WORKBOOK_TAG,
 } from '../io/load.js';
 
 export interface IterRowsOptions {
@@ -673,6 +675,7 @@ export async function loadWorkbookStream(
   const rootRels = relsFromBytes(archive.read(ARC_ROOT_RELS));
   const officeDocRel = findByType(rootRels, OFFICE_DOC_REL_TYPE);
   if (!officeDocRel) {
+    assertNotStrictRelTypes(rootRels.rels.map((r) => r.type));
     throw new OpenXmlSchemaError(`loadWorkbookStream: no officeDocument relationship in root rels`);
   }
   const workbookPath = resolveRelTarget('', officeDocRel.target);
@@ -680,6 +683,12 @@ export async function loadWorkbookStream(
     throw new OpenXmlSchemaError(`loadWorkbookStream: workbook part "${workbookPath}" missing`);
   }
   const workbookRoot = parseXml(archive.read(workbookPath));
+  if (workbookRoot.name !== WORKBOOK_TAG) {
+    assertNotStrictRoot(workbookRoot.name);
+    throw new OpenXmlSchemaError(
+      `loadWorkbookStream: ${workbookPath} root is "${workbookRoot.name}", expected workbook`,
+    );
+  }
   // loadWorkbook's `<sheets>` parser, and its rejections below: a declaration
   // that loader refuses must not read here as a workbook without that sheet.
   const declaredSheets = parseSheetEntries(workbookRoot);

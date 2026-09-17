@@ -556,7 +556,7 @@ Every error thrown by @office-kit/xlsx is a subclass of \`OpenXmlError\`
 | \`OpenXmlSchemaError\`               | Input does not conform to the ECMA-376 OOXML schema                                                  |
 | \`OpenXmlDecompressionBombError\`    | Archive exceeded \`decompressionLimits\` (per-entry size, total size, or compression ratio)        |
 | \`OpenXmlInvalidWorkbookError\`      | Workbook structurally invalid (missing parts, broken relationships)                                  |
-| \`OpenXmlNotImplementedError\`       | Feature is not yet supported (e.g. ZIP64 write, encrypted decryption)                               |
+| \`OpenXmlNotImplementedError\`       | Feature is not yet supported (e.g. ZIP64 write, encrypted decryption, ISO 29500 strict input)       |
 
 \`decompressionLimits\` is **on by default** in both \`loadWorkbook\` and
 \`loadWorkbookStream\`. Keep it on when reading untrusted input.
@@ -565,6 +565,12 @@ Encrypted xlsx files (CFB Compound Documents) are detected and rejected
 with a clear error pointing at
 [\`msoffcrypto-tool\`](https://github.com/nolze/msoffcrypto-tool); decrypt
 externally first, then load the resulting plain xlsx.
+
+ISO 29500 strict packages (Excel's "Strict Open XML Spreadsheet" Save As
+entry) keep the \`.xlsx\` extension but use the \`purl.oclc.org\` namespace
+family, which the reader does not understand. \`loadWorkbook\` and
+\`loadWorkbookStream\` throw \`OpenXmlNotImplementedError\` naming the
+format; re-save the file as "Excel Workbook (.xlsx)" to read it.
 
 ## Common pitfalls
 
