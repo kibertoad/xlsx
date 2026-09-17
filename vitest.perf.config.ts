@@ -14,6 +14,9 @@ export default defineConfig({
     exclude: ['tests/perf/**/*.bench.ts', 'node_modules', 'dist', 'reference'],
     // Heap and retention gates require a collected baseline in each worker.
     pool: 'forks',
+    // CPU throughput and heap retention must not compete with other benchmarks.
+    // Run every gate, but give each file an isolated measurement window.
+    fileParallelism: false,
     execArgv: ['--expose-gc'],
   },
 });
