@@ -13,16 +13,23 @@
 // Excluded from the default `pnpm test` run (see vitest.config.ts). Run
 // explicitly:
 //   pnpm test:perf
-//   PERF_HEAP_GATE=1 pnpm test:perf   # asserts the ceiling
+//   PERF_GATE=1 pnpm test:perf   # asserts the ceilings, as CI does
 //
 // Numbers depend on Node version and V8 GC mood, so the gate is off by default
-// and each ceiling is set well above its observed figure.
+// and each ceiling is set well above its observed figure. The gate needs a
+// reliable baseline, so it also requires `--expose-gc`; vitest.perf.config.ts
+// pins that flag.
+//
+// PERF_GATE rather than heap.test.ts's PERF_HEAP_GATE: this is a ceiling with
+// an order of magnitude of headroom, so CI can enforce it, and PERF_GATE is
+// what the CI perf job sets. heap.test.ts tracks a cells-per-MB floor close
+// enough to its observed value that a noisy runner would flap.
 
 import { describe, expect, it } from 'vitest';
 import { iterParse, type SaxInput } from '../../src/xml/iterparse.js';
 import { SHEET_MAIN_NS } from '../../src/xml/namespaces.js';
 
-const PERF_HEAP_GATE = process.env['PERF_HEAP_GATE'] === '1';
+const PERF_GATE = process.env['PERF_GATE'] === '1';
 
 const ROWS = 200_000;
 const COLS = 5;
@@ -32,10 +39,11 @@ const EXPECTED_EVENTS = ROWS * (2 + COLS * 5) + 2;
 const ZIP_STREAM_CHUNK_BYTES = 450 * 1024;
 
 // Ceilings are per shape because the two regress to very different figures.
-// On this input, chunked feeding measures around 65 MB from bytes and around
-// 95 MB from a 450 KB stream; unchunked it measures around 975 MB and around
-// 220 MB. A single loose ceiling would clear the stream regression entirely,
-// so each sits above its own observed figure and below its own regression.
+// Chunked feeding measures around 65 MB on this input whichever way it
+// arrives; unchunked it measures around 975 MB from bytes and around 220 MB
+// from a 450 KB stream. A single ceiling loose enough for the byte figure
+// would clear the stream regression entirely, so each sits above its own
+// observed figure and below its own regression.
 const BYTES_CEILING_MB = 200;
 const STREAM_CEILING_MB = 150;
 
@@ -43,7 +51,9 @@ const sheetBody = (rows: number, cols: number): Uint8Array => {
   const parts = [`<?xml version="1.0" encoding="UTF-8"?><sheetData xmlns="${SHEET_MAIN_NS}">`];
   for (let r = 1; r <= rows; r++) {
     parts.push(`<row r="${r}">`);
-    for (let c = 1; c <= cols; c++) parts.push(`<c r="A${r}" t="n"><v>${r * c}</v></c>`);
+    for (let c = 1; c <= cols; c++) {
+      parts.push(`<c r="${String.fromCharCode(0x40 + c)}${r}" t="n"><v>${r * c}</v></c>`);
+    }
     parts.push('</row>');
   }
   parts.push('</sheetData>');
@@ -67,6 +77,11 @@ const inChunksOf = (bytes: Uint8Array, chunkBytes: number): ReadableStream<Uint8
 
 const walk = async (label: string, ceilingMb: number, inputBytes: number, input: SaxInput): Promise<void> => {
   const gc = (globalThis as { gc?: () => void }).gc;
+  // Building the body leaves tens of MB of garbage behind. Sampling `before`
+  // on top of it and letting V8 reclaim it mid-walk drives the delta towards
+  // zero, so an ungated run is informational and a gated one is a real
+  // measurement or nothing.
+  if (PERF_GATE) expect(typeof gc).toBe('function');
   if (typeof gc === 'function') gc();
 
   const before = process.memoryUsage().heapUsed;
@@ -95,7 +110,7 @@ const walk = async (label: string, ceilingMb: number, inputBytes: number, input:
   // Guards the walk itself, gate or no gate: per row a start/end pair, per
   // cell a `<c>` pair, a `<v>` pair and one text event, plus `<sheetData>`.
   expect(events).toBe(EXPECTED_EVENTS);
-  if (PERF_HEAP_GATE) {
+  if (PERF_GATE) {
     expect(peakMb).toBeLessThan(ceilingMb);
   }
 };
