@@ -105,10 +105,34 @@ export function resolveDecompressionLimits(
 export interface DecompressionBudget {
   readonly limits: ResolvedDecompressionLimits;
   totalInflated: number;
+  /**
+   * Bytes charged to the archive total per entry. Keyed by path so a re-read
+   * refunds its predecessor instead of counting the same payload twice; see
+   * {@link startEntryInflate}.
+   */
+  readonly chargedByPath: Map<string, number>;
 }
 
 export function createBudget(limits: ResolvedDecompressionLimits): DecompressionBudget {
-  return { limits, totalInflated: 0 };
+  return { limits, totalInflated: 0, chargedByPath: new Map() };
+}
+
+/**
+ * Announce that `path` is about to be inflated, refunding whatever a previous
+ * read of it charged to the archive total.
+ *
+ * The total is a bound on how much distinct payload an archive is allowed to
+ * expand to, which `checkDeclaredTotals` enforces by summing each entry's
+ * declared size exactly once. Inflating an entry twice (a `readStream` followed
+ * by a `read`, or a read of an entry the inflate cache has evicted) would
+ * otherwise count it twice and reject a legitimate file. The per-entry cap is
+ * unaffected: it is re-evaluated from scratch on every read.
+ */
+export function startEntryInflate(budget: DecompressionBudget, path: string): void {
+  const prior = budget.chargedByPath.get(path);
+  if (prior === undefined) return;
+  budget.totalInflated -= prior;
+  budget.chargedByPath.delete(path);
 }
 
 /**
@@ -166,6 +190,7 @@ export function checkDeclaredTotals(
  */
 export function recordInflated(budget: DecompressionBudget, path: string, bytes: number): void {
   budget.totalInflated += bytes;
+  budget.chargedByPath.set(path, (budget.chargedByPath.get(path) ?? 0) + bytes);
   if (budget.totalInflated > budget.limits.maxTotalUncompressedBytes) {
     throw new OpenXmlDecompressionBombError(
       `openZip: archive-wide inflated size exceeded ${budget.limits.maxTotalUncompressedBytes} bytes` +

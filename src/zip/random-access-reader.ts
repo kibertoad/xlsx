@@ -1,11 +1,16 @@
-// Random-access ZIP reader. / §2.3 streaming-read residual.
+// Random-access ZIP reader.
 //
-// The previous reader handed every entry to `fflate.unzipSync` up front, which
-// materialises *every* uncompressed payload into memory at once. For a 100 MB
-// xlsx with ~500 MB of decompressed sheet data the resident set spikes
-// accordingly. The random-access path keeps only the compressed archive bytes
-// resident, parses the central directory once (cheap — ~46 B per entry plus
-// filename), and inflates each entry lazily on `read(path)`.
+// Handing every entry to `fflate.unzipSync` materialises every uncompressed
+// payload at once, so a 100 MB xlsx with 500 MB of decompressed sheet data
+// spikes the resident set accordingly. This reader keeps only the compressed
+// archive bytes resident, parses the central directory once (cheap, about 46 B
+// per entry plus the filename), and inflates each entry lazily on `read(path)`.
+//
+// Inflated payloads are cached only while they are small enough to be worth it
+// (see CACHE_MAX_ENTRY_BYTES). Caching every entry would put the whole
+// uncompressed package back in memory, which is the cost this reader exists to
+// avoid: across the fixture corpus a load re-reads nothing but `.rels` parts,
+// and never more than twice.
 //
 // Limitations:
 // - ZIP64 reads only when the standard ZIP32 fields fit. EOCD with
@@ -26,6 +31,7 @@ import {
   entryOverflowError,
   recordInflated,
   resolveDecompressionLimits,
+  startEntryInflate,
 } from './decompression-guard.js';
 import type { ZipArchive } from './reader.js';
 
@@ -35,6 +41,23 @@ import type { ZipArchive } from './reader.js';
  * keeps peak transient memory bounded.
  */
 const INFLATE_CHUNK_BYTES = 64 * 1024;
+
+/**
+ * Largest inflated entry worth keeping in the re-read cache. Only `.rels` parts
+ * are ever read more than once during a load, and those run to a few KB; sheets,
+ * styles and media are read once and would just sit there.
+ */
+const CACHE_MAX_ENTRY_BYTES = 64 * 1024;
+
+/**
+ * Ceiling on everything the re-read cache holds. An archive with thousands of
+ * small parts would otherwise accumulate without limit; past this the oldest
+ * entries are dropped and simply re-inflate if asked for again.
+ */
+const CACHE_MAX_TOTAL_BYTES = 4 * 1024 * 1024;
+
+/** Central-directory filenames are decoded per entry, so the decoder is shared. */
+const CD_NAME_DECODER = new TextDecoder('utf-8');
 
 const singleChunkStream = (bytes: Uint8Array): ReadableStream<Uint8Array> =>
   new ReadableStream<Uint8Array>({
@@ -215,7 +238,7 @@ function parseCentralDirectory(b: Uint8Array, cdOffset: number, expectedCount: n
     // Bit 11 (0x0800) signals UTF-8 filename. xlsx archives are almost always
     // UTF-8 already; treat bit-0 as UTF-8 too since CP437 ⊃ ASCII and xlsx uses
     // ASCII paths.
-    const path = new TextDecoder('utf-8').decode(nameBytes);
+    const path = CD_NAME_DECODER.decode(nameBytes);
 
     // ZIP64 Extended Information rewrites whichever of {uncompSize, compSize,
     // lfhOffset} are 0xFFFFFFFF sentinels in the canonical fields. The extra
@@ -329,10 +352,24 @@ export function openRandomAccessArchive(
     checkDeclaredTotals(budget, entries);
   }
 
-  // Per-entry inflate cache so repeated reads of the same path don't re-inflate
-  // — `read(path)` is documented as cheap on the second call (loadWorkbook
-  // touches several files multiple times).
+  // Re-read cache for small entries, so the `.rels` parts the passthrough walk
+  // revisits do not inflate twice. Insertion-ordered, which makes the oldest
+  // key the first one `keys()` yields when the total has to come back down.
   const inflateCache = new Map<string, Uint8Array>();
+  let cachedBytes = 0;
+
+  const cacheEntry = (path: string, out: Uint8Array): void => {
+    if (out.byteLength > CACHE_MAX_ENTRY_BYTES) return;
+    inflateCache.set(path, out);
+    cachedBytes += out.byteLength;
+    while (cachedBytes > CACHE_MAX_TOTAL_BYTES) {
+      const oldest = inflateCache.keys().next();
+      if (oldest.done === true) break;
+      const evicted = inflateCache.get(oldest.value);
+      inflateCache.delete(oldest.value);
+      cachedBytes -= evicted?.byteLength ?? 0;
+    }
+  };
   let live = true;
   let archiveBytes: Uint8Array | undefined = bytes;
 
@@ -360,6 +397,7 @@ export function openRandomAccessArchive(
         if (compressed.byteLength > budget.limits.maxEntryUncompressedBytes) {
           throw entryOverflowError(path, budget.limits.maxEntryUncompressedBytes);
         }
+        startEntryInflate(budget, path);
         recordInflated(budget, path, compressed.byteLength);
       }
       // Copy so callers can safely mutate the returned bytes without perturbing
@@ -370,7 +408,7 @@ export function openRandomAccessArchive(
     } else {
       throw new OpenXmlIoError(`openZip: unsupported compression method ${entry.compMethod} for "${path}"`);
     }
-    inflateCache.set(path, out);
+    cacheEntry(path, out);
     return out;
   };
 
@@ -393,6 +431,7 @@ export function openRandomAccessArchive(
         if (compressed.byteLength > budget.limits.maxEntryUncompressedBytes) {
           throw entryOverflowError(path, budget.limits.maxEntryUncompressedBytes);
         }
+        startEntryInflate(budget, path);
         recordInflated(budget, path, compressed.byteLength);
       }
       // Copy because callers may mutate the returned bytes.
@@ -407,6 +446,7 @@ export function openRandomAccessArchive(
     // input — never both — so the ReadableStream internal queue stays at
     // depth 1 and the producer can't race ahead of the consumer.
     const entryCap = budget ? entryInflateCap(budget, compressed.byteLength) : Number.POSITIVE_INFINITY;
+    if (budget) startEntryInflate(budget, path);
     let entryEmitted = 0;
     const pending: Uint8Array[] = [];
     let pushedOffset = 0;
@@ -521,6 +561,7 @@ export function openRandomAccessArchive(
       live = false;
       archiveBytes = undefined;
       inflateCache.clear();
+      cachedBytes = 0;
       byPath.clear();
     },
   };
@@ -538,6 +579,7 @@ function inflateBounded(
   budget: DecompressionBudget | null,
 ): Uint8Array {
   const cap = budget ? entryInflateCap(budget, compressed.byteLength) : Number.POSITIVE_INFINITY;
+  if (budget) startEntryInflate(budget, path);
   const acc: Uint8Array[] = [];
   let emitted = 0;
   let aborted: Error | undefined;
