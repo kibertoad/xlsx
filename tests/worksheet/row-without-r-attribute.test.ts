@@ -52,7 +52,7 @@ const pkg = (body: string): Uint8Array =>
 const openStream = (body: string) => loadWorkbookStream(fromBuffer(Buffer.from(pkg(body))));
 
 /** Every cell the streaming reader yields, as `row:col=value`. */
-const streamCells = async (body: string, opts?: { minRow?: number }): Promise<string[]> => {
+const streamCells = async (body: string, opts?: { minRow?: number; maxRow?: number; minCol?: number }): Promise<string[]> => {
   const wb = await openStream(body);
   try {
     const out: string[] = [];
@@ -229,5 +229,25 @@ describe('<row> without @r: loadWorkbookStream', () => {
     for (const body of SHAPES) {
       expect(await streamCells(body)).toEqual(parsedCells(body));
     }
+  });
+});
+
+
+describe('mixed located and unlocated cells', () => {
+  const body = '<row><c t="str"><v>a</v></c><c r="B3" t="str"><v>b</v></c><c t="str"><v>c</v></c></row>' + bareRow('d');
+  it('uses the first located cell even when it is not the first cell', async () => {
+    expect(await streamCells(body)).toEqual(parsedCells(body));
+  });
+  it('keeps the whole derived row in a band query', async () => {
+    expect(await streamCells(body, { minRow: 3, maxRow: 3 })).toEqual(['3:1=a', '3:2=b', '3:3=c']);
+  });
+  it('derives columns independently of the column filter', async () => {
+    const unlocated = '<row><c t="str"><v>a</v></c><c t="str"><v>b</v></c></row>';
+    expect(await streamCells(unlocated, { minCol: 2 })).toEqual(['1:2=b']);
+  });
+  it('accepts an explicit plus sign in unsignedInt row attributes', async () => {
+    const signed = numberedRow('+1', 'a') + numberedRow(' +2 ', 'b');
+    expect(parsedCells(signed)).toEqual(['1:1=a', '2:1=b']);
+    expect(await streamCells(signed, { minRow: 2 })).toEqual(['2:1=b']);
   });
 });

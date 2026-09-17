@@ -16,3 +16,8 @@ byte offset.
 `<row r="…">` values that are not a row number in `[1, 1048576]` now throw an
 `OpenXmlSchemaError` from both readers; `loadWorkbookStream` used to drop such a
 row silently, and `loadWorkbook` used to accept a value past the last row.
+
+A located cell can appear after unlocated cells in the same row. Both readers
+assign all of them to the derived row before applying a row band. Unlocated
+column numbering also stays independent of column filters. Row attributes
+continue to accept the optional plus sign allowed by `xsd:unsignedInt`.

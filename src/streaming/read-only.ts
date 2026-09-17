@@ -144,6 +144,18 @@ async function* iterSheetRows(
   let currentRow = -1;
   let nextRow = 1;
   let currentCells: ReadOnlyCell[] = [];
+  let nextCol = 1;
+  let pendingCells: Array<{ col: number; type: string; text: string; inline: string; styleId: number }> = [];
+  const settleRow = (row: number): void => {
+    currentRow = row;
+    nextRow = Math.max(nextRow, row + 1);
+    if (row >= minRow && row <= maxRow) {
+      for (const cell of pendingCells) {
+        currentCells.push({ row, col: cell.col, value: decodeCellValue(cell.type, cell.text, cell.inline, sst), styleId: cell.styleId });
+      }
+    }
+    pendingCells = [];
+  };
 
   // Per-cell state. Reset when each <c> starts.
   let cellOpen = false;
@@ -178,19 +190,18 @@ async function* iterSheetRows(
             nextRow = Math.max(nextRow, currentRow + 1);
           }
           currentCells = [];
+          pendingCells = [];
+          nextCol = 1;
           break;
         }
         case 'c': {
           if (currentRow < 0) break;
           const ref = e.attrs['r'];
-          if (currentRow === 0) {
-            currentRow = ref ? coordinateToTuple(ref).row : derivedRowNumber(nextRow, 'loadWorkbookStream');
-            nextRow = Math.max(nextRow, currentRow + 1);
-          }
+          if (currentRow === 0 && ref) settleRow(coordinateToTuple(ref).row);
           // Skip cell-attr parsing entirely when the row is outside the
           // requested band — saves the parseInt + coordinateToTuple hit on
           // every cell of every excluded row.
-          if (currentRow < minRow || currentRow > maxRow) break;
+          if (currentRow !== 0 && (currentRow < minRow || currentRow > maxRow)) break;
           cellOpen = true;
           cellType = e.attrs['t'] ?? 'n';
           const sRaw = e.attrs['s'];
@@ -201,8 +212,9 @@ async function* iterSheetRows(
             cellCol = tup.col;
           } else {
             cellRow = currentRow;
-            cellCol = (currentCells[currentCells.length - 1]?.col ?? 0) + 1;
+            cellCol = nextCol;
           }
+          nextCol = cellCol + 1;
           vText = '';
           isText = '';
           break;
@@ -240,8 +252,7 @@ async function* iterSheetRows(
         // A row that held no located cell still consumes a slot, so settle it
         // before moving the high-water mark past it.
         if (currentRow === 0) {
-          currentRow = derivedRowNumber(nextRow, 'loadWorkbookStream');
-          nextRow = currentRow + 1;
+          settleRow(derivedRowNumber(nextRow, 'loadWorkbookStream'));
         }
         if (currentRow >= minRow && currentRow <= maxRow && currentCells.length > 0) {
           yield currentCells;
@@ -258,7 +269,9 @@ async function* iterSheetRows(
         break;
       }
       case 'c': {
-        if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
+        if (cellOpen && cellRow === 0 && cellCol >= minCol && cellCol <= maxCol) {
+          pendingCells.push({ col: cellCol, type: cellType, text: vText, inline: isText, styleId: cellStyleId });
+        } else if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
           const value = decodeCellValue(cellType, vText, isText, sst);
           currentCells.push({ row: cellRow, col: cellCol, value, styleId: cellStyleId });
         }
@@ -306,6 +319,7 @@ const readRowAttr = (bytes: Uint8Array, from: number, to: number): number => {
     }
     let q = p + 4;
     while (q < to && isXmlSpace(bytes[q])) q++;
+    if (bytes[q] === 0x2b /* + */) q++;
     let value = 0;
     let digits = 0;
     while (q < to) {

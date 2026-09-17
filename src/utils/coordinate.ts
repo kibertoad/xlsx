@@ -249,11 +249,11 @@ export function isValidRowNumber(n: unknown): n is number {
   return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= MAX_ROW;
 }
 
-// Digits with optional XML whitespace, which is all `xsd:unsignedInt` collapses
+// Digits with an optional plus sign and XML whitespace, which `xsd:unsignedInt` collapses
 // away. The streaming row-offset index scans bytes for this exact shape, so a
 // looser rule here would let the index and the SAX walk number a row
 // differently, and a band query would then seek past rows it should yield.
-const ROW_ATTR_VALUE = /^[ \t\r\n]*([0-9]+)[ \t\r\n]*$/;
+const ROW_ATTR_VALUE = /^[ \t\r\n]*\+?([0-9]+)[ \t\r\n]*$/;
 
 /**
  * Parse a `<row r="…">` value into a row number, or `undefined` when it is not
