@@ -74,6 +74,32 @@ describe('setHyperlinks matches the loop it replaces', () => {
     expect(batched.hyperlinks).toEqual(looped.hyperlinks);
   });
 
+  it('does linear work when replacing many duplicate refs', () => {
+    const count = 5000;
+    const ws = makeWorksheet('S');
+    for (let i = 0; i < count; i++) {
+      ws.hyperlinks.push(makeHyperlink({ ref: 'A1', target: `https://old.example/${i}` }));
+    }
+    // Include more than one full cycle through the initial duplicates.
+    const entries = linkEntries(Array.from({ length: count * 2 + 1 }, () => 'A1'));
+    let shiftedSlots = 0;
+    const shift = Array.prototype.shift;
+    // eslint-disable-next-line no-extend-native -- Count queue work synchronously; restore in finally.
+    Array.prototype.shift = function (this: unknown[]) {
+      // Ref reads alone miss work spent moving a positions queue on each removal.
+      shiftedSlots += this.length;
+      return shift.call(this);
+    };
+    try {
+      setHyperlinks(ws, entries);
+    } finally {
+      // eslint-disable-next-line no-extend-native -- Restore the native method after instrumentation.
+      Array.prototype.shift = shift;
+    }
+    expect(shiftedSlots).toBeLessThan(count * 10);
+    expect(ws.hyperlinks.map((entry) => entry.target)).toEqual(entries.slice(-count).map((entry) => entry.target));
+  });
+
   it('keeps the array identity, so a held reference sees the result', () => {
     const ws = makeWorksheet('S');
     const held = ws.hyperlinks;

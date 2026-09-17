@@ -16,6 +16,11 @@ export type RefBatchMode =
   /** Removes it and appends the addition, as setHyperlink does. */
   | 'move-to-end';
 
+interface RefPositions {
+  slots: number[];
+  head: number;
+}
+
 /**
  * Every position each ref occupies, ascending. "The first entry carrying this
  * ref" is then the head of its list rather than a scan.
@@ -24,15 +29,15 @@ export type RefBatchMode =
  * carry two entries for one cell (a malformed file declares them) and a run of
  * single calls consumes those one at a time.
  */
-const positionsByRef = (items: ReadonlyArray<{ ref: string } | undefined>): Map<string, number[]> => {
-  const positions = new Map<string, number[]>();
+const positionsByRef = (items: ReadonlyArray<{ ref: string } | undefined>): Map<string, RefPositions> => {
+  const positions = new Map<string, RefPositions>();
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (!item) continue;
     const ref = item.ref;
     const known = positions.get(ref);
-    if (known) known.push(i);
-    else positions.set(ref, [i]);
+    if (known) known.slots.push(i);
+    else positions.set(ref, { slots: [i], head: 0 });
   }
   return positions;
 };
@@ -54,10 +59,10 @@ export function applyRefBatch<T extends { ref: string }>(
   if (mode === 'in-place') {
     for (const addition of additions) {
       const ref = addition.ref;
-      const at = positions.get(ref)?.[0];
+      const at = positions.get(ref)?.slots[0];
       if (at === undefined) {
         items.push(addition);
-        positions.set(ref, [items.length - 1]);
+        positions.set(ref, { slots: [items.length - 1], head: 0 });
       } else {
         items[at] = addition;
       }
@@ -72,11 +77,12 @@ export function applyRefBatch<T extends { ref: string }>(
   for (const addition of additions) {
     const ref = addition.ref;
     const known = positions.get(ref);
-    const replaced = known?.shift();
+    // Advancing a cursor avoids shifting every remaining duplicate position.
+    const replaced = known?.slots[known.head++];
     if (replaced !== undefined) slots[replaced] = undefined;
     slots.push(addition);
-    if (known) known.push(slots.length - 1);
-    else positions.set(ref, [slots.length - 1]);
+    if (known) known.slots.push(slots.length - 1);
+    else positions.set(ref, { slots: [slots.length - 1], head: 0 });
   }
 
   items.length = 0;
