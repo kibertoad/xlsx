@@ -32,6 +32,14 @@ const buildSheet = async (rows: number): Promise<Uint8Array> => {
 };
 
 describe('phase-4 — row-offset index for sub-sheet iter', () => {
+  it('rejects cached band queries after the workbook closes', async () => {
+    const wb = await loadWorkbookStream(fromBuffer(await buildSheet(10)));
+    const ws = wb.openWorksheet('A');
+    for await (const _row of ws.iterRows({ minRow: 2 })) { /* prime the cache */ }
+    await wb.close();
+    expect(() => ws.iterRows({ minRow: 2 })).toThrow(/archive is closed/);
+  });
+
   it('iterRows({ minRow: K }) yields only rows ≥ K', async () => {
     const bytes = await buildSheet(50);
     const wb = await loadWorkbookStream(fromBuffer(bytes));

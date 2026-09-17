@@ -6,6 +6,8 @@ import { workbookToBytes } from '../../src/io/save.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import { getCell, setCell } from '../../src/worksheet/worksheet.js';
 
+const STAMP = new Date(Date.UTC(2026, 0, 2, 3, 4, 0));
+
 describe('workbookToBuffer (#28)', () => {
   it('returns a Node Buffer', async () => {
     const wb = createWorkbook();
@@ -21,8 +23,11 @@ describe('workbookToBuffer (#28)', () => {
     setCell(ws, 1, 2, 42);
     setCell(ws, 2, 1, true);
 
-    const bufBytes = await workbookToBuffer(wb);
-    const u8Bytes = await workbookToBytes(wb);
+    // Both saves need the same pinned mtime: unpinned, each entry header
+    // carries the wall clock at two-second resolution, so the two results
+    // differ whenever the saves land either side of a tick.
+    const bufBytes = await workbookToBuffer(wb, { mtime: STAMP });
+    const u8Bytes = await workbookToBytes(wb, { mtime: STAMP });
 
     expect(bufBytes.byteLength).toBe(u8Bytes.byteLength);
     expect(Array.from(bufBytes)).toEqual(Array.from(u8Bytes));
