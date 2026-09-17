@@ -20,6 +20,7 @@ import type { Drawing } from '../drawing/drawing.js';
 import { translateFormula } from '../formula/translate.js';
 import type { Relationships } from '../packaging/relationships.js';
 import { findById } from '../packaging/relationships.js';
+import { parseCellNumber } from '../utils/cell-number.js';
 import { coordinateToTuple, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
@@ -1417,7 +1418,7 @@ const readCell = (
     // into a workbook it cannot reach), and that cached value is the only
     // thing it has to display until the link resolves.
     const cachedRaw = vNode === undefined ? undefined : (vNode.text ?? '');
-    const cached = decodeCachedValue(cachedRaw, t);
+    const cached = decodeCachedValue(cachedRaw, t, ws.title, coord);
     handleFormula(cell, fNode, coord, cached, sharedFormulas);
     return;
   }
@@ -1426,7 +1427,7 @@ const readCell = (
   let value: CellValue = null;
   switch (t) {
     case 'n':
-      value = parseNumericCellText(vNode?.text);
+      value = parseCellNumber(vNode?.text, ws.title, coord.col, coord.row);
       break;
     case 's': {
       if (vNode?.text === undefined) {
@@ -1468,26 +1469,6 @@ const readCell = (
   setCell(ws, coord.row, coord.col, value, styleId);
 };
 
-/**
- * `<v>` under `t="n"`. An absent or empty `<v>` is an empty cell; anything
- * else has to be a finite number.
- *
- * `Number.parseFloat` answers NaN for text and Infinity for an overflowing
- * exponent, and both used to be stored on the cell as-is. Nothing rejected
- * them on the way in, so a corrupt file loaded cleanly and only failed later,
- * at save, with "cannot serialise non-finite number" pointing at a cell the
- * caller never wrote. The writer's guard is `Number.isFinite`; matching it
- * here keeps what the model can hold and what it can emit in agreement.
- */
-const parseNumericCellText = (raw: string | undefined): number | null => {
-  if (raw === undefined || raw === '') return null;
-  const n = Number.parseFloat(raw);
-  if (!Number.isFinite(n)) {
-    throw new OpenXmlSchemaError(`worksheet: <c t="n"><v>${raw}</v> is not a finite number`);
-  }
-  return n;
-};
-
 const parseStyleId = (raw: string): number => {
   const n = Number.parseInt(raw, 10);
   if (!Number.isInteger(n) || n < 0) {
@@ -1508,12 +1489,17 @@ const readInlineString = (isNode: XmlNode | undefined): CellValue => {
   return typeof entry === 'string' ? entry : { kind: 'rich-text', runs: entry.runs };
 };
 
-const decodeCachedValue = (raw: string | undefined, t: string): number | string | boolean | undefined => {
+const decodeCachedValue = (
+  raw: string | undefined,
+  t: string,
+  sheet: string,
+  coord: { row: number; col: number },
+): number | string | boolean | undefined => {
   if (raw === undefined) return undefined;
   switch (t) {
     case 'n':
       // An empty `<v/>` under the (default) numeric type carries no number.
-      return raw === '' ? undefined : (parseNumericCellText(raw) ?? undefined);
+      return parseCellNumber(raw, sheet, coord.col, coord.row) ?? undefined;
     case 'b':
       return raw === '' ? undefined : raw === '1';
     case 'str':

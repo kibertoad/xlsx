@@ -10,6 +10,7 @@ import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } fro
 import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, ARC_SHARED_STRINGS, ARC_STYLE, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { findById, relsFromBytes } from '../packaging/relationships.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
+import { parseCellNumber } from '../utils/cell-number.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
 import { type ZipArchive, openZip } from '../zip/reader.js';
@@ -92,27 +93,21 @@ const localName = (qname: string): string => {
   return i < 0 ? qname : qname.slice(i + 1);
 };
 
-/**
- * `<v>` under `t="n"`. `Number.parseFloat` answers NaN for text and Infinity
- * for an overflowing exponent; either would travel on as a cell value that no
- * caller can use and that the writer refuses to emit. This reader drops
- * unreadable values rather than throwing, as it does everywhere else.
- */
-const parseNumericCellText = (raw: string | undefined): number | null => {
-  if (raw === undefined || raw === '') return null;
-  const n = Number.parseFloat(raw);
-  return Number.isFinite(n) ? n : null;
-};
-
 const decodeCellValue = (
   t: string,
   vText: string | undefined,
   inlineText: string | undefined,
   sst: ReadonlyArray<string>,
+  sheet: string,
+  col: number,
+  row: number,
 ): CellValue => {
   switch (t) {
     case 'n':
-      return parseNumericCellText(vText);
+      // Throws on text or an exponent past the double range, as loadWorkbook
+      // does: the two entry points have to answer the same bytes the same way,
+      // and a null here would be indistinguishable from an empty cell.
+      return parseCellNumber(vText, sheet, col, row);
     case 's': {
       if (vText === undefined) return null;
       const idx = Number.parseInt(vText, 10);
@@ -130,7 +125,10 @@ const decodeCellValue = (
     case 'inlineStr':
       return inlineText ?? '';
     default:
-      return parseNumericCellText(vText);
+      // An unhandled `t` (`"d"`, or something not in ST_CellType at all). The
+      // type says nothing about what the text holds, so there is no finiteness
+      // rule to apply; loadWorkbook rejects the cell type outright instead.
+      return vText !== undefined && vText !== '' ? Number.parseFloat(vText) : null;
   }
 };
 
@@ -140,6 +138,7 @@ const decodeCellValue = (
  * `opts`.
  */
 async function* iterSheetRows(
+  title: string,
   sheetInput: SaxInput,
   sst: ReadonlyArray<string>,
   opts: IterRowsOptions,
@@ -253,7 +252,7 @@ async function* iterSheetRows(
       }
       case 'c': {
         if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
-          const value = decodeCellValue(cellType, vText, isText, sst);
+          const value = decodeCellValue(cellType, vText, isText, sst, title, cellCol, cellRow);
           currentCells.push({ row: cellRow, col: cellCol, value, styleId: cellStyleId });
         }
         cellOpen = false;
@@ -540,21 +539,21 @@ const makeStreamingReadOnlyWorksheet = (
       // archive's streaming inflate path so the worksheet's inflated payload
       // is never fully resident. Peak memory for the walk drops to the
       // inflate window + SAX state instead of the entire `<sheetData>` body.
-      return iterSheetRows(archive.readStream(partPath), sst, opts);
+      return iterSheetRows(title, archive.readStream(partPath), sst, opts);
     }
     // Band query (minRow > 1): the row-offset index needs the full inflated
     // bytes so we can binary-search to the byte offset of the first matching
     // row. Materialise once and reuse via `ensureIndexed`.
     const { bytes, index, sheetDataEnd, sheetDataTagEnd } = ensureIndexed();
-    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(bytes, sst, opts);
+    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(title, bytes, sst, opts);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {
       // Every row is below minRow, so there is nothing to yield.
       return (async function* () {})();
     }
     const target = index[pos];
-    if (!target) return iterSheetRows(bytes, sst, opts);
-    return iterSheetRows(replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
+    if (!target) return iterSheetRows(title, bytes, sst, opts);
+    return iterSheetRows(title, replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
   };
   const iterValues = async function* (opts: IterRowsOptions = {}): AsyncIterableIterator<CellValue[]> {
     for await (const row of iterRows(opts)) {
