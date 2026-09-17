@@ -44,6 +44,20 @@ export const SHEET_DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/200
 export const CHART_DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/chartDrawing';
 export const PICTURE_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
+// ---- ISO 29500 strict -------------------------------------------------------
+//
+// "Strict Open XML Spreadsheet" in Excel's Save As dialog writes the same
+// document model as the transitional form above, under a `purl.oclc.org`
+// namespace family instead of a `schemas.openxmlformats.org` one. The reader
+// only understands transitional, so these two exist to recognise a strict
+// package and name it: the relationship type every OPC package must declare,
+// and the root namespace of `xl/workbook.xml`. A file carrying either is
+// strict throughout.
+
+const STRICT_DOC_NS = 'http://purl.oclc.org/ooxml/officeDocument/';
+export const STRICT_REL_NS = `${STRICT_DOC_NS}relationships`;
+export const STRICT_SHEET_MAIN_NS = 'http://purl.oclc.org/ooxml/spreadsheetml/main';
+
 // ---- Microsoft extensions ---------------------------------------------------
 
 export const CUSTOMUI_NS = 'http://schemas.microsoft.com/office/2006/relationships/ui/extensibility';
