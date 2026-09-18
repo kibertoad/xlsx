@@ -138,7 +138,7 @@ Every style primitive has a `make*` constructor — `makeFont`,
 | `wb.active`               | `getActiveSheet(wb)`                  |
 | `wb.sheetnames`           | `sheetNames(wb)`                      |
 | `wb['Data']`              | `getSheet(wb, 'Data')`                |
-| `wb.worksheets[0]`        | `getSheetByIndex(wb, 0)`              |
+| `wb.worksheets[0]`        | `wb.sheets.find((s) => s.kind === 'worksheet')?.sheet` |
 | `del wb['Data']`          | `removeSheet(wb, 'Data')`             |
 | `ws.merged_cells.ranges`  | `getMergedCells(ws)`                  |
 | `ws.merge_cells('A1:B2')` | `mergeCells(ws, 'A1:B2')`             |
@@ -277,3 +277,5 @@ editing surface.
   prose-style worked examples (styling, charts, validation, streaming).
 - `SECURITY.md` — `decompressionLimits` defaults and the threat model when
   loading untrusted input.
+
+`getSheetByIndex(wb, index)` uses the full tab order, including chartsheets. It returns `undefined` for a chartsheet, so it is not equivalent to indexing openpyxl’s worksheet-only `wb.worksheets` list.
