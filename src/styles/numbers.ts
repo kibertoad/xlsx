@@ -3,7 +3,7 @@
 //
 // Excel keeps two parallel namespaces for number formats:
 //   * IDs 0–163 are reserved for the built-in catalogue (sparsely
-//     populated; only 38 of them are actually defined).
+//     populated; only 36 of them are actually defined).
 //   * IDs ≥ 164 are user-defined / locale-specific. The Stylesheet
 //     pool allocates these on demand (phase 2 §3.4).
 
@@ -91,7 +91,15 @@ export function isBuiltinFormat(code: string): boolean {
 // Mirror openpyxl's regex strategy verbatim. The two patterns work together
 // to decide whether a format implies a date / time / duration interpretation.
 
-const COLORS_GROUP = '\\[(BLACK|BLUE|CYAN|GREEN|MAGENTA|RED|WHITE|YELLOW)\\]';
+/**
+ * The colour names Excel accepts in a bracket group (`[Red]`), as the regex
+ * alternation `STRIP_RE` needs them. The format-code parser needs the same
+ * names to tell a colour apart from a comparison or a calendar modifier, so
+ * they live here once.
+ */
+export const FORMAT_COLOR_NAMES = 'BLACK|BLUE|CYAN|GREEN|MAGENTA|RED|WHITE|YELLOW';
+
+const COLORS_GROUP = `\\[(${FORMAT_COLOR_NAMES})\\]`;
 const LITERAL_GROUP = '"[^"]*"';
 const LOCALE_GROUP = '\\[(?!hh?\\]|mm?\\]|ss?\\])[^\\]]*\\]';
 
