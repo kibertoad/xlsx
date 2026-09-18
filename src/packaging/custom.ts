@@ -7,7 +7,7 @@
 // below cover the most common conversions.
 
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
-import { CPROPS_FMTID, CUSTPROPS_NS, parseQName, VTYPES_NS } from '../xml/namespaces.js';
+import { CPROPS_FMTID, CUSTPROPS_NS, localNameOf, VTYPES_NS } from '../xml/namespaces.js';
 import { parseXml } from '../xml/parser.js';
 import { serializeXml } from '../xml/serializer.js';
 import { el, type XmlNode } from '../xml/tree.js';
@@ -64,15 +64,13 @@ export function makeDateValue(iso: string): XmlNode {
 
 // ---- typed-value readers ---------------------------------------------------
 
-const localNameOf = (n: XmlNode): string => parseQName(n.name).local;
-
 export function readStringValue(v: XmlNode): string | undefined {
-  const ln = localNameOf(v);
+  const ln = localNameOf(v.name);
   if (ln === 'lpwstr' || ln === 'lpstr' || ln === 'bstr') return v.text ?? '';
   return undefined;
 }
 export function readIntValue(v: XmlNode): number | undefined {
-  const ln = localNameOf(v);
+  const ln = localNameOf(v.name);
   if (
     ln === 'i4' ||
     ln === 'i2' ||
@@ -89,7 +87,7 @@ export function readIntValue(v: XmlNode): number | undefined {
   return undefined;
 }
 export function readDoubleValue(v: XmlNode): number | undefined {
-  const ln = localNameOf(v);
+  const ln = localNameOf(v.name);
   if (ln === 'r4' || ln === 'r8' || ln === 'decimal' || ln === 'cy') {
     const n = Number.parseFloat(v.text ?? '');
     return Number.isFinite(n) ? n : undefined;
@@ -97,14 +95,14 @@ export function readDoubleValue(v: XmlNode): number | undefined {
   return undefined;
 }
 export function readBoolValue(v: XmlNode): boolean | undefined {
-  if (localNameOf(v) !== 'bool') return undefined;
+  if (localNameOf(v.name) !== 'bool') return undefined;
   const t = (v.text ?? '').toLowerCase();
   if (t === '1' || t === 'true' || t === 't') return true;
   if (t === '0' || t === 'false' || t === 'f') return false;
   return undefined;
 }
 export function readFiletimeValue(v: XmlNode): string | undefined {
-  if (localNameOf(v) === 'filetime') return v.text ?? '';
+  if (localNameOf(v.name) === 'filetime') return v.text ?? '';
   return undefined;
 }
 

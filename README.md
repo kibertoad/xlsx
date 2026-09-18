@@ -337,7 +337,9 @@ on the grounds that a wrong value is worse than a failed load.
 `loadWorkbookStream` reads that cell as empty and keeps going, because an
 iterator that throws on row 900,000 leaves you no way to finish the pass.
 Structural problems (a missing part, no `officeDocument` relationship, an
-unknown sheet name) throw in both.
+unknown sheet name) throw in both, and so does XML inside `<sheetData>` that is
+not well-formed: an unclosed `<row>`, a stray `</c>`, an undefined entity
+reference. Outside `<sheetData>` the same input is still read leniently.
 
 ### Migrating from openpyxl
 

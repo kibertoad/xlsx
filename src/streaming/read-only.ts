@@ -7,7 +7,7 @@
 // in memory.
 
 import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
-import { ARC_CONTENT_TYPES, ARC_ROOT_RELS } from '../xml/namespaces.js';
+import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, localNameOf } from '../xml/namespaces.js';
 import { findById, findByType, makeRelationships, relsFromBytes } from '../packaging/relationships.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
 import { parseCellNumber } from '../utils/cell-number.js';
@@ -69,11 +69,6 @@ const relsPathFor = (partPath: string): string => {
   return `${partPath.slice(0, i)}/_rels/${partPath.slice(i + 1)}.rels`;
 };
 
-const localName = (qname: string): string => {
-  const i = qname.lastIndexOf('}');
-  return i < 0 ? qname : qname.slice(i + 1);
-};
-
 const decodeCellValue = (
   t: string,
   vText: string | undefined,
@@ -119,6 +114,14 @@ const decodeCellValue = (
  * SAX-iterate `<sheetData>/<row>/<c>` events out of the worksheet bytes (or a
  * stream that yields them), yielding one `ReadOnlyCell[]` per row that matches
  * `opts`.
+ *
+ * `readSheetData` in `../worksheet/reader.ts` walks the same element shapes for
+ * `loadWorkbook`. The two stay separate because this one is an async generator
+ * over a stream with a row band and an early exit, and that per-event cost is
+ * what the other one exists to avoid. Where a row or cell with no `@r` lands
+ * has to come out the same in both, and is asserted to: see "agrees with
+ * loadWorkbook on where every cell lands" in
+ * `tests/worksheet/row-without-r-attribute.test.ts`.
  */
 async function* iterSheetRows(
   title: string,
@@ -167,7 +170,7 @@ async function* iterSheetRows(
   for await (const ev of iterParse(sheetInput)) {
     const e = ev as SaxEvent;
     if (e.kind === 'start') {
-      const local = localName(e.name);
+      const local = localNameOf(e.name);
       if (!inSheetData) {
         if (local === 'sheetData') inSheetData = true;
         continue;
@@ -236,7 +239,7 @@ async function* iterSheetRows(
       continue;
     }
     // end
-    const local = localName(e.name);
+    const local = localNameOf(e.name);
     if (!inSheetData) continue;
     switch (local) {
       case 'sheetData':
