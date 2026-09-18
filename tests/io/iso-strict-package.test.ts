@@ -164,6 +164,17 @@ describe('loadWorkbook on an ISO 29500 strict package', () => {
       (path) => path === WORKSHEET_PART,
     );
     await expectNamedAsStrict(loadWorkbook(fromBuffer(mixed)));
+    for (const options of [{}, { minRow: 2, maxRow: 2 }]) {
+      const streamed = await loadWorkbookStream(fromBuffer(mixed));
+      try {
+        const worksheet = streamed.openWorksheet('Data');
+        await expectNamedAsStrict((async () => {
+          for await (const row of worksheet.iterRows(options)) void row;
+        })());
+      } finally {
+        await streamed.close();
+      }
+    }
   });
 
   it('names the format from the streaming reader too', async () => {

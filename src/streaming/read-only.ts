@@ -166,9 +166,14 @@ async function* iterSheetRows(
   let isText = '';
   let isRunText = '';
 
+  let checkedRoot = false;
   for await (const ev of iterParse(sheetInput)) {
     const e = ev as SaxEvent;
     if (e.kind === 'start') {
+      if (!checkedRoot) {
+        assertNotStrictRoot(e.name);
+        checkedRoot = true;
+      }
       const local = localName(e.name);
       if (!inSheetData) {
         if (local === 'sheetData') inSheetData = true;
