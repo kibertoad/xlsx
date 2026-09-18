@@ -50,11 +50,11 @@ import {
   ARC_THEME,
   ARC_WORKBOOK,
   MARKUP_COMPAT_NS,
-  parseQName,
   REL_NS,
   SHEET_MAIN_NS,
 } from '../xml/namespaces.js';
 import { type ParsedDocument, parseXmlDocument } from '../xml/parser.js';
+import { assertNotStrictRelTypes, assertNotStrictRoot } from '../xml/strict-package.js';
 import { findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
 import { openZip, type ZipArchive } from '../zip/reader.js';
@@ -77,6 +77,9 @@ export interface LoadOptions {
 
 /** Office Document relationship type: the package-root pointer to `xl/workbook.xml`. */
 export const OFFICE_DOC_REL_TYPE = `${REL_NS}/officeDocument`;
+
+/** Root element of `xl/workbook.xml`. Shared with the streaming reader. */
+export const WORKBOOK_TAG = `{${SHEET_MAIN_NS}}workbook`;
 
 /**
  * Resolve an OPC relationship target against its source part path.
@@ -330,6 +333,7 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
   const rootRels = relsFromBytes(archive.read(ARC_ROOT_RELS));
   const officeRel = rootRels.rels.find((r) => r.type === OFFICE_DOC_REL_TYPE);
   if (!officeRel) {
+    assertNotStrictRelTypes(rootRels.rels.map((r) => r.type));
     throw new OpenXmlSchemaError('loadWorkbook: root rels missing officeDocument relationship');
   }
   const workbookPath = resolveRelTarget('', officeRel.target);
@@ -344,7 +348,11 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
   // 3. workbook.xml — parse to extract sheet metadata only.
   const wbDoc = parseXmlDocument(archive.read(workbookPath));
   const wbRoot = wbDoc.root;
-  if (parseQName(wbRoot.name).local !== 'workbook') {
+  // Compared with its namespace, not on local name alone: every `<sheets>`
+  // lookup below is a transitional QName, so a root in some other namespace
+  // would read as a workbook with no sheets rather than be rejected.
+  if (wbRoot.name !== WORKBOOK_TAG) {
+    assertNotStrictRoot(wbRoot.name);
     throw new OpenXmlSchemaError(`loadWorkbook: ${workbookPath} root is "${wbRoot.name}", expected workbook`);
   }
   const sheetEntries = parseSheetEntries(wbRoot);

@@ -80,6 +80,10 @@ Honest list:
   projects.
 - **`.xlsx` only**: no `.xls` (BIFF), `.xlsb`, `.ods`, or `.csv`. Use
   SheetJS for those.
+- **Transitional OOXML only**: a file saved through Excel's "Strict Open XML
+  Spreadsheet" entry is ISO 29500 **strict**, and reading it is not
+  implemented. `loadWorkbook` and `loadWorkbookStream` name the format and tell
+  you to re-save it as "Excel Workbook (.xlsx)" instead of mis-reading it.
 - **Node 22+ required**: relies on built-in `Web Streams`, `Blob`, and
   `fetch`. Node 18 / 20 (EOL) are not supported.
 - **Browser stress-test history is shorter** than ExcelJS's. If you ship
@@ -403,6 +407,12 @@ map, including the formats that stay out of scope.
   extras and per-sheet rels chain are preserved end-to-end.
 - ✅ Encrypted xlsx detection (CFB Compound Document magic): clear error
   pointing at `msoffcrypto-tool` for decryption.
+- ✅ ISO 29500 strict detection: a file saved from Excel as "Strict Open XML
+  Spreadsheet" carries the `.xlsx` extension but a different namespace family,
+  so `loadWorkbook` and `loadWorkbookStream` throw an
+  `OpenXmlNotImplementedError` naming the format and saying to re-save it as
+  "Excel Workbook (.xlsx)". Converter output that mixes the two families is
+  caught per part. Reading strict packages is not implemented.
 - ✅ ZIP64 write — partial: workbooks with > 65 535 entries get a ZIP64 EOCD
   record + locator spliced into the final chunk. Read works too. **Limit:**
   individual entry sizes and the central-directory offset must still fit in

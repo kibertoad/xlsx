@@ -30,6 +30,7 @@ import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { localNameOf, MARKUP_COMPAT_NS, qname, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { isWhitespaceOnly, parseXml, rejectDtdDeclarations } from '../xml/parser.js';
 import { serializeXml } from '../xml/serializer.js';
+import { assertNotStrictRoot } from '../xml/strict-package.js';
 import { el, findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings.js';
 import type { AutoFilter, FilterColumn } from './auto-filter.js';
@@ -218,6 +219,7 @@ export function parseWorksheetXml(bytes: Uint8Array | string, title: string, ctx
     sheetData === undefined ? text : text.slice(0, sheetData.bodyStart) + text.slice(sheetData.bodyEnd),
   );
   if (root.name !== WORKSHEET_TAG) {
+    assertNotStrictRoot(root.name);
     throw new OpenXmlSchemaError(`parseWorksheetXml: root is "${root.name}", expected worksheet`);
   }
   const ws = makeWorksheet(title);
