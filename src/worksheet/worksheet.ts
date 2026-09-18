@@ -509,18 +509,25 @@ export interface IterRowsOptions {
  * Iterate the worksheet rows rectangularly. Yields one row per row in
  * `[minRow, maxRow]` — including entirely empty rows — and each yielded row
  * has length `maxCol - minCol + 1`. Missing cell positions are `undefined`
- * (no placeholder Cell allocations).
+ * (no placeholder Cell allocations), so position `i` of every yielded row is
+ * column `minCol + i` for the whole iteration.
  *
  * Defaults: `minRow=1`, `maxRow=getMaxRow(ws)`, `minCol=1`,
- * `maxCol=getMaxCol(ws)`. The default extent is the populated bounding box,
- * not the 1M × 16K sheet limit, so the rectangular default doesn't iterate
- * the whole grid for a small sheet.
+ * `maxCol=getMaxCol(ws)`. That bounding box is the sheet's populated cells,
+ * not the 1M × 16K grid limit, so the rectangular default doesn't iterate the
+ * whole grid for a small sheet. A cell carrying only formatting is populated,
+ * so a sheet formatted past its content iterates to the end of the
+ * formatting. Pass {@link getValueExtent}'s box as the options to stop at the
+ * last value instead; it is `undefined` for a sheet holding no value at all,
+ * which the caller narrows.
  *
  * To iterate populated rows only, filter:
  * `[...iterRows(ws)].filter(row => row.some((c) => c !== undefined))`. To
  * iterate populated cells without row boundaries, use {@link iterCells}.
  */
 export function* iterRows(ws: Worksheet, opts: IterRowsOptions = {}): IterableIterator<(Cell | undefined)[]> {
+  // Default parameters, so `getMaxCol` (O(cells)) is skipped entirely when the
+  // caller pins `maxCol`, and likewise for `getMaxRow`.
   const { minRow = 1, maxRow = getMaxRow(ws), minCol = 1, maxCol = getMaxCol(ws) } = opts;
   if (maxRow < minRow || maxCol < minCol) return;
   const width = maxCol - minCol + 1;
@@ -541,8 +548,9 @@ export function* iterRows(ws: Worksheet, opts: IterRowsOptions = {}): IterableIt
 
 /**
  * Same rectangular iteration as {@link iterRows}, but yields each cell's
- * `.value`. Missing cell positions become `null` — already the canonical empty
- * marker in `CellValue`.
+ * `.value`. Missing cell positions become `null`, already the canonical empty
+ * marker in `CellValue`, so every yielded row has the full extent width: a
+ * `null` means "no value at that position" rather than a short row.
  */
 export function* iterValues(ws: Worksheet, opts: IterRowsOptions = {}): IterableIterator<CellValue[]> {
   for (const row of iterRows(ws, opts)) {
@@ -564,14 +572,22 @@ export function* iterCells(ws: Worksheet, opts: IterRowsOptions = {}): IterableI
   }
 }
 
-/** Effective max row index based on populated cells (0 when empty). */
+/**
+ * Highest row index holding a cell (0 when the sheet has none). Counts a cell
+ * that carries only formatting, matching Excel's used range rather than the
+ * last row of data, which is `getValueExtent(ws)?.maxRow`.
+ */
 export function getMaxRow(ws: Worksheet): number {
   let m = 0;
   for (const r of ws.rows.keys()) if (r > m) m = r;
   return m;
 }
 
-/** Effective max column index based on populated cells (0 when empty). */
+/**
+ * Highest column index holding a cell (0 when the sheet has none). Counts
+ * formatting-only cells, same as {@link getMaxRow}; the last column of data is
+ * `getValueExtent(ws)?.maxCol`.
+ */
 export function getMaxCol(ws: Worksheet): number {
   let m = 0;
   for (const rowMap of ws.rows.values()) {
@@ -744,39 +760,85 @@ export function countCells(ws: Worksheet): number {
   return n;
 }
 
-/**
- * Bounding-box of the populated cells: `{ minRow, maxRow, minCol, maxCol }`
- * covering every cell in `ws.rows`. Returns `undefined` when the sheet is
- * empty. Walks the sparse store once.
- */
-export function getDataExtent(
-  ws: Worksheet,
-): { minRow: number; maxRow: number; minCol: number; maxCol: number } | undefined {
+// `include` is optional rather than `() => true` for the cell extent: the walk
+// is O(cells) on a public helper, and the row-keys form skips both the
+// per-cell entry tuple and the per-cell call.
+const scanExtent = (ws: Worksheet, include?: (c: Cell) => boolean): CellRange | undefined => {
   let minRow = Number.POSITIVE_INFINITY;
   let maxRow = 0;
   let minCol = Number.POSITIVE_INFINITY;
   let maxCol = 0;
   let touched = false;
   for (const [r, rowMap] of ws.rows) {
-    if (rowMap.size === 0) continue;
+    let rowCounts = false;
+    if (include === undefined) {
+      if (rowMap.size === 0) continue;
+      for (const c of rowMap.keys()) {
+        if (c < minCol) minCol = c;
+        if (c > maxCol) maxCol = c;
+      }
+      rowCounts = true;
+    } else {
+      for (const [c, cell] of rowMap) {
+        if (!include(cell)) continue;
+        if (c < minCol) minCol = c;
+        if (c > maxCol) maxCol = c;
+        rowCounts = true;
+      }
+    }
+    if (!rowCounts) continue;
     if (r < minRow) minRow = r;
     if (r > maxRow) maxRow = r;
-    for (const c of rowMap.keys()) {
-      if (c < minCol) minCol = c;
-      if (c > maxCol) maxCol = c;
-    }
     touched = true;
   }
   if (!touched) return undefined;
   return { minRow, maxRow, minCol, maxCol };
+};
+
+/**
+ * Bounding-box of the cells the sheet materialises: `{ minRow, maxRow, minCol,
+ * maxCol }` covering every cell in `ws.rows`, whether or not it holds a value.
+ * Returns `undefined` when the sheet has no cells. Walks the sparse store once.
+ *
+ * This is Excel's used range, and what it writes into `<dimension>`: a cell
+ * that exists only to carry formatting (`<c r="A6" s="4"/>`, no `<v>`) counts.
+ * {@link getValueExtent} answers "where does the data end" instead.
+ */
+export function getCellExtent(
+  ws: Worksheet,
+): { minRow: number; maxRow: number; minCol: number; maxCol: number } | undefined {
+  return scanExtent(ws);
 }
 
 /**
- * Same as {@link getDataExtent} but returns the canonical `"A1:E10"` range
- * string for the bounding box, or `undefined` when the sheet is empty.
+ * Bounding-box of the cells holding a value, i.e. those whose `value` is
+ * neither `null` nor `''`. Returns `undefined` when no cell on the sheet holds
+ * one.
+ *
+ * A cell is outside the box when all it carries is formatting, a hyperlink, a
+ * comment, or the empty string a converter leaves behind, so this is narrower
+ * than {@link getCellExtent} on a sheet formatted or linked past its content.
+ * Merged ranges and table refs are not consulted either: the box covers cells,
+ * not declared geometry.
  */
-export function getDataExtentRef(ws: Worksheet): string | undefined {
-  const ext = getDataExtent(ws);
+export function getValueExtent(
+  ws: Worksheet,
+): { minRow: number; maxRow: number; minCol: number; maxCol: number } | undefined {
+  return scanExtent(ws, (c) => c.value !== null && c.value !== '');
+}
+
+/**
+ * Same as {@link getCellExtent} but returns the canonical `"A1:E10"` range
+ * string for the bounding box, or `undefined` when the sheet is empty.
+ *
+ * This is the plain two-corner form `makeAutoFilter` and `makeTableDefinition`
+ * take for their `ref`, which is otherwise reachable only by hand-rolling
+ * column letters: `getRangeAddress` returns the sheet-qualified
+ * `'Sheet1!A1:C5'` instead. Both fields take a plain `string`, so narrow the
+ * `undefined` an empty sheet returns before passing it on.
+ */
+export function getCellExtentRef(ws: Worksheet): string | undefined {
+  const ext = getCellExtent(ws);
   if (!ext) return undefined;
   return rangeToString({
     minRow: ext.minRow,

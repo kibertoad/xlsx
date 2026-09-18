@@ -194,3 +194,13 @@ export function parseQName(name: string): { ns: string; local: string } {
   if (m === null) return { ns: '', local: name };
   return { ns: m[1] ?? '', local: m[2] ?? '' };
 }
+
+/**
+ * Local part of a Clark-notation name. {@link parseQName} answers the same
+ * question and also hands back the namespace; this one runs per element in the
+ * SAX readers, so it skips the match object.
+ */
+export function localNameOf(name: string): string {
+  const brace = name.lastIndexOf('}');
+  return brace < 0 ? name : name.slice(brace + 1);
+}

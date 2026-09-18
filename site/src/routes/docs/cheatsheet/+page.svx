@@ -25,7 +25,9 @@ for every export see <a href="{base}/api">API reference</a>.
 | Read xlsx from `fetch` (browser) → Workbook | `loadWorkbook` + `fromResponse` |
 | Read xlsx from `<input type="file">` (browser) → Workbook | `loadWorkbook` + `fromBlob` |
 | Iterate every cell of a worksheet → 2D array | `iterRows` (or `iterValues`) |
-| Find the populated extents of a worksheet | `getMaxRow` + `getMaxCol` |
+| Find the used range of a worksheet (formatting included) | `getCellExtent` (or `getMaxRow` + `getMaxCol`) |
+| Find where the values end, ignoring formatting | `getValueExtent` |
+| Iterate only the rows that hold values | `getValueExtent` + `iterValues(ws, box)` |
 
 ### Stream-read (huge sheets)
 
@@ -135,13 +137,30 @@ import { iterValues } from '@office-kit/xlsx/worksheet';
 const rows = [...iterValues(ws)]; // CellValue[][]
 ```
 
-### Find the populated extents of a worksheet
+### Find the used range of a worksheet (formatting included)
 
 ```ts
-import { getMaxRow, getMaxCol } from '@office-kit/xlsx/worksheet';
+import { getCellExtent, getMaxCol, getMaxRow } from '@office-kit/xlsx/worksheet';
 
 const lastRow = getMaxRow(ws);
 const lastCol = getMaxCol(ws);
+const box = getCellExtent(ws); // { minRow, maxRow, minCol, maxCol } | undefined
+```
+
+A cell that carries only formatting counts towards all three, which is what
+Excel calls the used range.
+
+### Iterate only the rows that hold values
+
+```ts
+import { getValueExtent, iterValues } from '@office-kit/xlsx/worksheet';
+
+const box = getValueExtent(ws); // undefined when the sheet holds no value
+if (box) {
+  for (const row of iterValues(ws, box)) {
+    // no leading or trailing rows of null, however far the formatting runs
+  }
+}
 ```
 
 ### Stream-read: iterate a huge sheet without loading it

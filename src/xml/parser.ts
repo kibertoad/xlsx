@@ -6,7 +6,7 @@
 //   3. drop XML declarations and processing instructions.
 //
 // DOCTYPE / external entity declarations are rejected outright via a byte-level
-// prescan before the parser ever sees the input — fast-xml-parser does not
+// prescan before the parser ever sees the input. fast-xml-parser does not
 // expand external entities, but we still want the offending document to fail
 // loudly.
 
@@ -24,7 +24,12 @@ const decodeForPrescan = (input: Uint8Array | string): string => {
   return decoder.decode(input);
 };
 
-const checkForDoctype = (text: string): void => {
+/**
+ * Refuse a payload carrying a DTD. Exported because the worksheet reader lexes
+ * `<sheetData>` itself and so has to run this over the span `parseXml` no
+ * longer sees.
+ */
+export const rejectDtdDeclarations = (text: string): void => {
   // Strip XML declaration so any subsequent `<!DOCTYPE` is the real thing. The
   // declaration is always the first non-BOM token in well-formed XML.
   const stripped = text.replace(/^﻿/, '');
@@ -134,7 +139,7 @@ export function parseXml(input: Uint8Array | string): XmlNode {
 /** {@link parseXml} plus the root element's namespace declarations. */
 export function parseXmlDocument(input: Uint8Array | string): ParsedDocument {
   const text = decodeForPrescan(input);
-  checkForDoctype(text);
+  rejectDtdDeclarations(text);
 
   let raw: FxpTree;
   try {
@@ -258,7 +263,12 @@ const filterAttrs = (rawAttrs: FxpAttrs | undefined, stack: NamespaceStack): { r
   return { resolved };
 };
 
-const isWhitespaceOnly = (s: string): boolean => /^\s*$/.test(s);
+/**
+ * Whether a text run is ignorable between child elements. Exported for the same
+ * reason as {@link rejectDtdDeclarations}: the worksheet reader applies this
+ * rule to the `<is>` subtrees it builds itself.
+ */
+export const isWhitespaceOnly = (s: string): boolean => /^\s*$/.test(s);
 
 const convertElement = (entry: FxpEntry, parentStack: NamespaceStack): XmlNode => {
   const rawTag = elementTag(entry);

@@ -21,6 +21,7 @@ export {
   getCellSummary,
   getChartsheet,
   getSheet,
+  getSheetByIndex,
   getSheetState,
   getWorkbookCellsByKind,
   getWorkbookStats,
