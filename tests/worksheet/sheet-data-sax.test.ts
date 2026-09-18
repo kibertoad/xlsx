@@ -305,3 +305,22 @@ describe('the DTD prescan still covers the whole part', () => {
     );
   });
 });
+
+it('ignores an extension sheetData before the real direct child', () => {
+  const ws = read(`<worksheet xmlns="${MAIN_NS}" xmlns:e="urn:extension"><extLst><e:sheetData><e:row r="1"><e:c r="A1"><e:v>99</e:v></e:c></e:row></e:sheetData></extLst><sheetData><row r="1"><c r="A1"><v>42</v></c></row></sheetData></worksheet>`);
+  expect(getCell(ws, 1, 1)?.value).toBe(42);
+});
+it('does not interpret foreign namespace values as cell values', () => {
+  const ws = read(sheet('<row r="1"><c r="A1"><v xmlns="urn:extension">99</v></c></row>'));
+  expect(getCell(ws, 1, 1)?.value).toBeNull();
+});
+it('rejects unbound prefixes in the cell span', () => {
+  expect(() => read(sheet('<row r="1"><c r="A1"><bad:v>99</bad:v></c></row>'))).toThrow(OpenXmlSchemaError);
+});
+it('rejects non-whitespace text between cell elements', () => {
+  expect(() => read(sheet('<row r="1"><c r="A1">lost<v>42</v></c></row>'))).toThrow(OpenXmlSchemaError);
+});
+it('keeps foreign rich-text elements outside the spreadsheet namespace', () => {
+  const ws = read(sheet('<row r="1"><c r="A1" t="inlineStr"><is><t xmlns="urn:extension">wrong</t><t>right</t></is></c></row>'));
+  expect(getCell(ws, 1, 1)?.value).toBe('right');
+});

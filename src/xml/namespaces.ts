@@ -189,14 +189,3 @@ export function localNameOf(name: string): string {
   const brace = name.lastIndexOf('}');
   return brace < 0 ? name : name.slice(brace + 1);
 }
-
-/**
- * Local part of a `prefix:local` name as a document writes it. Distinct from
- * {@link localNameOf}, which takes the Clark notation this library resolves
- * names into: only a parser running with namespace processing off sees the
- * prefix at all.
- */
-export function stripPrefix(name: string): string {
-  const colon = name.indexOf(':');
-  return colon < 0 ? name : name.slice(colon + 1);
-}

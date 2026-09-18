@@ -3,7 +3,7 @@
 // Everything except `<sheetData>` is read from an XmlNode tree. `<sheetData>`
 // holds every cell of the sheet, so a node per `<c>` and per `<v>` is where the
 // time and the peak heap of a load go; it is cut out of the text and walked
-// with a synchronous SAX pass instead. See `cutSheetData` / `readSheetData`.
+// with a synchronous SAX pass instead. See `locateSheetData` / `readSheetData`.
 
 import { SaxesParser } from 'saxes';
 import {
@@ -27,7 +27,7 @@ import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
 import { ERROR_CODES } from '../utils/inference.js';
 import { parseXsdBoolean } from '../utils/xsd-boolean.js';
-import { localNameOf, MARKUP_COMPAT_NS, qname, REL_NS, SHEET_MAIN_NS, stripPrefix } from '../xml/namespaces.js';
+import { localNameOf, MARKUP_COMPAT_NS, qname, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { isWhitespaceOnly, parseXml, rejectDtdDeclarations } from '../xml/parser.js';
 import { serializeXml } from '../xml/serializer.js';
 import { el, findChild, findChildren, type XmlNode } from '../xml/tree.js';
@@ -1363,6 +1363,12 @@ const parseSelection = (node: XmlNode): Selection => {
 /** Attributes of one element, keyed by the name as written. */
 type RawAttrs = Readonly<Record<string, string>>;
 
+const saxAttributes = (attrs: Record<string, { uri: string; local: string; value: string }>): Record<string, string> => {
+  const out: Record<string, string> = {};
+  for (const attr of Object.values(attrs)) out[qname(attr.uri, attr.local)] = attr.value;
+  return out;
+};
+
 /**
  * One `<c>` reduced to the parts the cell model needs. `value` is the `<v>`
  * text, `undefined` when the element is absent: an empty `<v/>` and no `<v>`
@@ -1395,15 +1401,9 @@ const UNTERMINATED_SPAN = String.raw`(?<unterminated><!--|<!\[CDATA\[|<\?)`;
 
 const OPAQUE_SPAN_RE = new RegExp(String.raw`${OPAQUE_SPAN}|${UNTERMINATED_SPAN}`, 'g');
 
-/**
- * `<sheetData>`'s open tag, or whichever opaque span comes before it.
- *
- * `(?=[\s/>])` is what keeps `<sheetDataFoo>` from matching the name.
- * CT_SheetData carries no attributes, so nothing between the name and the `>`
- * can hold a quoted `>`.
- */
-const SHEETDATA_OPEN_RE = new RegExp(
-  String.raw`${OPAQUE_SPAN}|<(?<tag>(?:[^\s:<>/?!]+:)?sheetData)(?=[\s/>])(?<rest>[^>]*)>|${UNTERMINATED_SPAN}`,
+/** Lexical tag boundaries, including quoted `>` and opaque XML spans. */
+const HEADER_TAG_RE = new RegExp(
+  String.raw`${OPAQUE_SPAN}|<(?:(?:"[^"]*"|'[^']*'|[^'">])*)>`,
   'g',
 );
 
@@ -1415,37 +1415,49 @@ interface SheetDataSpan {
   bodyStart: number;
   /** The `<` that opens the matching close tag. */
   bodyEnd: number;
+  namespaces: Record<string, string>;
 }
 
 /**
  * Locate the `<sheetData>` span in a worksheet part so its rows can be walked
  * without building a node per cell.
  *
- * Found by scanning the text rather than by parsing it, which is the point: a
- * parse is the cost being avoided. The scan is structural all the same. It steps
- * over comments, CDATA sections and processing instructions instead of trusting
- * the first `<sheetData` it sees, and refuses an opaque span with no terminator
- * rather than scanning on through text that is not markup.
+ * Parse the header to resolve the direct child's namespace, then scan for its
+ * closing tag without constructing cell nodes. The scan skips comments, CDATA
+ * sections and processing instructions and refuses unterminated opaque spans.
  *
  * `undefined` means "this sheet has no rows", and must not come to mean anything
  * else: no node-tree path for `<sheetData>` is left, so a span this function
  * declined to identify would drop every cell in the sheet in silence.
  */
 const locateSheetData = (text: string): SheetDataSpan | undefined => {
-  SHEETDATA_OPEN_RE.lastIndex = 0;
-  for (let open = SHEETDATA_OPEN_RE.exec(text); open !== null; open = SHEETDATA_OPEN_RE.exec(text)) {
-    refuseUnterminatedSpan(open);
-    const tag = open.groups?.['tag'];
-    // A complete comment, CDATA section or processing instruction, consumed by
-    // the match: `lastIndex` already sits past it.
-    if (tag === undefined) continue;
-    // `<sheetData/>`: an empty sheet, and nothing to walk.
-    if ((open.groups?.['rest'] ?? '').endsWith('/')) return undefined;
-    const bodyStart = open.index + open[0].length;
-    return { bodyStart, bodyEnd: findSheetDataClose(text, tag, bodyStart) };
+  // Parse only the header, stopping at the direct SpreadsheetML child.
+  // Extensions may legitimately contain their own sheetData elements.
+  const parser = new SaxesParser({ xmlns: true });
+  const scopes: Record<string, string>[] = [];
+  let found: { tag: string; namespaces: Record<string, string>; empty: boolean } | undefined;
+  parser.on('error', (error: Error) => {
+    throw new OpenXmlSchemaError(`worksheet: malformed header: ${error.message}`, { cause: error });
+  });
+  parser.on('opentag', (node) => {
+    const namespaces = { ...scopes[scopes.length - 1], ...node.ns };
+    scopes.push(namespaces);
+    if (scopes.length === 2 && node.uri === SHEET_MAIN_NS && node.local === 'sheetData') {
+      found = { tag: node.name, namespaces, empty: node.isSelfClosing };
+    }
+  });
+  parser.on('closetag', () => { scopes.pop(); });
+  HEADER_TAG_RE.lastIndex = 0;
+  let cursor = 0;
+  for (let tag = HEADER_TAG_RE.exec(text); tag !== null; tag = HEADER_TAG_RE.exec(text)) {
+    const bodyStart = tag.index + tag[0].length;
+    parser.write(text.slice(cursor, bodyStart));
+    cursor = bodyStart;
+    if (found !== undefined) {
+      if (found.empty) return undefined;
+      return { bodyStart, bodyEnd: findSheetDataClose(text, found.tag, bodyStart), namespaces: found.namespaces };
+    }
   }
-  // No `<sheetData>` at all. CT_Worksheet requires the element, but a part
-  // without one simply has no cells, and the node-tree reader read it too.
   return undefined;
 };
 
@@ -1508,10 +1520,8 @@ const WRITE_CHUNK = 256 * 1024;
 const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
 
 /**
- * Walk `<sheetData>` and place every cell. Matching is on local names, the way
- * `loadWorkbookStream` matches, so saxes runs with namespace processing off:
- * resolving a namespace per element more than doubles the walk, and inside
- * `<sheetData>` the schema admits nothing that local names could confuse.
+ * Walk `<sheetData>` and place every cell, resolving inherited namespaces
+ * so foreign extension elements cannot become spreadsheet cells.
  *
  * `iterSheetRows` in `../streaming/read-only.ts` walks the same element shapes
  * to a different destination, and the two have to agree on where a row or cell
@@ -1555,9 +1565,7 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
     held.length = 0;
   };
 
-  // `xmlns: false` is the default, but naming it narrows the parser's tag type
-  // to the plain one, whose `attributes` is a flat name -> value record.
-  const parser = new SaxesParser({ fragment: true, xmlns: false });
+  const parser = new SaxesParser({ fragment: true, xmlns: true, additionalNamespaces: span.namespaces });
   parser.on('error', (err: Error) => {
     throw new OpenXmlSchemaError(`worksheet: malformed <sheetData>: ${err.message}`, { cause: err });
   });
@@ -1571,15 +1579,12 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
   parser.on('opentag', (node) => {
     depth++;
     if (inlineStack.length > 0) {
-      // `<is>` is a CT_Rst, always in the spreadsheetml namespace, so the
-      // subtree can carry the Clark names the CT_Rst reader matches on without
-      // asking saxes to resolve anything.
-      const child = el(qname(SHEET_MAIN_NS, stripPrefix(node.name)), node.attributes);
+      const child = el(qname(node.uri, node.local), saxAttributes(node.attributes));
       inlineStack[inlineStack.length - 1]?.children.push(child);
       inlineStack.push(child);
       return;
     }
-    const local = stripPrefix(node.name);
+    const local = node.local;
     if (valueTag !== undefined) {
       // `<v>` and `<f>` are text-only in the schema. The node-tree reader read
       // the element's text and ignored a child element outright, which turned a
@@ -1588,9 +1593,10 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
         `worksheet: mixed content not supported (<${local}> inside <${valueTag}>${cellLabel(cell)})`,
       );
     }
+    if (node.uri !== SHEET_MAIN_NS) return;
     if (depth === 1) {
       if (local !== 'row') return;
-      rowAttrs = node.attributes;
+      rowAttrs = saxAttributes(node.attributes);
       nextCol = 1;
       held.length = 0;
       const rAttr = rowAttrs['r'];
@@ -1606,7 +1612,7 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
     if (rowIdx < 0) return;
     if (depth === 2) {
       if (local !== 'c') return;
-      const attrs = node.attributes;
+      const attrs = saxAttributes(node.attributes);
       cell = {
         ref: attrs['r'],
         style: attrs['s'],
@@ -1622,7 +1628,7 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
       // Only a direct child of `<c>` is the cell's own value; a `<v>` nested
       // inside an `<extLst>` belongs to whatever extension put it there.
       if (local === 'v' || local === 'f') {
-        if (local === 'f') cell.formulaAttrs = node.attributes;
+        if (local === 'f') cell.formulaAttrs = saxAttributes(node.attributes);
         valueTag = local;
         valueText = '';
       } else if (local === 'is') {
@@ -1639,7 +1645,11 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
       if (top !== undefined) top.text = (top.text ?? '') + chunk;
       return;
     }
-    if (valueText !== undefined) valueText += chunk;
+    if (valueText !== undefined) {
+      valueText += chunk;
+    } else if ((depth === 0 || (depth === 1 && rowIdx >= 0) || (depth === 2 && cell !== undefined)) && !isWhitespaceOnly(chunk)) {
+      throw new OpenXmlSchemaError('worksheet: mixed content not supported (text between cell elements)');
+    }
   };
   parser.on('text', addText);
   // saxes reports a CDATA section separately from text. Its content is literal,
@@ -1654,7 +1664,8 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
       if (closed !== undefined) refuseInlineMixedContent(closed);
       return;
     }
-    const local = stripPrefix(node.name);
+    if (node.uri !== SHEET_MAIN_NS) return;
+    const local = node.local;
     if (depth === 2 && cell !== undefined) {
       if (local === 'v') cell.value = valueText ?? '';
       else if (local === 'f') cell.formula = valueText ?? '';
