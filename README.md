@@ -364,6 +364,25 @@ common surprise for direct ports:
   etc. — every style primitive has a `make*` constructor under
   `@office-kit/xlsx/styles`.
 
+### Migrating from SheetJS
+
+SheetJS covers a dozen formats through one loosely typed worksheet object;
+@office-kit/xlsx covers `.xlsx` / `.xlsm` through a typed model. The two
+differences a port hits first:
+
+- **There is no `cell.w`.** SheetJS caches a formatted string on the cell.
+  Here the text is computed on demand: `getCellDisplayText(wb, cell)` from
+  `@office-kit/xlsx/styles` puts the value through the cell's number format,
+  so `0.5` under `0.0%` reads `50.0%`. `cellValueAsString` answers the other
+  question, what the value is in JavaScript terms, and never sees the format.
+- **There is no `cellDates` load option.** A date cell holds the serial the
+  file stores, and `getCellDate(wb, cell)` reads it under the cell's format
+  and the workbook epoch. Keeping it out of the loader keeps the value model
+  from depending on how the file was opened.
+
+See [migrating from SheetJS](docs/migrate-from-sheetjs.md) for the full API
+map, including the formats that stay out of scope.
+
 ## What's supported
 
 - ✅ Cell values: number, string (sharedStrings), boolean, error, formulas
