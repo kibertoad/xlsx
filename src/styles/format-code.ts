@@ -98,6 +98,7 @@ type Token =
   | { readonly kind: 'percent' }
   | { readonly kind: 'exponent'; readonly explicitSign: boolean }
   | { readonly kind: 'slash' }
+  | { readonly kind: 'fixedDenominator'; readonly text: string }
   | { readonly kind: 'textPlaceholder' }
   /** Excel prints the meridiem in the case the code carries, so `am/pm` stays lowercase. */
   | { readonly kind: 'meridiem'; readonly am: string; readonly pm: string }
@@ -159,6 +160,7 @@ interface TextFormatSection {
 type FormatSection =
   | { readonly kind: 'general' }
   | { readonly kind: 'blank' }
+  | { readonly kind: 'literal'; readonly text: string }
   | NumberFormatSection
   | DateFormatSection
   | FractionFormatSection
@@ -341,6 +343,12 @@ const tokenizeSection = (src: string): Token[] | undefined => {
     if (ch === '/') {
       tokens.push({ kind: 'slash' });
       i++;
+      // A denominator beginning with 1–9 is a fixed integer, including zeros.
+      const fixed = /^[1-9][0-9]*/.exec(src.slice(i));
+      if (fixed !== null) {
+        tokens.push({ kind: 'fixedDenominator', text: fixed[0] });
+        i += fixed[0].length;
+      }
       continue;
     }
     if (ch === '@') {
@@ -427,6 +435,7 @@ const splitSections = (code: string): string[] | undefined => {
 const literalFor = (token: Token): string => {
   switch (token.kind) {
     case 'literal':
+    case 'fixedDenominator':
       return token.text;
     case 'percent':
       return '%';
@@ -539,10 +548,10 @@ const resolveFractionSection = (tokens: readonly Token[]): FractionFormatSection
   if (after?.kind === 'digit') {
     denominatorEnd = slashIndex + 1;
     while (tokens[denominatorEnd]?.kind === 'digit') denominatorEnd++;
-  } else if (after?.kind === 'literal' && /^\d+$/.test(after.text)) {
+  } else if (after?.kind === 'fixedDenominator') {
     denominatorEnd = slashIndex + 2;
     fixedDenominator = Number(after.text);
-    if (fixedDenominator === 0) return undefined;
+    if (!Number.isSafeInteger(fixedDenominator) || fixedDenominator === 0) return undefined;
   } else {
     return undefined;
   }
@@ -649,6 +658,9 @@ const parseSection = (src: string): FormatSection | undefined => {
   if (hasText && hasDate) return undefined;
   if (hasText) return { kind: 'text', tokens };
   if (hasDate) return resolveDateSection(tokens);
+  if (tokens.every((token) => token.kind === 'literal')) {
+    return { kind: 'literal', text: tokens.map(literalFor).join('') };
+  }
   const resolved = resolveCommas(tokens);
   return resolveFractionSection(resolved.tokens) ?? resolveNumberSection(resolved);
 };
@@ -694,10 +706,10 @@ export function parseFormatCode(code: string): ParsedFormat | undefined {
 /**
  * True when the format reads as a calendar date: a date section carrying a
  * year, month or day, rather than a time of day (`h:mm`), an elapsed span
- * (`[h]:mm`) or a numeric layout. The positive section decides.
+ * (`[h]:mm`) or a numeric layout. The section selected for the value decides.
  */
-export function hasCalendarDate(format: ParsedFormat): boolean {
-  const first = format.sections[0];
+export function hasCalendarDate(format: ParsedFormat, value: number): boolean {
+  const first = pickSection(format.sections, value)?.section;
   return first?.kind === 'date' && first.calendar;
 }
 
@@ -846,8 +858,9 @@ const renderScientificSection = (section: NumberFormatSection, magnitude: number
   }
 };
 
-const renderNumberSection = (section: NumberFormatSection, magnitude: number): RenderedSection => {
+const renderNumberSection = (section: NumberFormatSection, magnitude: number): RenderedSection | undefined => {
   const scaled = (magnitude * PERCENT_MULTIPLIER ** section.percents) / SCALE_DIVISOR ** section.scale;
+  if (!Number.isFinite(scaled)) return undefined;
   if (section.exponentIndex !== -1) return renderScientificSection(section, scaled);
   const parts = roundDecimal(scaled, section.fracPlaceholders.length);
   return { text: assembleNumber(section, parts, ''), zero: partsAreZero(parts) };
@@ -939,7 +952,7 @@ const blankRange = (tokens: readonly Token[], from: number, to: number): string 
 /** The digits a code spells the denominator out as: `16` in `# ?/16`. */
 const fixedDenominatorText = (section: FractionFormatSection): string => {
   const token = section.tokens[section.slashIndex + 1];
-  return token?.kind === 'literal' ? token.text : '';
+  return token?.kind === 'fixedDenominator' ? token.text : '';
 };
 
 /**
@@ -1180,6 +1193,8 @@ const pickSection = (sections: readonly FormatSection[], value: number): PickedS
 
 const renderSection = (section: FormatSection, magnitude: number, epoch: ExcelEpoch): RenderedSection | undefined => {
   switch (section.kind) {
+    case 'literal':
+      return { text: section.text, zero: true };
     case 'blank':
       return { text: '', zero: true };
     // A numeric value in a text-formatted cell falls back to General.
@@ -1231,6 +1246,7 @@ export function renderTextValue(format: ParsedFormat, text: string): string {
         : undefined;
   if (section === undefined) return text;
   if (section.kind === 'blank') return '';
+  if (section.kind === 'literal' && format.sections.length === MAX_SECTIONS) return section.text;
   if (section.kind !== 'text') return text;
   return section.tokens.map((token) => (token.kind === 'textPlaceholder' ? text : literalFor(token))).join('');
 }

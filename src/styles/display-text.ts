@@ -150,7 +150,7 @@ export function getCellDate(wb: Workbook, c: Cell): Date | undefined {
   if (value instanceof Date) return value;
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   const format = parseFormatCode(getCellNumberFormat(wb, c));
-  if (format === undefined || !hasCalendarDate(format)) return undefined;
+  if (format === undefined || !hasCalendarDate(format, value)) return undefined;
   const date = excelToDate(value, { epoch: epochOf(wb) });
   // A serial far outside the range a `Date` covers has no reading to hand back.
   return Number.isNaN(date.getTime()) ? undefined : date;

@@ -103,3 +103,8 @@ describe('getCellDate: no date reading', () => {
     expect(read('yyyy-mm-dd', makeFormula('TODAY()'))).toBeUndefined();
   });
 });
+
+it('uses the section selected for the actual value', () => {
+  expect(read('yyyy-mm-dd;0;"zero"', 0)).toBeUndefined();
+  expect(read('0;0;yyyy-mm-dd', 0)).toBeInstanceOf(Date);
+});

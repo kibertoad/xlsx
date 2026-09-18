@@ -347,3 +347,17 @@ describe('getCellDisplayText: the styleId drives the format', () => {
     expect(getCellDisplayText(wb, date)).toBe('2024-03-14');
   });
 });
+
+it('renders literal-only numeric and text sections without appending the value', () => {
+  expect(display('"red"', 12)).toBe('red');
+  expect(display('0;0;0;"hidden"', 'hello')).toBe('hidden');
+});
+it('reads fixed fraction denominators containing zero', () => {
+  expect(display('# ?/10', 0.3)).toBe(' 3/10');
+});
+it('falls back when percentage scaling overflows', () => {
+  expect(display('0%', 1e308)).toBe('1e+308');
+});
+it('keeps a fixed denominator separate from a following literal', () => {
+  expect(display('# ?/10" kg"', 0.3)).toBe(' 3/10 kg');
+});
