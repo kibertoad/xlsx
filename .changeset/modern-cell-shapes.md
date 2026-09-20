@@ -20,13 +20,19 @@ reported against the cell it sits in, on read and on save alike. A `t="e"` whose
 `<v>` is missing or blank is an empty cell, the way it is under `t="n"` and
 `t="b"`.
 
-A `t="d"` cell reads as a `Date`, or as a duration for the time-only and `PT…`
-forms, in UTC like every other `Date` in the model. Fractional seconds past the
-third digit are truncated rather than refused (Python's `datetime.isoformat()`
-writes six, so openpyxl-written strict files carry them), a time-only value may
-carry the `Z` or `±HH:MM` suffix XSD `time` allows, `24:00:00` reads as a full
-day, and a duration may carry days (`P1DT2H`). Writing is unchanged: a `Date`
-still saves as a serial number under the workbook epoch, not as `t="d"`.
+ISO `t="d"` cells in Transitional producer output now read as a `Date`, or
+as `{ kind: 'duration', ms }` for time-only and day/time duration forms.
+Unqualified calendar dates use UTC; explicit date offsets are applied and
+validated within ±14:00. Time-only offsets are validated but retain the stated
+wall-clock time. Fractional seconds in dates and times are truncated to
+milliseconds. `24:00:00` represents one day. Invalid dates, incomplete durations
+and durations beyond the safe integer millisecond range fail during loading.
+Saving emits numeric serials under the workbook epoch. ISO formula caches also
+become numeric serials, preserving their value with either the 1900 or 1904 epoch.
+
+Strict packages keep the normalization contract introduced in 0.20.0: supported
+calendar dates become numeric serials, while time-only/duration cells and
+sub-millisecond dates remain unsupported. This does not widen that Strict scope.
 
 **This changes `ExcelErrorCode`** from a union of eight literals to
 `` `#${string}` ``. Code that passes the type around, or into `makeErrorValue`,

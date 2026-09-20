@@ -24,6 +24,7 @@ import { parseCellDate } from '../utils/cell-date.js';
 import { parseCellErrorCode } from '../utils/cell-error.js';
 import { parseCellNumber } from '../utils/cell-number.js';
 import { unknownCellType } from '../utils/cell-text.js';
+import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import { coordinateToTuple, derivedRowNumber, rowNumberFromAttr, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
@@ -181,6 +182,8 @@ export interface WorksheetReadContext {
    * per-run formatting Excel stored survives.
    */
   sharedStrings: ReadonlyArray<SharedStringEntry>;
+  /** Workbook epoch used to normalize ISO date formula caches to numeric serials. */
+  date1904?: boolean;
   /** This worksheet's `_rels/sheetN.xml.rels`. Used to resolve external hyperlink targets and table parts. */
   rels?: Relationships;
   /** Resolves a worksheet-rels rId pointing at xl/tables/tableN.xml into a parsed TableDefinition. */
@@ -1886,14 +1889,13 @@ const decodeCachedValue = (
   sheet: string,
   coord: { row: number; col: number },
 ): number | string | boolean | undefined => {
-  if (raw === undefined) return undefined;
   switch (t) {
     case 'n':
       // An empty `<v/>` under the (default) numeric type carries no number.
       return parseCellNumber(raw, sheet, coord.col, coord.row) ?? undefined;
     case 'b': {
-      const text = raw.trim();
-      if (text === '') return undefined;
+      const text = raw?.trim();
+      if (text === undefined || text === '') return undefined;
       const parsed = parseXsdBoolean(text);
       if (parsed === undefined) {
         // Dropping it instead would lose the cached result *and* the `t="b"`
@@ -1904,6 +1906,13 @@ const decodeCachedValue = (
         );
       }
       return parsed;
+    }
+    case 'd': {
+      const value = parseCellDate(raw, sheet, coord.col, coord.row);
+      if (value === null) return undefined;
+      return value instanceof Date
+        ? dateToExcel(value, { epoch: ctx.date1904 ? 'mac' : 'windows' })
+        : durationToExcel(value.ms);
     }
     case 'e':
       // The cached result of an errored formula is an error token, held as the
@@ -1918,14 +1927,15 @@ const decodeCachedValue = (
       // model holds the text it points at, so the index never reaches a
       // consumer (or the writer) as if it were the result. A rich-text entry
       // flattens: a cached result carries no run formatting.
-      if (raw === '') return undefined;
+      if (raw === undefined || raw === '') return undefined;
       const sst = resolveSharedString(raw, ctx);
       return typeof sst === 'string' ? sst : richTextToString(sst.runs);
     }
-    default:
-      // `t="str"`, `t="e"` and whatever a non-Excel producer invents are all
-      // already the text Excel displays.
+    case 'str':
+    case 'inlineStr':
       return raw;
+    default:
+      throw unknownCellType(t, sheet, coord.col, coord.row);
   }
 };
 

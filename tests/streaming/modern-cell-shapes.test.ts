@@ -149,3 +149,16 @@ describe('loadWorkbookStream on a cell type outside ST_CellType', () => {
     expect(err.message).toBe('worksheet: unknown cell type t="q" at Data!A2');
   });
 });
+
+
+describe('streaming ISO date boundary regressions', () => {
+  it.each(['2024-03-14T00:00:00+99:00', '12:30:00+14:01', 'P1DT', `PT${'9'.repeat(310)}S`])(
+    'rejects %s in both readers, including formula caches', async (value) => {
+      for (const formula of ['', '<f>A1</f>']) {
+        const cell = `<c r="A2" t="d">${formula}<v>${value}</v></c>`;
+        await expect(loadWorkbook(fromBuffer(await savedWithCell(cell)))).rejects.toThrow(OpenXmlSchemaError);
+        expect(await streamError(cell)).toBeInstanceOf(OpenXmlSchemaError);
+      }
+    },
+  );
+});

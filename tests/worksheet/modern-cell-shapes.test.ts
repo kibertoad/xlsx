@@ -29,8 +29,8 @@ const readSheet = (body: string) => parseWorksheetXml(sheet(body), 'Data', { sha
  * Going through the real save path keeps content types, rels and the workbook
  * part exactly as a legitimate file has them, so the load reaches the cell.
  */
-const savedWithCell = async (cellXml: string): Promise<Uint8Array> => {
-  const wb = createWorkbook();
+const savedWithCell = async (cellXml: string, date1904 = false): Promise<Uint8Array> => {
+  const wb = createWorkbook({ date1904 });
   setCell(addWorksheet(wb, 'Data'), 1, 1, 42);
   const entries = unzipSync(await workbookToBytes(wb));
   const part = entries[SHEET_PART];
@@ -273,5 +273,48 @@ describe('a cell type outside ST_CellType', () => {
     expect(() => readSheet('<row r="1"><c r="A1" t="q"><v>1</v></c></row>')).toThrow(
       'worksheet: unknown cell type t="q"',
     );
+  });
+});
+
+describe('ISO cell boundary regressions', () => {
+  it.each(['2024-03-14T00:00:00+99:00', '2024-03-14T00:00:00+14:01',
+    '2024-03-14T00:00:00+02:60', '12:30:00-15:00', '12:30:00+00:60',
+    '24:00:00.0001', 'P1DT', `PT${'9'.repeat(310)}S`])('rejects %s before save', (value) => {
+    expect(() => readSheet(`<row r="1"><c r="A1" t="d"><v>${value}</v></c></row>`)).toThrow(OpenXmlSchemaError);
+  });
+
+  it('accepts a leap day in a year below 100 without applying the 1900 calendar', () => {
+    const ws = readSheet('<row r="1"><c r="A1" t="d"><v>0040-02-29</v></c></row>');
+    const value = getCell(ws, 1, 1)?.value;
+    expect(value instanceof Date ? value.toISOString() : value).toBe('0040-02-29T00:00:00.000Z');
+  });
+
+  it.each([false, true])('keeps a formula ISO date numeric on save with date1904=%s', async (date1904) => {
+    const bytes = await savedWithCell('<c r="A1" t="d"><f>DATE(2024,3,14)</f><v>2024-03-14T00:00:00</v></c>', date1904);
+    const wb = await loadWorkbook(fromBuffer(bytes));
+    const serial = date1904 ? 43903 : 45365;
+    const ws = getSheet(wb, 'Data');
+    if (!ws) throw new Error('missing Data sheet');
+    expect(getCell(ws, 1, 1)?.value).toMatchObject({ kind: 'formula', cachedValue: serial });
+    const saved = await workbookToBytes(wb);
+    const reloaded = await loadWorkbook(fromBuffer(saved));
+    const reloadedSheet = getSheet(reloaded, 'Data');
+    if (!reloadedSheet) throw new Error('missing reloaded Data sheet');
+    expect(getCell(reloadedSheet, 1, 1)?.value).toMatchObject({ cachedValue: serial });
+    expect(new TextDecoder().decode(unzipSync(saved)[SHEET_PART])).not.toContain('t="str"');
+  });
+
+  it('keeps a formula duration cache numeric on save', async () => {
+    const { wb, ws } = await loadPatched('<c r="A1" t="d"><f>A2</f><v>PT12H</v></c>');
+    expect(getCell(ws, 1, 1)?.value).toMatchObject({ cachedValue: 0.5 });
+    expect(await savedSheetText(wb)).toContain('<f>A2</f><v>0.5</v>');
+  });
+
+  it.each(['<v>oops</v>', ''])('validates an unknown formula cell type with %s', (value) => {
+    expect(() => readSheet(`<row r="1"><c r="A1" t="q"><f>A2</f>${value}</c></row>`)).toThrow(OpenXmlSchemaError);
+  });
+
+  it('rejects a malformed date formula cache during load', () => {
+    expect(() => readSheet('<row r="1"><c r="A1" t="d"><f>A2</f><v>oops</v></c></row>')).toThrow(OpenXmlSchemaError);
   });
 });

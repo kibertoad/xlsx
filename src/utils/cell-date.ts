@@ -22,7 +22,7 @@ const HOURS_PER_DAY = 24;
  *
  * The fraction is unbounded because XSD `dateTime` puts no limit on it and
  * producers do use the room: Python's `datetime.isoformat()`, which is what
- * every openpyxl-written strict file carries, prints six digits.
+ * openpyxl ISO date output carries, prints six digits.
  */
 const ISO_DATE =
   /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?(Z|[+-]\d{2}:\d{2})?$/;
@@ -30,7 +30,7 @@ const ISO_DATE =
  * `HH:MM[:SS[.fff]]` with no date, optionally zone-qualified. Excel stores a
  * time of day as a fraction of a day.
  */
-const ISO_TIME = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|[+-]\d{2}:\d{2})?$/;
+const ISO_TIME = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2})?$/;
 /**
  * `P[nD][T[nH][nM][n[.fff]S]]`. Excel writes the `PT…` form for an elapsed-time
  * cell; the day component turns up in strict files from other producers. The
@@ -53,8 +53,11 @@ const fractionMs = (raw: string | undefined): number =>
 /** Minutes a `±HH:MM` suffix puts the wall clock ahead of UTC. `Z` and an absent suffix are 0. */
 const offsetMinutes = (raw: string | undefined): number => {
   if (raw === undefined || raw === 'Z') return 0;
+  const hours = Number(raw.slice(1, 3));
+  const minutes = Number(raw.slice(4, 6));
+  if (hours > 14 || minutes > 59 || (hours === 14 && minutes !== 0)) return Number.NaN;
   const sign = raw.startsWith('-') ? -1 : 1;
-  return sign * (intOr(raw.slice(1, 3), 0) * 60 + intOr(raw.slice(4, 6), 0));
+  return sign * (hours * 60 + minutes);
 };
 
 /**
@@ -85,13 +88,12 @@ export function parseCellDate(
     const hour = intOr(date[4], 0);
     const minute = intOr(date[5], 0);
     const second = intOr(date[6], 0);
-    const wall = new Date(Date.UTC(year, month - 1, day, hour, minute, second, fractionMs(date[7])));
-    // Date.UTC reads a year under 100 as 1900 + year, so 0099-01-01 would
-    // arrive as 1999 and the roll check below would then reject a date that
-    // exists. setUTCFullYear is the documented way out and leaves the rest of
-    // the components alone.
-    if (year < 100) wall.setUTCFullYear(year);
-    // Date.UTC rolls a component past its range into the next one, so a
+    // Set the full year before validating, without Date.UTC's 1900 offset for
+    // years below 100 (which also uses the wrong leap-year calendar).
+    const wall = new Date(0);
+    wall.setUTCFullYear(year, month - 1, day);
+    wall.setUTCHours(hour, minute, second, fractionMs(date[7]));
+    // Date setters roll a component past its range into the next one, so a
     // non-existent date like 2024-02-30 arrives here as March 1. Comparing the
     // components back is what rejects it.
     const rolled =
@@ -101,11 +103,12 @@ export function parseCellDate(
       wall.getUTCHours() !== hour ||
       wall.getUTCMinutes() !== minute ||
       wall.getUTCSeconds() !== second;
-    if (!rolled) return new Date(wall.getTime() - offsetMinutes(date[8]) * MS_PER_MINUTE);
+    const offset = offsetMinutes(date[8]);
+    if (!rolled && Number.isFinite(offset)) return new Date(wall.getTime() - offset * MS_PER_MINUTE);
   }
 
   const time = ISO_TIME.exec(text);
-  if (time) {
+  if (time && Number.isFinite(offsetMinutes(time[5]))) {
     const hour = intOr(time[1], 0);
     const minute = intOr(time[2], 0);
     const second = intOr(time[3], 0);
@@ -118,18 +121,18 @@ export function parseCellDate(
     if (hour < HOURS_PER_DAY && minute <= 59 && second <= 59) return { kind: 'duration', ms };
     // 24:00:00 is the end-of-day form XSD `time` admits, and only at exactly
     // midnight: every other component has to be zero.
-    if (hour === HOURS_PER_DAY && ms === MS_PER_DAY) return { kind: 'duration', ms };
+    if (hour === HOURS_PER_DAY && ms === MS_PER_DAY && !/[1-9]/.test(time[4] ?? '')) return { kind: 'duration', ms };
   }
 
   const duration = ISO_DURATION.exec(text);
-  if (duration && (duration[1] ?? duration[2] ?? duration[3] ?? duration[4]) !== undefined) {
+  if (duration && !text.endsWith('T') && (duration[1] ?? duration[2] ?? duration[3] ?? duration[4]) !== undefined) {
     const seconds = duration[4] === undefined ? 0 : Number.parseFloat(duration[4]);
     const ms =
       intOr(duration[1], 0) * MS_PER_DAY +
       intOr(duration[2], 0) * MS_PER_HOUR +
       intOr(duration[3], 0) * MS_PER_MINUTE +
       seconds * MS_PER_SECOND;
-    return { kind: 'duration', ms: Math.round(ms) };
+    if (Number.isSafeInteger(Math.round(ms))) return { kind: 'duration', ms: Math.round(ms) };
   }
 
   const at = cellLabel(sheet, col, row);

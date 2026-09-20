@@ -609,6 +609,7 @@ function loadWorkbookFromArchive(archive: ZipArchive, contentLimits: ResolvedCon
     }
     const ws = parseWorksheetXml(archive.read(sheetPath), entry.name, {
       sharedStrings: sst,
+      date1904: wb.date1904,
       contentBudget,
       ...(sheetRels ? { rels: sheetRels } : {}),
       ...(loadTable ? { loadTable } : {}),
