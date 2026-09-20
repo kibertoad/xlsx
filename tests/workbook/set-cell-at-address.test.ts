@@ -1,6 +1,7 @@
 // Tests for setCellAtAddress — sheet-qualified A1 → single-cell write.
 
 import { describe, expect, it } from 'vitest';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import {
   addWorksheet,
   createWorkbook,
@@ -35,5 +36,33 @@ describe('setCellAtAddress', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Data');
     expect(() => setCellAtAddress(wb, 'Data!A1:B5', 'x')).toThrow(/range/);
+  });
+
+  // The signature is (wb, address, value), and the mistake it invites is
+  // (wb, worksheet, address, value). Before, the Worksheet was coerced into
+  // the message as "[object Object]" and blamed for a missing "!".
+  it('names the argument when a Worksheet is passed where the address goes', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, ws, 'A1', 'x');
+    expect(call).toThrow(OpenXmlSchemaError);
+    expect(call).toThrow(/address must be a sheet-qualified A1 string/);
+    expect(call).toThrow(/received an object/);
+    expect(call).toThrow(/setCellByCoord/);
+    expect(call).not.toThrow(/\[object Object\]/);
+  });
+
+  it('names the argument on getCellAtAddress too', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    const call = () => (getCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, ws);
+    expect(call).toThrow(/getCellAtAddress: address must be a sheet-qualified A1 string/);
+  });
+
+  it('reports a missing address as undefined rather than as a bad string', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Data');
+    const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, undefined, 'x');
+    expect(call).toThrow(/received undefined/);
   });
 });

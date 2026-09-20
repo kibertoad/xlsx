@@ -176,4 +176,14 @@ describe('parseSheetRange', () => {
   it('throws when there is no "!"', () => {
     expect(() => parseSheetRange('Sheet1A1:B5')).toThrowError(OpenXmlSchemaError);
   });
+
+  // The regex coerces whatever it is handed, so a non-string from a JS caller
+  // used to come back as a missing delimiter in "[object Object]".
+  it('names the type it received instead of stringifying a non-string', () => {
+    const call = () => (parseSheetRange as unknown as (v: unknown) => unknown)({ title: 'Data' });
+    expect(call).toThrowError(OpenXmlSchemaError);
+    expect(call).toThrow(/received an object/);
+    expect(call).not.toThrow(/\[object Object\]/);
+    expect(() => (parseSheetRange as unknown as (v: unknown) => unknown)(undefined)).toThrow(/received undefined/);
+  });
 });

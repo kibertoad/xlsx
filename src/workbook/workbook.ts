@@ -19,7 +19,7 @@ import {
 } from '../styles/cell-style.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
 import { makeStylesheet } from '../styles/stylesheet.js';
-import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { describeArg, OpenXmlSchemaError } from '../utils/exceptions.js';
 import { type CellValue, isFormulaValue } from '../cell/cell.js';
 import type { Alignment } from '../styles/alignment.js';
 import type { Border } from '../styles/borders.js';
@@ -731,45 +731,64 @@ export function getWorkbookCellsByKind(wb: Workbook): CellsByKindCounts {
 }
 
 /**
- * Resolve a sheet-qualified A1 address (`'Sheet1!A1'`) to its Cell, or
- * `undefined` when the cell isn't materialised. Throws on malformed addresses,
- * missing sheets, or range inputs.
+ * Resolve the `'Sheet1!A1'` argument both address helpers take down to the
+ * worksheet and the bare `'A1'` ref.
+ *
+ * The `typeof` check guards a mistake the type system cannot catch from JS,
+ * and the one a TS caller makes by reaching for a `(wb, ws, ref, value)`
+ * signature that does not exist: passing the Worksheet where the address goes.
+ * The regex behind `parseSheetRange` coerces, so that argument used to be read
+ * as the text `[object Object]` and reported as an address missing its `!`.
  */
-export function getCellAtAddress(wb: Workbook, address: string): import('../cell/cell.js').Cell | undefined {
+const resolveAddress = (fn: string, wb: Workbook, address: string): { ws: Worksheet; ref: string } => {
+  if (typeof address !== 'string') {
+    throw new OpenXmlSchemaError(
+      `${fn}: address must be a sheet-qualified A1 string such as "Sheet1!A1" or "'Quarter 1'!A1", ` +
+        `received ${describeArg(address)}. To address a cell on a Worksheet you already hold, ` +
+        `use getCellByCoord / setCellByCoord from @office-kit/xlsx/worksheet, which take a bare "A1" ref.`,
+    );
+  }
   const { sheet: sheetTitle, range } = parseSheetRange(address);
   if (range.includes(':')) {
-    throw new OpenXmlSchemaError(
-      `getCellAtAddress: address "${address}" refers to a range, not a single cell`,
-    );
+    throw new OpenXmlSchemaError(`${fn}: address "${address}" refers to a range, not a single cell`);
   }
   const ws = getSheet(wb, sheetTitle);
   if (!ws) {
-    throw new OpenXmlSchemaError(`getCellAtAddress: sheet "${sheetTitle}" not found`);
+    throw new OpenXmlSchemaError(`${fn}: sheet "${sheetTitle}" not found`);
   }
-  const { col, row } = coordinateToTuple(range);
+  return { ws, ref: range };
+};
+
+/**
+ * Resolve a sheet-qualified A1 address (`'Sheet1!A1'`) to its Cell, or
+ * `undefined` when the cell isn't materialised. Throws on malformed addresses,
+ * missing sheets, or range inputs.
+ *
+ * The address names the sheet, so there is no Worksheet argument. Use
+ * `getCellByCoord(ws, 'A1')` from `@office-kit/xlsx/worksheet` when the
+ * worksheet is already in hand.
+ */
+export function getCellAtAddress(wb: Workbook, address: string): import('../cell/cell.js').Cell | undefined {
+  const { ws, ref } = resolveAddress('getCellAtAddress', wb, address);
+  const { col, row } = coordinateToTuple(ref);
   return getCell(ws, row, col);
 }
 
 /**
  * Set a single cell by sheet-qualified A1 address. Throws on malformed
  * addresses, missing sheets, or range inputs.
+ *
+ * The address names the sheet, so there is no Worksheet argument. Use
+ * `setCellByCoord(ws, 'A1', value)` from `@office-kit/xlsx/worksheet` when the
+ * worksheet is already in hand.
  */
 export function setCellAtAddress(
   wb: Workbook,
   address: string,
   value: CellValue,
 ): import('../cell/cell.js').Cell {
-  const { sheet: sheetTitle, range } = parseSheetRange(address);
-  if (range.includes(':')) {
-    throw new OpenXmlSchemaError(
-      `setCellAtAddress: address "${address}" refers to a range, not a single cell`,
-    );
-  }
-  const ws = getSheet(wb, sheetTitle);
-  if (!ws) {
-    throw new OpenXmlSchemaError(`setCellAtAddress: sheet "${sheetTitle}" not found`);
-  }
-  return setCellByCoord(ws, range, value);
+  const { ws, ref } = resolveAddress('setCellAtAddress', wb, address);
+  return setCellByCoord(ws, ref, value);
 }
 
 /**
