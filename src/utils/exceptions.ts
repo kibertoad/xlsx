@@ -48,7 +48,7 @@ export class OpenXmlError extends Error {
  * "not a valid zip".
  *
  * It is also the one class that is not always permanent. `openZip: failed to
- * read source bytes` comes from the {@link XlsxSource}, not from the payload,
+ * read source bytes` comes from the `XlsxSource`, not from the payload,
  * and wraps the underlying fs / fetch / stream error as its `cause`; a retry
  * can succeed. Every other `OpenXmlIoError` is a verdict on the bytes. When
  * the bytes are already in memory (`fromBuffer`) the source cannot fail, so

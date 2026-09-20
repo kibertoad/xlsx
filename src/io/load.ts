@@ -352,22 +352,30 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
  *
  * What a failure means, for a caller checking a file it did not produce:
  *
- * - {@link OpenXmlIoError}: the bytes are not a readable zip. A CSV, a PDF or
- *   a truncated upload lands here, and the message names what the leading
- *   bytes look like whenever a magic number identifies them.
- * - {@link OpenXmlDecompressionBombError}: the archive inflates past the
+ * - `OpenXmlIoError`: the bytes are not a readable zip. A CSV, a PDF or a
+ *   truncated upload lands here, and the message names what the leading bytes
+ *   look like whenever a magic number identifies them.
+ * - `OpenXmlDecompressionBombError`: the archive inflates past the
  *   {@link LoadOptions.decompressionLimits} caps. A subclass of the above, so
  *   test for it first when the distinction matters.
- * - {@link OpenXmlNotImplementedError}: a real Office format this library does
- *   not read, such as an encrypted xlsx or a legacy `.xls`. The message says
- *   what the user has to do to the file.
- * - {@link OpenXmlSchemaError}: the archive opened, and the OOXML inside it is
+ * - `OpenXmlNotImplementedError`: an OOXML feature this library does not read
+ *   yet, such as an ISO 29500 strict part it cannot convert.
+ * - `OpenXmlUnsupportedFormatError`: the input is a different Office format
+ *   altogether. A subclass of the above, carrying a `format` of
+ *   `'encrypted-xlsx' | 'legacy-xls' | 'compound-file'`, so "ask for the
+ *   password" is answerable apart from "ask for a re-save".
+ * - `OpenXmlSchemaError`: the archive opened, and the OOXML inside it is
  *   unreadable or contradicts the spec.
+ * - `OpenXmlContentLimitError`: the workbook is valid and larger than the
+ *   {@link LoadOptions.contentLimits} caps allowed. It extends `OpenXmlError`
+ *   directly, so a catch ladder written around the others misses it.
  *
- * All four are permanent for the same bytes: reject the file rather than
- * retry. The single transient case is documented on {@link OpenXmlIoError}.
- * Branch on the class and never on the message text, which names parts and
- * offsets and changes between releases.
+ * All of them are permanent for the same bytes and the same {@link LoadOptions}:
+ * reject the file rather than retry. Raising a cap is the one thing that turns
+ * a failure into a success, and only for the two classes that name a cap. The
+ * single transient case is documented on `OpenXmlIoError`. Branch on the class
+ * and never on the message text, which names parts and offsets and changes
+ * between releases.
  */
 export async function loadWorkbook(source: XlsxSource, opts: LoadOptions = {}): Promise<Workbook> {
   // Settled before the source is opened, so a cap that cannot mean anything is

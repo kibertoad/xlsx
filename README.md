@@ -257,21 +257,30 @@ Every failure is an `OpenXmlError` subclass from `@office-kit/xlsx/utils`, and
 the subclass is the contract. Anything that is not an `OpenXmlError` is a bug
 in this library, not a rejected file.
 
-| Class                            | What happened                                                              |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| `OpenXmlIoError`                 | The bytes are not a readable zip, or the source failed to produce them     |
-| `OpenXmlDecompressionBombError`  | The archive inflates past the `decompressionLimits` caps (subclass of the above) |
-| `OpenXmlNotImplementedError`     | A real Office format this library does not read: encrypted xlsx, legacy `.xls` |
-| `OpenXmlSchemaError`             | The archive opened; the OOXML inside is unreadable or contradicts the spec  |
+| Class                           | What happened                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------- |
+| `OpenXmlIoError`                | The bytes are not a readable zip, or the source failed to produce them            |
+| `OpenXmlDecompressionBombError` | The archive inflates past the `decompressionLimits` caps (subclass of the above)  |
+| `OpenXmlNotImplementedError`    | An OOXML feature this library does not read yet, such as an unconvertible ISO 29500 strict part |
+| `OpenXmlUnsupportedFormatError` | The input is a different Office format: encrypted xlsx, legacy `.xls` (subclass of the above) |
+| `OpenXmlSchemaError`            | The archive opened; the OOXML inside is unreadable or contradicts the spec        |
+| `OpenXmlContentLimitError`      | The workbook is valid and larger than the `contentLimits` caps allowed            |
+
+`OpenXmlContentLimitError` extends `OpenXmlError` directly rather than any of
+the others, so a catch ladder built out of the rows above it misses the
+too-big case. `OpenXmlUnsupportedFormatError` carries a `format` of
+`'encrypted-xlsx' | 'legacy-xls' | 'compound-file'`, which is how you answer
+"ask for the password" apart from "ask for a re-save".
 
 For a service validating uploads, the question is usually "tell the user, or
-retry and investigate". With the same bytes, every one of these fails the same
-way, so the answer is to reject the file. The single exception is the source
-itself failing to hand over its bytes, which `fromFile` / `fromResponse` can do
-transiently: that arrives as `OpenXmlIoError` with message
-`openZip: failed to read source bytes` and the fs / fetch error as its `cause`.
-With `fromBuffer` the source cannot fail, so every error from that load is
-final.
+retry and investigate". With the same bytes and the same options, every one of
+these fails the same way, so the answer is to reject the file. Raising a cap is
+the one thing that turns a failure into a success, and only for the two rows
+that name a cap. The other exception is the source itself failing to hand over
+its bytes, which `fromFile` / `fromResponse` can do transiently: that arrives
+as `OpenXmlIoError` with message `openZip: failed to read source bytes` and the
+fs / fetch error as its `cause`. With `fromBuffer` the source cannot fail, so
+every error from that load is final.
 
 ```ts
 import { loadWorkbook } from '@office-kit/xlsx/io';
@@ -297,9 +306,12 @@ async function readUpload(upload: Uint8Array): Promise<Loaded> {
 Files that are not xlsx at all reach `loadWorkbook` routinely, because uploads
 get validated by extension. Where a magic number identifies the input, the
 message says so rather than only "not a valid zip": a CSV or plain text, a
-UTF-8 or UTF-16 byte-order mark, a PDF, a zip with no readable central
-directory (a truncated or partially uploaded file), and an OLE
-compound-document container (encrypted xlsx or legacy `.xls`).
+UTF-8 or UTF-16 byte-order mark, a PDF, and a file that begins with zip
+entries. That last one is reported two ways, because the fix differs: entries
+with no trailer at all is what a truncated or partially uploaded file looks
+like, while a trailer that is present with an unreadable central directory is a
+whole file that got corrupted. An OLE compound file or a raw BIFF workbook is
+recognised earlier still and throws `OpenXmlUnsupportedFormatError`.
 
 Branch on the class, not on the message. Messages name parts, byte offsets and
 cell references so that a failure is diagnosable, and they change between

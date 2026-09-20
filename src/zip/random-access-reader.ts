@@ -315,6 +315,16 @@ const looksLikeText = (b: Uint8Array): boolean => {
 };
 
 /**
+ * Whether an End-of-Central-Directory record was located before the failure.
+ * This is what separates the two things a leading local-file-header signature
+ * can mean: with no EOCD the entries begin and the index that should follow
+ * them never arrives, which is what a truncated upload looks like; with one
+ * present the archive ends where it should and its central directory is
+ * corrupt, so the same four bytes say only that the file started out as a zip.
+ */
+type EocdState = 'absent' | 'present';
+
+/**
  * Name what the leading bytes are, for the error a caller sees when something
  * that passed an extension check turns out not to be an xlsx. States only what
  * a magic number actually says and returns `undefined` rather than guessing,
@@ -323,9 +333,11 @@ const looksLikeText = (b: Uint8Array): boolean => {
  * The OLE compound-document signature is absent on purpose: `openZip` rejects
  * that container before any of this runs, with a message that names it.
  */
-const describeLeadingBytes = (b: Uint8Array): string | undefined => {
+const describeLeadingBytes = (b: Uint8Array, eocd: EocdState): string | undefined => {
   if (b.length >= 4 && u32(b, 0) === SIG_LFH) {
-    return 'a zip with no readable central directory, the shape of a truncated or partially uploaded file';
+    return eocd === 'absent'
+      ? 'a zip whose entries begin but whose central directory never arrives, the shape of a truncated or partially uploaded file'
+      : 'a zip whose central directory is present but unreadable';
   }
   if (startsWith(b, PDF_MAGIC)) return 'a PDF';
   if (startsWith(b, UTF8_BOM)) return 'text with a UTF-8 byte-order mark, such as a CSV saved under an .xlsx name';
@@ -334,13 +346,13 @@ const describeLeadingBytes = (b: Uint8Array): string | undefined => {
   return undefined;
 };
 
-const leadingBytesSuffix = (bytes: Uint8Array): string => {
-  const looksLike = describeLeadingBytes(bytes);
+const leadingBytesSuffix = (bytes: Uint8Array, eocd: EocdState): string => {
+  const looksLike = describeLeadingBytes(bytes, eocd);
   return looksLike === undefined ? '' : `; the leading bytes look like ${looksLike}`;
 };
 
-const notAZipError = (bytes: Uint8Array, cause: unknown): OpenXmlIoError =>
-  new OpenXmlIoError(`openZip: archive is not a valid zip${leadingBytesSuffix(bytes)}`, { cause });
+const notAZipError = (bytes: Uint8Array, eocd: EocdState, cause: unknown): OpenXmlIoError =>
+  new OpenXmlIoError(`openZip: archive is not a valid zip${leadingBytesSuffix(bytes, eocd)}`, { cause });
 
 /**
  * Open a buffered xlsx archive in random-access mode. The archive bytes stay
@@ -367,7 +379,7 @@ export function openRandomAccessArchive(
   if (bytes.length < EOCD_MIN_BYTES) {
     throw new OpenXmlIoError(
       `openZip: archive is ${bytes.length} bytes, shorter than the ${EOCD_MIN_BYTES}-byte minimum` +
-        ` for a zip End-of-Central-Directory (EOCD) record${leadingBytesSuffix(bytes)}`,
+        ` for a zip End-of-Central-Directory (EOCD) record${leadingBytesSuffix(bytes, 'absent')}`,
     );
   }
 
@@ -375,7 +387,7 @@ export function openRandomAccessArchive(
   try {
     eocdOff = findEocd(bytes);
   } catch (cause) {
-    throw notAZipError(bytes, cause);
+    throw notAZipError(bytes, 'absent', cause);
   }
 
   const resolvedLimits = resolveDecompressionLimits(decompressionLimits);
@@ -720,7 +732,9 @@ function openViaUnzipSync(
   try {
     entries = unzipSync(bytes);
   } catch (cause) {
-    throw notAZipError(bytes, cause);
+    // Only reachable after `findEocd` succeeded, so the archive is not short
+    // of its trailer however badly the central directory itself reads.
+    throw notAZipError(bytes, 'present', cause);
   }
   // fflate's `unzipSync` returns already-inflated bytes — we can't abort the
   // inflate mid-flight here, but a post-hoc check still rejects a malicious
