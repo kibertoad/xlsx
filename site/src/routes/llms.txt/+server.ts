@@ -570,8 +570,9 @@ Every error thrown by @office-kit/xlsx is a subclass of \`OpenXmlError\`
 | \`OpenXmlSchemaError\`               | Input does not conform to the ECMA-376 OOXML schema                                                  |
 | \`OpenXmlDecompressionBombError\`    | Archive exceeded \`decompressionLimits\` (per-entry size, total size, or compression ratio)        |
 | \`OpenXmlInvalidWorkbookError\`      | Workbook structurally invalid (missing parts, broken relationships)                                  |
-| \`OpenXmlNotImplementedError\`       | Feature is not yet supported (e.g. ZIP64 write, encrypted decryption, ISO 29500 strict input)       |
+| \`OpenXmlNotImplementedError\`       | Feature is not yet supported (e.g. ZIP64 write, encrypted decryption, unconvertible Strict content)       |
 | \`OpenXmlUnsupportedFormatError\`    | Input is another file format: an encrypted xlsx, a legacy \`.xls\`, or some other OLE compound file    |
+
 
 \`decompressionLimits\` is **on by default** in both \`loadWorkbook\` and
 \`loadWorkbookStream\`. Keep it on when reading untrusted input.
@@ -586,11 +587,18 @@ of \`OpenXmlNotImplementedError\` whose \`format\` field is
 \`'encrypted-xlsx'\`, \`'legacy-xls'\` or \`'compound-file'\` (a compound file
 that is neither). Branch on \`format\`, because the message wording can change.
 
-ISO 29500 strict packages (Excel's "Strict Open XML Spreadsheet" Save As
-entry) keep the \`.xlsx\` extension but use the \`purl.oclc.org\` namespace
-family, which the reader does not understand. \`loadWorkbook\` and
-\`loadWorkbookStream\` throw \`OpenXmlNotImplementedError\` naming the
-format; re-save the file as "Excel Workbook (.xlsx)" to read it.
+ISO 29500 Strict packages are read by \`loadWorkbook\` and
+\`loadWorkbookStream\` through the existing API; saving writes Transitional XLSX.
+Supported parts include worksheets, strings, styles, formulas, themes and
+supported drawings/charts. ISO date cells and formula caches become numeric
+Excel serials. Dates before March 1900 (January 1904 for the 1904 epoch), dates
+beyond 9999, sub-millisecond precision, and time-only/duration ISO cells are
+unsupported. Datetimes without a
+zone use UTC. With \`dateCompatibility=false\`, \`date1904\` is ignored and
+numeric date cells before March 1900 are refused. Unsupported Strict part types,
+direction-relative alignment and DrawingML universal measures raise
+\`OpenXmlNotImplementedError\`; re-save those files as "Excel Workbook (.xlsx)".
+The general XML and ZIP APIs preserve original namespaces and bytes.
 
 ## Common pitfalls
 
