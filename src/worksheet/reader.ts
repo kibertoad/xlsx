@@ -1556,6 +1556,7 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
 
   let depth = 0;
   let cell: RawCell | undefined;
+  let cellCoord = { row: 0, col: 0 };
   // Local name of the `<v>` or `<f>` whose text is being collected, and the
   // accumulator for it. Both `undefined` outside one.
   let valueTag: string | undefined;
@@ -1566,11 +1567,9 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
   const settleRow = (row: number): void => {
     rowIdx = row;
     nextRow = Math.max(nextRow, row + 1);
-    chargeRow(budget, ws.title, row);
     maybeRecordRowDimension(ws, rowAttrs, row);
     for (const heldCell of held) {
       const coord = parseCellCoord(heldCell.ref, row, nextCol);
-      chargeCell(budget, ws.title, coord.col, coord.row);
       readCell(ws, heldCell, coord, ctx, sharedFormulas);
       nextCol = coord.col + 1;
     }
@@ -1615,9 +1614,12 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
       // `@r` is optional on CT_Row (ECMA-376 §18.3.1.73); such a row waits for
       // its first located cell to name it.
       if (rAttr === undefined) {
+        chargeRow(budget, ws.title, undefined);
         rowIdx = 0;
       } else {
-        settleRow(rowNumberFromAttr(rAttr, 'worksheet'));
+        const row = rowNumberFromAttr(rAttr, 'worksheet');
+        chargeRow(budget, ws.title, row);
+        settleRow(row);
       }
       return;
     }
@@ -1625,6 +1627,12 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
     if (depth === 2) {
       if (local !== 'c') return;
       const attrs = saxAttributes(node.attributes);
+      const ref = attrs['r'];
+      if (rowIdx === 0 && ref !== undefined) settleRow(coordinateToTuple(ref).row);
+      // Count before retaining raw cell text, including cells whose row is
+      // unresolved until a later reference or the end of the row.
+      cellCoord = parseCellCoord(ref, rowIdx, nextCol + held.length);
+      chargeCell(budget, ws.title, cellCoord.col, rowIdx === 0 ? undefined : cellCoord.row);
       cell = {
         ref: attrs['r'],
         style: attrs['s'],
@@ -1691,10 +1699,8 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
         else held.push(cell);
       }
       if (rowIdx > 0) {
-        const coord = parseCellCoord(cell.ref, rowIdx, nextCol);
-        chargeCell(budget, ws.title, coord.col, coord.row);
-        readCell(ws, cell, coord, ctx, sharedFormulas);
-        nextCol = coord.col + 1;
+        readCell(ws, cell, cellCoord, ctx, sharedFormulas);
+        nextCol = cellCoord.col + 1;
       }
       cell = undefined;
       return;

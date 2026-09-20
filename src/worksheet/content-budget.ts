@@ -78,10 +78,12 @@ export function makeContentBudget(limits: ResolvedContentLimits): ContentBudget 
  * runs once per cell of the sheet, and the ref is only needed on the one call
  * that throws.
  */
-export function chargeCell(budget: ContentBudget, sheet: string, col: number, row: number): void {
+export function chargeCell(budget: ContentBudget, sheet: string, col: number, row: number | undefined): void {
   budget.cells++;
   if (budget.cells > budget.limits.maxCells) {
-    const at = formatSheetQualifiedRef(sheet, tupleToCoordinate(col, row));
+    const at = row === undefined
+      ? `a cell in an unnumbered row of ${sheet}`
+      : formatSheetQualifiedRef(sheet, tupleToCoordinate(col, row));
     throw new OpenXmlContentLimitError(
       `worksheet: reading ${at} passes contentLimits.maxCells of ${budget.limits.maxCells}`,
     );
@@ -89,11 +91,11 @@ export function chargeCell(budget: ContentBudget, sheet: string, col: number, ro
 }
 
 /** Charge one row to the budget. */
-export function chargeRow(budget: ContentBudget, sheet: string, row: number): void {
+export function chargeRow(budget: ContentBudget, sheet: string, row: number | undefined): void {
   budget.rows++;
   if (budget.rows > budget.limits.maxRows) {
     throw new OpenXmlContentLimitError(
-      `worksheet: reading row ${row} of ${sheet} passes contentLimits.maxRows of ${budget.limits.maxRows}`,
+      `worksheet: reading ${row === undefined ? 'an unnumbered row' : `row ${row}`} of ${sheet} passes contentLimits.maxRows of ${budget.limits.maxRows}`,
     );
   }
 }

@@ -291,7 +291,7 @@ describe('loadWorkbookStream band queries', () => {
     });
     try {
       await expect(drain(wb.openWorksheet('Data'), 4)).rejects.toThrow(
-        'worksheet: reading row 3 of Data passes contentLimits.maxRows of 2',
+        'worksheet: reading an unnumbered row of Data passes contentLimits.maxRows of 2',
       );
     } finally {
       await wb.close();
@@ -307,6 +307,72 @@ describe('the shape of a band-query refusal', () => {
     try {
       const ws = wb.openWorksheet('Data');
       expect(() => ws.iterRows({ minRow: 9 })).toThrow(OpenXmlContentLimitError);
+    } finally {
+      await wb.close();
+    }
+  });
+});
+
+describe('content limits before buffering unresolved coordinates', () => {
+  for (const reader of ['eager', 'streaming'] as const) {
+    const read = async (xml: string, limits: { maxCells?: number; maxRows?: number }): Promise<void> => {
+      const bytes = rawPackage(xml);
+      if (reader === 'eager') {
+        await loadWorkbook(fromBuffer(bytes), { contentLimits: limits });
+      } else {
+        const wb = await loadWorkbookStream(fromBuffer(bytes), { contentLimits: limits });
+        try {
+          await drain(wb.openWorksheet('Data'));
+        } finally {
+          await wb.close();
+        }
+      }
+    };
+
+    it(`${reader}: stops at the cell cap before buffering a reference-less row`, async () => {
+      // An invalid reference after the third cell proves that the limit stops
+      // the walk before collecting the rest of this unresolved row.
+      await expect(read('<row><c/><c/><c/><c r="invalid"/></row>', { maxCells: 2 }))
+        .rejects.toThrow(OpenXmlContentLimitError);
+    });
+
+    it(`${reader}: stops at the row cap before reading an unnumbered row's cells`, async () => {
+      await expect(read('<row/><row><c r="invalid"/></row>', { maxRows: 1 }))
+        .rejects.toThrow(OpenXmlContentLimitError);
+    });
+
+    it(`${reader}: permits exactly the budget with derived coordinates`, async () => {
+      await expect(read('<row><c/><c/></row><row><c/><c r="B5"/></row>', { maxCells: 4, maxRows: 2 }))
+        .resolves.toBeUndefined();
+    });
+  }
+});
+
+
+describe('streaming cell budgets for filtered rows', () => {
+  it('charges unresolved cells before their row can be excluded by the band', async () => {
+    const wb = await loadWorkbookStream(fromBuffer(rawPackage('<row><c/><c/><c r="C9"/></row>')), {
+      contentLimits: { maxCells: 1 },
+    });
+    try {
+      const rows = async (): Promise<void> => {
+        for await (const _row of wb.openWorksheet('Data').iterRows({ maxRow: 1 })) { /* drain */ }
+      };
+      await expect(rows()).rejects.toThrow(OpenXmlContentLimitError);
+    } finally {
+      await wb.close();
+    }
+  });
+
+  it('does not charge cells in known excluded rows or columns', async () => {
+    const wb = await loadWorkbookStream(fromBuffer(rawPackage(
+      '<row r="1"><c r="A1"><v>1</v></c><c r="B1"><v>2</v></c></row>' +
+      '<row r="2"><c r="A2"><v>3</v></c><c r="B2"><v>4</v></c></row>',
+    )), { contentLimits: { maxCells: 1 } });
+    try {
+      const values: unknown[][] = [];
+      for await (const row of wb.openWorksheet('Data').iterValues({ maxRow: 1, maxCol: 1 })) values.push(row);
+      expect(values).toEqual([[1]]);
     } finally {
       await wb.close();
     }

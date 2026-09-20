@@ -162,13 +162,8 @@ async function* iterSheetRows(
   const settleRow = (row: number): void => {
     currentRow = row;
     nextRow = Math.max(nextRow, row + 1);
-    // Charged whether or not the band wants the row: this walk had to read it
-    // either way, and on a part the index cannot seek into that reading is the
-    // cost the cap exists to bound.
-    chargeRow(budget, title, row);
     if (row >= minRow && row <= maxRow) {
       for (const cell of pendingCells) {
-        chargeCell(budget, title, cell.col, row);
         currentCells.push({ row, col: cell.col, value: decodeCellValue(cell.type, cell.text, cell.inline, sst, title, cell.col, row), styleId: cell.styleId });
       }
     }
@@ -207,13 +202,14 @@ async function* iterSheetRows(
           // for its first cell to name it.
           const rRaw = e.attrs['r'];
           if (rRaw === undefined) {
+            chargeRow(budget, title, undefined);
             currentRow = 0;
           } else {
             currentRow = rowNumberFromAttr(rRaw, 'loadWorkbookStream');
             nextRow = Math.max(nextRow, currentRow + 1);
             // Charged here rather than at `</row>` so a row past the cap is
-            // refused before its cells are decoded. A row whose number only
-            // its first located cell settles is charged in `settleRow`.
+            // refused before its cells are decoded. Unnumbered rows are
+            // charged at their opening tag too, before buffering any cells.
             chargeRow(budget, title, currentRow);
           }
           currentCells = [];
@@ -229,7 +225,6 @@ async function* iterSheetRows(
           // requested band — saves the parseInt + coordinateToTuple hit on
           // every cell of every excluded row.
           if (currentRow !== 0 && (currentRow < minRow || currentRow > maxRow)) break;
-          cellOpen = true;
           cellType = e.attrs['t'] ?? 'n';
           const sRaw = e.attrs['s'];
           cellStyleId = sRaw ? Number.parseInt(sRaw, 10) || 0 : 0;
@@ -242,6 +237,12 @@ async function* iterSheetRows(
             cellCol = nextCol;
           }
           nextCol = cellCol + 1;
+          cellOpen = cellCol >= minCol && cellCol <= maxCol;
+          if (cellOpen) {
+            // An unresolved row might be selected later, so its buffered cells
+            // consume budget even if its eventual number is outside the band.
+            chargeCell(budget, title, cellCol, cellRow === 0 ? undefined : cellRow);
+          }
           vText = '';
           isText = '';
           break;
@@ -299,7 +300,6 @@ async function* iterSheetRows(
         if (cellOpen && cellRow === 0 && cellCol >= minCol && cellCol <= maxCol) {
           pendingCells.push({ col: cellCol, type: cellType, text: vText, inline: isText, styleId: cellStyleId });
         } else if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
-          chargeCell(budget, title, cellCol, cellRow);
           const value = decodeCellValue(cellType, vText, isText, sst, title, cellCol, cellRow);
           currentCells.push({ row: cellRow, col: cellCol, value, styleId: cellStyleId });
         }
@@ -720,7 +720,10 @@ export interface LoadWorkbookStreamOptions {
    * `minRow` costs a walk or an index over everything before it, and the index
    * a band query builds holds one object per row of the whole part, so that is
    * where a cap has to bite for `iterRows({ minRow })` to be bounded at all.
-   * The index is built once per worksheet handle and charged once.
+   * The index is built once per worksheet handle and charged once. Cells are
+   * charged before buffering or decoding them, including cells of unnumbered
+   * rows whose eventual row number might fall outside the requested band.
+   * Cells in known excluded rows or columns are not charged.
    *
    * See `LoadOptions.contentLimits` for a starting ingestion profile and
    * `SECURITY.md` for the threat model.

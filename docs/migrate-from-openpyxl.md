@@ -233,6 +233,9 @@ options as `loadWorkbook`. `contentLimits` counts per traversal here rather than
 per workbook, since this reader holds one row at a time and a sheet can be
 iterated again. It counts the rows a traversal walks, not only the ones it
 yields: a band query reads or indexes everything before `minRow` to get there.
+Cells count before buffering or decoding. Cells buffered while an omitted row
+number is unresolved count even if that row later falls outside the band; cells
+in known excluded rows or columns do not count.
 
 ## What's preserved verbatim (no model)
 
