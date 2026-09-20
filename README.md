@@ -417,7 +417,6 @@ map, including the formats that stay out of scope.
   at the workbook loading boundary, including mixed-namespace packages.
   Output is Transitional; general XML and ZIP readers preserve original content.
   See the limitations above for Strict content that cannot be converted.
-
 - ✅ ZIP64 write — partial: workbooks with > 65 535 entries get a ZIP64 EOCD
   record + locator spliced into the final chunk. Read works too. **Limit:**
   individual entry sizes and the central-directory offset must still fit in

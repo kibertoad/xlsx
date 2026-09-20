@@ -573,7 +573,6 @@ Every error thrown by @office-kit/xlsx is a subclass of \`OpenXmlError\`
 | \`OpenXmlNotImplementedError\`       | Feature is not yet supported (e.g. ZIP64 write, encrypted decryption, unconvertible Strict content)       |
 | \`OpenXmlUnsupportedFormatError\`    | Input is another file format: an encrypted xlsx, a legacy \`.xls\`, or some other OLE compound file    |
 
-
 \`decompressionLimits\` is **on by default** in both \`loadWorkbook\` and
 \`loadWorkbookStream\`. Keep it on when reading untrusted input.
 
