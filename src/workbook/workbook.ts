@@ -731,21 +731,40 @@ export function getWorkbookCellsByKind(wb: Workbook): CellsByKindCounts {
 }
 
 /**
+ * Advice for a caller who reached for a `(wb, ws, ref, value)` signature that
+ * does not exist, appended to whichever argument guard caught it. Gated on the
+ * argument being an object, because that is the shape the mix-up has: an
+ * omitted or `null` argument is a different mistake, and pointing that caller
+ * at `getCellByCoord` sends them after a swap they did not make.
+ */
+const worksheetArgHint = (v: unknown): string =>
+  typeof v === 'object' && v !== null
+    ? ' To address a cell on a Worksheet you already hold, use getCellByCoord /' +
+      ' setCellByCoord from @office-kit/xlsx/worksheet, which take a bare "A1" ref.'
+    : '';
+
+/**
  * Resolve the `'Sheet1!A1'` argument both address helpers take down to the
  * worksheet and the bare `'A1'` ref.
  *
- * The `typeof` check guards a mistake the type system cannot catch from JS,
- * and the one a TS caller makes by reaching for a `(wb, ws, ref, value)`
- * signature that does not exist: passing the Worksheet where the address goes.
- * The regex behind `parseSheetRange` coerces, so that argument used to be read
- * as the text `[object Object]` and reported as an address missing its `!`.
+ * Both guards below fire only for JS callers and untyped wrappers, since
+ * `tsc` rejects the mixed-up call on arity and on argument type. They are here
+ * because neither mistake fails legibly on its own. A Worksheet in the address
+ * slot reaches the regex behind `parseSheetRange`, which coerces, so it used
+ * to be read as the text `[object Object]` and reported as an address missing
+ * its `!`. A Worksheet in the workbook slot reaches {@link getSheet}, which
+ * iterates `wb.sheets` and throws a bare `TypeError`, not an `OpenXmlError`.
  */
 const resolveAddress = (fn: string, wb: Workbook, address: string): { ws: Worksheet; ref: string } => {
+  if (typeof wb !== 'object' || wb === null || !Array.isArray(wb.sheets)) {
+    throw new OpenXmlSchemaError(
+      `${fn}: first argument must be the Workbook, received ${describeArg(wb)}.` + worksheetArgHint(wb),
+    );
+  }
   if (typeof address !== 'string') {
     throw new OpenXmlSchemaError(
       `${fn}: address must be a sheet-qualified A1 string such as "Sheet1!A1" or "'Quarter 1'!A1", ` +
-        `received ${describeArg(address)}. To address a cell on a Worksheet you already hold, ` +
-        `use getCellByCoord / setCellByCoord from @office-kit/xlsx/worksheet, which take a bare "A1" ref.`,
+        `received ${describeArg(address)}.` + worksheetArgHint(address),
     );
   }
   const { sheet: sheetTitle, range } = parseSheetRange(address);

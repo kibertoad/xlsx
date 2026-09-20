@@ -52,11 +52,16 @@ describe('setCellAtAddress', () => {
     expect(call).not.toThrow(/\[object Object\]/);
   });
 
-  it('names the argument on getCellAtAddress too', () => {
+  // The mirror mistake: the Worksheet lands in the workbook slot, which used
+  // to reach getSheet and die on `wb.sheets` with a bare TypeError.
+  it('names the argument when a Worksheet is passed where the workbook goes', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'Data');
-    const call = () => (getCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, ws);
-    expect(call).toThrow(/getCellAtAddress: address must be a sheet-qualified A1 string/);
+    const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(ws, 'Data!A1', 'x');
+    expect(call).toThrow(OpenXmlSchemaError);
+    expect(call).toThrow(/setCellAtAddress: first argument must be the Workbook/);
+    expect(call).toThrow(/setCellByCoord/);
+    expect(call).not.toThrow(/is not iterable/);
   });
 
   it('reports a missing address as undefined rather than as a bad string', () => {
@@ -64,5 +69,7 @@ describe('setCellAtAddress', () => {
     addWorksheet(wb, 'Data');
     const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, undefined, 'x');
     expect(call).toThrow(/received undefined/);
+    // No argument was swapped, so the getCellByCoord advice would misdirect.
+    expect(call).not.toThrow(/setCellByCoord/);
   });
 });
