@@ -14,21 +14,41 @@ import { OpenXmlSchemaError } from './exceptions.js';
 const MS_PER_SECOND = 1_000;
 const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 3_600_000;
+const MS_PER_DAY = 86_400_000;
+const HOURS_PER_DAY = 24;
 
-/** `YYYY-MM-DD`, optionally `T`-joined to a time, optionally zone-qualified. */
+/**
+ * `YYYY-MM-DD`, optionally `T`-joined to a time, optionally zone-qualified.
+ *
+ * The fraction is unbounded because XSD `dateTime` puts no limit on it and
+ * producers do use the room: Python's `datetime.isoformat()`, which is what
+ * every openpyxl-written strict file carries, prints six digits.
+ */
 const ISO_DATE =
-  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?(Z|[+-]\d{2}:\d{2})?$/;
-/** `HH:MM[:SS[.fff]]` with no date. Excel stores a time of day as a fraction of a day. */
-const ISO_TIME = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/;
-/** `PT[nH][nM][n[.fff]S]`, the form Excel writes for an elapsed-time cell. */
-const ISO_DURATION = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d{1,3})?)S)?$/;
+  /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?)?(Z|[+-]\d{2}:\d{2})?$/;
+/**
+ * `HH:MM[:SS[.fff]]` with no date, optionally zone-qualified. Excel stores a
+ * time of day as a fraction of a day.
+ */
+const ISO_TIME = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(?:Z|[+-]\d{2}:\d{2})?$/;
+/**
+ * `P[nD][T[nH][nM][n[.fff]S]]`. Excel writes the `PT…` form for an elapsed-time
+ * cell; the day component turns up in strict files from other producers. The
+ * year and month components are refused: how many milliseconds they stand for
+ * depends on which year and month, and a `t="d"` carries no date to pin them to.
+ */
+const ISO_DURATION = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
 
 const intOr = (raw: string | undefined, fallback: number): number =>
   raw === undefined ? fallback : Number.parseInt(raw, 10);
 
-/** `.5` and `.500` are both 500ms. */
+/**
+ * `.5` and `.500` are both 500ms. Digits past the third are dropped rather
+ * than rounded: `Date` holds whole milliseconds, and truncating keeps a value
+ * inside the second it was written in.
+ */
 const fractionMs = (raw: string | undefined): number =>
-  raw === undefined ? 0 : Number.parseInt(raw.padEnd(3, '0'), 10);
+  raw === undefined ? 0 : Number.parseInt(raw.slice(0, 3).padEnd(3, '0'), 10);
 
 /** Minutes a `±HH:MM` suffix puts the wall clock ahead of UTC. `Z` and an absent suffix are 0. */
 const offsetMinutes = (raw: string | undefined): number => {
@@ -66,6 +86,11 @@ export function parseCellDate(
     const minute = intOr(date[5], 0);
     const second = intOr(date[6], 0);
     const wall = new Date(Date.UTC(year, month - 1, day, hour, minute, second, fractionMs(date[7])));
+    // Date.UTC reads a year under 100 as 1900 + year, so 0099-01-01 would
+    // arrive as 1999 and the roll check below would then reject a date that
+    // exists. setUTCFullYear is the documented way out and leaves the rest of
+    // the components alone.
+    if (year < 100) wall.setUTCFullYear(year);
     // Date.UTC rolls a component past its range into the next one, so a
     // non-existent date like 2024-02-30 arrives here as March 1. Comparing the
     // components back is what rejects it.
@@ -84,19 +109,26 @@ export function parseCellDate(
     const hour = intOr(time[1], 0);
     const minute = intOr(time[2], 0);
     const second = intOr(time[3], 0);
-    if (hour <= 23 && minute <= 59 && second <= 59) {
-      return {
-        kind: 'duration',
-        ms: hour * MS_PER_HOUR + minute * MS_PER_MINUTE + second * MS_PER_SECOND + fractionMs(time[4]),
-      };
-    }
+    const ms = hour * MS_PER_HOUR + minute * MS_PER_MINUTE + second * MS_PER_SECOND + fractionMs(time[4]);
+    // A zone suffix is read off the clock rather than applied to it. There is
+    // no date here to shift across, and the value is a fraction of a day, so a
+    // conversion to UTC would have to land outside [00:00, 24:00) with nowhere
+    // to record the day it moved into. XSD `time` allows the suffix, so a file
+    // carrying one is read for the clock reading it states.
+    if (hour < HOURS_PER_DAY && minute <= 59 && second <= 59) return { kind: 'duration', ms };
+    // 24:00:00 is the end-of-day form XSD `time` admits, and only at exactly
+    // midnight: every other component has to be zero.
+    if (hour === HOURS_PER_DAY && ms === MS_PER_DAY) return { kind: 'duration', ms };
   }
 
   const duration = ISO_DURATION.exec(text);
-  if (duration && (duration[1] !== undefined || duration[2] !== undefined || duration[3] !== undefined)) {
-    const seconds = duration[3] === undefined ? 0 : Number.parseFloat(duration[3]);
+  if (duration && (duration[1] ?? duration[2] ?? duration[3] ?? duration[4]) !== undefined) {
+    const seconds = duration[4] === undefined ? 0 : Number.parseFloat(duration[4]);
     const ms =
-      intOr(duration[1], 0) * MS_PER_HOUR + intOr(duration[2], 0) * MS_PER_MINUTE + seconds * MS_PER_SECOND;
+      intOr(duration[1], 0) * MS_PER_DAY +
+      intOr(duration[2], 0) * MS_PER_HOUR +
+      intOr(duration[3], 0) * MS_PER_MINUTE +
+      seconds * MS_PER_SECOND;
     return { kind: 'duration', ms: Math.round(ms) };
   }
 

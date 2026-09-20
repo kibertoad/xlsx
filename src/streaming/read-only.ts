@@ -98,8 +98,12 @@ const decodeCellValue = (
       // Invalid boolean values stay empty in this reader, like out-of-range
       // shared-string indexes. Numeric values have stricter validation.
       return parseXsdBoolean(vText) ?? null;
-    case 'e':
-      return { kind: 'error', code: parseCellErrorCode(vText, sheet, col, row) };
+    case 'e': {
+      // A blank `<v>` carries no token, so it is an empty cell the way it is
+      // under `t="n"` and `t="b"`.
+      const code = parseCellErrorCode(vText, sheet, col, row);
+      return code === null ? null : { kind: 'error', code };
+    }
     case 'd':
       return parseCellDate(vText, sheet, col, row);
     case 'str':

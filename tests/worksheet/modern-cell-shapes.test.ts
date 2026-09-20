@@ -5,7 +5,7 @@
 
 import { unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { isErrorValue } from '../../src/cell/cell.js';
+import { type ExcelErrorCode, isErrorValue, makeFormula } from '../../src/cell/cell.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
@@ -109,8 +109,57 @@ describe('an error token the library does not model', () => {
     );
   });
 
-  it('rejects a t="e" with no value', () => {
-    expect(() => readSheet('<row r="1"><c r="A1" t="e"/></row>')).toThrow(OpenXmlSchemaError);
+  it('reads a blank value as an empty cell, as t="n" and t="b" do', () => {
+    const ws = readSheet('<row r="1"><c r="A1" t="e"/><c r="B1" t="e"><v></v></c></row>');
+    expect(getCell(ws, 1, 1)?.value).toBeNull();
+    expect(getCell(ws, 1, 2)?.value).toBeNull();
+  });
+
+  it('carries the token through a formula cell rather than failing the save', async () => {
+    const { wb, ws } = await loadPatched('<c r="A1" t="e"><f>A2</f><v>#NOTYET!</v></c>');
+    expect(getCell(ws, 1, 1)?.value).toMatchObject({
+      kind: 'formula',
+      cachedValue: '#NOTYET!',
+      cachedValueType: 'error',
+    });
+    expect(await savedSheetText(wb)).toContain('t="e"><f>A2</f><v>#NOTYET!</v>');
+  });
+
+  it('rejects a non-token cached formula error where the cell is, not on save', () => {
+    expect(() => readSheet('<row r="1"><c r="A1" t="e"><f>A2</f><v>oops</v></c></row>')).toThrow(
+      'worksheet: <v>oops</v> at Data!A1 is not an Excel error token',
+    );
+  });
+});
+
+// The token goes into `<v>` as it stands, so a `t="e"` payload outside the
+// token shape would leave the saved part malformed, or close the `<v>` early
+// and carry a cell of the file author's choosing into the sheet.
+describe('a t="e" payload that is not shaped like a token', () => {
+  const INJECTION = '#</v></c><c r="B1" t="s"><v>0</v></c>';
+
+  it('is refused on read', () => {
+    const escaped = INJECTION.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    expect(() => readSheet(`<row r="1"><c r="A1" t="e"><v>${escaped}</v></c></row>`)).toThrow(
+      OpenXmlSchemaError,
+    );
+    expect(() => readSheet('<row r="1"><c r="A1" t="e"><v>#A&amp;B</v></c></row>')).toThrow(
+      'is not an Excel error token',
+    );
+  });
+
+  it('is refused on write, naming the cell', async () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    setCell(ws, 1, 1, { kind: 'error', code: INJECTION as ExcelErrorCode });
+    await expect(savedSheetText(wb)).rejects.toThrow('worksheet: invalid error token at A1');
+  });
+
+  it('is refused as a cached formula result too', async () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    setCell(ws, 1, 1, makeFormula('A2', { cachedValue: INJECTION, cachedValueType: 'error' }));
+    await expect(savedSheetText(wb)).rejects.toThrow('worksheet: invalid cached formula error at A1');
   });
 });
 
@@ -134,12 +183,62 @@ describe('t="d", the ISO 29500 strict date cell', () => {
     }
   });
 
+  it('reads a fraction longer than milliseconds, truncating it', () => {
+    // Python's datetime.isoformat() prints six digits, so this is what every
+    // openpyxl-written strict file carries.
+    const ws = readSheet('<row r="1"><c r="A1" t="d"><v>2024-03-14T12:30:45.123456</v></c></row>');
+    expect(getCell(ws, 1, 1)?.value).toEqual(new Date(Date.UTC(2024, 2, 14, 12, 30, 45, 123)));
+  });
+
+  it('reads a year before 100, which Date.UTC would otherwise read as 19xx', () => {
+    const ws = readSheet('<row r="1"><c r="A1" t="d"><v>0099-01-01</v></c></row>');
+    const value = getCell(ws, 1, 1)?.value;
+    expect(value).toBeInstanceOf(Date);
+    expect((value as Date).getUTCFullYear()).toBe(99);
+  });
+
   it('reads the time-only and duration forms as a duration', () => {
     const ws = readSheet(
       '<row r="1"><c r="A1" t="d"><v>14:30:00</v></c><c r="B1" t="d"><v>PT4H30M</v></c></row>',
     );
     expect(getCell(ws, 1, 1)?.value).toEqual({ kind: 'duration', ms: 52_200_000 });
     expect(getCell(ws, 1, 2)?.value).toEqual({ kind: 'duration', ms: 16_200_000 });
+  });
+
+  it('reads a zoned time off the clock, since a fraction of a day cannot hold a zone', () => {
+    const ws = readSheet(
+      '<row r="1"><c r="A1" t="d"><v>14:30:00Z</v></c><c r="B1" t="d"><v>14:30:00+02:00</v></c></row>',
+    );
+    expect(getCell(ws, 1, 1)?.value).toEqual({ kind: 'duration', ms: 52_200_000 });
+    expect(getCell(ws, 1, 2)?.value).toEqual({ kind: 'duration', ms: 52_200_000 });
+  });
+
+  it('reads 24:00:00, the end-of-day form, as a full day', () => {
+    const ws = readSheet('<row r="1"><c r="A1" t="d"><v>24:00:00</v></c></row>');
+    expect(getCell(ws, 1, 1)?.value).toEqual({ kind: 'duration', ms: 86_400_000 });
+  });
+
+  it('rejects an hour past the end of the day', () => {
+    expect(() => readSheet('<row r="1"><c r="A1" t="d"><v>24:00:01</v></c></row>')).toThrow(
+      OpenXmlSchemaError,
+    );
+    expect(() => readSheet('<row r="1"><c r="A1" t="d"><v>25:00:00</v></c></row>')).toThrow(
+      OpenXmlSchemaError,
+    );
+  });
+
+  it('reads a duration carrying days', () => {
+    const ws = readSheet(
+      '<row r="1"><c r="A1" t="d"><v>P1D</v></c><c r="B1" t="d"><v>P1DT2H30M</v></c></row>',
+    );
+    expect(getCell(ws, 1, 1)?.value).toEqual({ kind: 'duration', ms: 86_400_000 });
+    expect(getCell(ws, 1, 2)?.value).toEqual({ kind: 'duration', ms: 95_400_000 });
+  });
+
+  it('rejects a duration in years or months, which stand for no fixed span', () => {
+    expect(() => readSheet('<row r="1"><c r="A1" t="d"><v>P1Y</v></c></row>')).toThrow(OpenXmlSchemaError);
+    expect(() => readSheet('<row r="1"><c r="A1" t="d"><v>P2M</v></c></row>')).toThrow(OpenXmlSchemaError);
+    expect(() => readSheet('<row r="1"><c r="A1" t="d"><v>P</v></c></row>')).toThrow(OpenXmlSchemaError);
   });
 
   it('reads a blank value as an empty cell, as t="n" and t="b" do', () => {

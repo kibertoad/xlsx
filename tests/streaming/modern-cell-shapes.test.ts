@@ -74,6 +74,10 @@ describe('loadWorkbookStream on a post-2018 error token', () => {
     ]);
   });
 
+  it('yields an empty cell for a t="e" with no token, instead of ending the pass', async () => {
+    expect(await streamValues('<c r="A2" t="e"/>')).toEqual([[10], [null], [30], [40]]);
+  });
+
   it('agrees with loadWorkbook that a non-token t="e" payload is an error', async () => {
     const bytes = await savedWithCell('<c r="A2" t="e"><v>oops</v></c>');
     await expect(loadWorkbook(fromBuffer(bytes))).rejects.toThrow(
@@ -104,6 +108,27 @@ describe('loadWorkbookStream on t="d"', () => {
     expect(await streamValues('<c r="A2" t="d"><v>2024-03-14T12:30:45Z</v></c>')).toEqual([
       [10],
       [new Date(Date.UTC(2024, 2, 14, 12, 30, 45))],
+      [30],
+      [40],
+    ]);
+  });
+
+  it('reads the fraction, zone and duration forms the way loadWorkbook reads them', async () => {
+    expect(await streamValues('<c r="A2" t="d"><v>2024-03-14T12:30:45.123456</v></c>')).toEqual([
+      [10],
+      [new Date(Date.UTC(2024, 2, 14, 12, 30, 45, 123))],
+      [30],
+      [40],
+    ]);
+    expect(await streamValues('<c r="A2" t="d"><v>14:30:00Z</v></c>')).toEqual([
+      [10],
+      [{ kind: 'duration', ms: 52_200_000 }],
+      [30],
+      [40],
+    ]);
+    expect(await streamValues('<c r="A2" t="d"><v>P1DT2H30M</v></c>')).toEqual([
+      [10],
+      [{ kind: 'duration', ms: 95_400_000 }],
       [30],
       [40],
     ]);

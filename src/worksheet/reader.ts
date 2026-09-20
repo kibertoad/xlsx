@@ -1793,9 +1793,13 @@ const readCell = (
       value = parsed;
       break;
     }
-    case 'e':
-      value = { kind: 'error', code: parseCellErrorCode(raw.value, ws.title, coord.col, coord.row) };
+    case 'e': {
+      // A blank `<v>` carries no token, so it is an empty cell the way it is
+      // under `t="n"` and `t="b"`, and `<c t="e"/>` is written back as `<c/>`.
+      const code = parseCellErrorCode(raw.value, ws.title, coord.col, coord.row);
+      value = code === null ? null : { kind: 'error', code };
       break;
+    }
     case 'd':
       // ISO 29500 strict stores a date as ISO 8601 text rather than a serial.
       // The transitional XSD vendored under tests/conformance/ omits `d`, so
@@ -1884,6 +1888,13 @@ const decodeCachedValue = (
       }
       return parsed;
     }
+    case 'e':
+      // The cached result of an errored formula is an error token, held as the
+      // text it is stored as. Checking it here is what keeps the cell loadable
+      // and saveable as a pair: the writer emits it back into `<v>` verbatim,
+      // and a `t="e"` payload that is no token at all would only be caught on
+      // save, far from the file it came out of.
+      return parseCellErrorCode(raw, sheet, coord.col, coord.row) ?? undefined;
     case 's': {
       // Excel writes a cached string result as `t="str"`, but other producers
       // put it in the sst, where the `<v>` is an index and not the text. The

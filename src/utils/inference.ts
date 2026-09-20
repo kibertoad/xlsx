@@ -18,7 +18,12 @@ export type CellDataType = 'n' | 's' | 'b' | 'd' | 'f' | 'e';
  *
  * It is not a closed description of the format: Excel has added nine tokens
  * since 2018 and can add more, so a `t="e"` cell read out of a file keeps
- * whatever token it carries whether or not that token is listed here.
+ * whatever token it carries, listed here or not, as long as the token is
+ * shaped like one (`isExcelErrorToken` in `./cell-error.js`).
+ *
+ * Adding a token here changes what a write does with the matching string:
+ * {@link inferCellType} and `bindValue` turn it into an error value instead of
+ * text, and `makeErrorValue` starts accepting it.
  */
 export const ERROR_CODES: ReadonlySet<string> = new Set([
   // Pre-2018, and all a transitional-conformance file can hold.

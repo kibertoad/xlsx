@@ -10,6 +10,7 @@
 // + array-formula round-trip).
 
 import { OpenXmlError } from '../utils/exceptions.js';
+import { ERROR_CODES } from '../utils/inference.js';
 
 export class TokenizerError extends OpenXmlError {
   override readonly name = 'TokenizerError';
@@ -145,16 +146,10 @@ export const STRING_DOUBLE_RE = /^"(?:[^"]*"")*[^"]*"(?!")/;
 /** '...'-delimited link / sheet name. Internal `''` is an escaped apostrophe. */
 export const STRING_SINGLE_RE = /^'(?:[^']*'')*[^']*'(?!')/;
 
-const ERROR_CODES: readonly string[] = [
-  '#NULL!',
-  '#DIV/0!',
-  '#VALUE!',
-  '#REF!',
-  '#NAME?',
-  '#NUM!',
-  '#N/A',
-  '#GETTING_DATA',
-];
+// The tokens a formula can carry literally are the tokens a cell can hold, so
+// this reads the one list rather than keeping a second copy of openpyxl's
+// pre-2018 eight. No token in the set is a prefix of another, which is what
+// lets the `startsWith` scan below take them in any order.
 
 /** Each of these characters terminates the operand token currently being built. */
 const TOKEN_ENDERS = new Set(',;}) +-*/^&=><%'.split(''));
