@@ -11,6 +11,15 @@ import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, localNameOf } from '../xml/namespaces
 import { findById, findByType, makeRelationships, relsFromBytes } from '../packaging/relationships.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
 import { parseCellNumber } from '../utils/cell-number.js';
+import {
+  chargeCell,
+  chargeRow,
+  type ContentBudget,
+  type ContentLimits,
+  makeContentBudget,
+  resolveContentLimits,
+  type ResolvedContentLimits,
+} from '../worksheet/content-budget.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
 import { type ZipArchive, openZip } from '../zip/reader.js';
@@ -130,7 +139,12 @@ async function* iterSheetRows(
   sheetInput: SaxInput,
   sst: ReadonlyArray<string>,
   opts: IterRowsOptions,
+  contentLimits: ResolvedContentLimits,
 ): AsyncIterableIterator<ReadOnlyCell[]> {
+  // One budget per traversal, not per workbook: this reader holds a row at a
+  // time and the same sheet can be iterated again, so a cumulative total would
+  // refuse the second pass over a workbook it already allowed.
+  const budget = makeContentBudget(contentLimits);
   const minRow = opts.minRow ?? 1;
   const maxRow = opts.maxRow ?? Number.POSITIVE_INFINITY;
   const minCol = opts.minCol ?? 1;
@@ -188,10 +202,15 @@ async function* iterSheetRows(
           // for its first cell to name it.
           const rRaw = e.attrs['r'];
           if (rRaw === undefined) {
+            chargeRow(budget, title, undefined);
             currentRow = 0;
           } else {
             currentRow = rowNumberFromAttr(rRaw, 'loadWorkbookStream');
             nextRow = Math.max(nextRow, currentRow + 1);
+            // Charged here rather than at `</row>` so a row past the cap is
+            // refused before its cells are decoded. Unnumbered rows are
+            // charged at their opening tag too, before buffering any cells.
+            chargeRow(budget, title, currentRow);
           }
           currentCells = [];
           pendingCells = [];
@@ -206,7 +225,6 @@ async function* iterSheetRows(
           // requested band — saves the parseInt + coordinateToTuple hit on
           // every cell of every excluded row.
           if (currentRow !== 0 && (currentRow < minRow || currentRow > maxRow)) break;
-          cellOpen = true;
           cellType = e.attrs['t'] ?? 'n';
           const sRaw = e.attrs['s'];
           cellStyleId = sRaw ? Number.parseInt(sRaw, 10) || 0 : 0;
@@ -219,6 +237,12 @@ async function* iterSheetRows(
             cellCol = nextCol;
           }
           nextCol = cellCol + 1;
+          cellOpen = cellCol >= minCol && cellCol <= maxCol;
+          if (cellOpen) {
+            // An unresolved row might be selected later, so its buffered cells
+            // consume budget even if its eventual number is outside the band.
+            chargeCell(budget, title, cellCol, cellRow === 0 ? undefined : cellRow);
+          }
           vText = '';
           isText = '';
           break;
@@ -409,9 +433,16 @@ const findSheetDataTagEnd = (bytes: Uint8Array): number => {
  * `hasUnnumberedRow` reports a `<row>` this scan cannot number, which makes the
  * whole sheet unseekable: a row without `@r` takes the row its first cell
  * names, and reading cell refs is the SAX walk's job.
+ *
+ * Every recorded row is charged to `budget`. The index holds one object per
+ * row of the whole part, however narrow the band that asked for it, so a cap
+ * that only counted the rows a band yields would leave the largest allocation
+ * on this path uncapped.
  */
 const buildRowOffsetIndex = (
   bytes: Uint8Array,
+  budget: ContentBudget,
+  title: string,
 ): {
   index: ReadonlyArray<{ row: number; offset: number }>;
   sheetDataEnd: number;
@@ -472,8 +503,10 @@ const buildRowOffsetIndex = (
     while (j < bytes.length && bytes[j] !== 0x3e) j++;
     if (j >= bytes.length) break;
     const row = readRowAttr(bytes, start + 4, j);
-    if (row > 0) out.push({ row, offset: start });
-    else hasUnnumberedRow = true;
+    if (row > 0) {
+      chargeRow(budget, title, row);
+      out.push({ row, offset: start });
+    } else hasUnnumberedRow = true;
     i = j + 1;
   }
   if (sheetDataEnd < 0) sheetDataEnd = bytes.length;
@@ -562,6 +595,7 @@ const makeStreamingReadOnlyWorksheet = (
   partPath: string,
   sst: ReadonlyArray<string>,
   indexes: RowIndexCache,
+  contentLimits: ResolvedContentLimits,
 ): ReadOnlyWorksheet => {
   // Lazy + cached, bytes included: the archive only keeps small entries, so a
   // second band query that went back to `read` would inflate the whole part
@@ -573,7 +607,13 @@ const makeStreamingReadOnlyWorksheet = (
     let cached = indexes.byWorksheet.get(cacheKey);
     if (!cached) {
       const bytes = archive.read(partPath);
-      const { hasUnnumberedRow, index, sheetDataEnd, sheetDataTagEnd } = buildRowOffsetIndex(bytes);
+      // The index is built once and reused, so it gets a budget of its own
+      // rather than spending a traversal's.
+      const { hasUnnumberedRow, index, sheetDataEnd, sheetDataTagEnd } = buildRowOffsetIndex(
+        bytes,
+        makeContentBudget(contentLimits),
+        title,
+      );
       cached = hasUnnumberedRow
         ? { seekable: false }
         : { seekable: true, bytes, index, sheetDataEnd, sheetDataTagEnd };
@@ -589,7 +629,7 @@ const makeStreamingReadOnlyWorksheet = (
       // archive's streaming inflate path so the worksheet's inflated payload
       // is never fully resident. Peak memory for the walk drops to the
       // inflate window + SAX state instead of the entire `<sheetData>` body.
-      return iterSheetRows(title, archive.readStream(partPath), sst, opts);
+      return iterSheetRows(title, archive.readStream(partPath), sst, opts, contentLimits);
     }
     // Band query (minRow > 1): the row-offset index needs the full inflated
     // bytes so we can binary-search to the byte offset of the first matching
@@ -597,17 +637,23 @@ const makeStreamingReadOnlyWorksheet = (
     const seek = ensureIndexed();
     // Rows the index cannot number: walk the part instead of seeking into it,
     // which is the only way the derived numbers stay the SAX walk's.
-    if (!seek.seekable) return iterSheetRows(title, archive.readStream(partPath), sst, opts);
+    if (!seek.seekable) return iterSheetRows(title, archive.readStream(partPath), sst, opts, contentLimits);
     const { bytes, index, sheetDataEnd, sheetDataTagEnd } = seek;
-    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(title, bytes, sst, opts);
+    if (index.length === 0 || sheetDataTagEnd < 0) return iterSheetRows(title, bytes, sst, opts, contentLimits);
     const pos = firstRowAtOrAfter(index, minRow);
     if (pos < 0) {
       // Every row is below minRow, so there is nothing to yield.
       return (async function* () {})();
     }
     const target = index[pos];
-    if (!target) return iterSheetRows(title, bytes, sst, opts);
-    return iterSheetRows(title, replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd), sst, opts);
+    if (!target) return iterSheetRows(title, bytes, sst, opts, contentLimits);
+    return iterSheetRows(
+      title,
+      replayFromRow(bytes, sheetDataTagEnd, target.offset, sheetDataEnd),
+      sst,
+      opts,
+      contentLimits,
+    );
   };
   const iterValues = async function* (opts: IterRowsOptions = {}): AsyncIterableIterator<CellValue[]> {
     for await (const row of iterRows(opts)) {
@@ -629,6 +675,7 @@ const makeStreamingReadOnlyWorkbook = (
   archive: ZipArchive,
   partPathByName: ReadonlyMap<string, string>,
   sst: ReadonlyArray<string>,
+  contentLimits: ResolvedContentLimits,
 ): ReadOnlyWorkbook => {
   // Weak keys let unused worksheet handles release their indexed bytes. The
   // indirection also lets close() release every index while handles remain live.
@@ -642,7 +689,7 @@ const makeStreamingReadOnlyWorkbook = (
       if (partPath === undefined) {
         throw new OpenXmlSchemaError(`loadWorkbookStream: no worksheet named "${name}"`);
       }
-      return makeStreamingReadOnlyWorksheet(name, archive, partPath, sst, indexes);
+      return makeStreamingReadOnlyWorksheet(name, archive, partPath, sst, indexes, contentLimits);
     },
     async close() {
       archive.close();
@@ -659,6 +706,29 @@ export interface LoadWorkbookStreamOptions {
    * (only safe for fully trusted sources).
    */
   decompressionLimits?: DecompressionLimits | false;
+  /**
+   * Caps on how much content one row-iteration will read, the same option
+   * `loadWorkbook` takes. Unlimited by default, and counted per traversal here
+   * rather than per workbook: this reader holds a row at a time, so the cap
+   * bounds how long a pass can run rather than how much it retains, and a
+   * sheet can be iterated again without the cap having been spent. Exceeding
+   * either count raises an `OpenXmlContentLimitError`: from the iterator for a
+   * row the pass reached, and from the `iterRows` call itself when the index a
+   * band query has to build is what passes the cap.
+   *
+   * A pass is charged for the rows it walks, not the ones it yields. Reaching
+   * `minRow` costs a walk or an index over everything before it, and the index
+   * a band query builds holds one object per row of the whole part, so that is
+   * where a cap has to bite for `iterRows({ minRow })` to be bounded at all.
+   * The index is built once per worksheet handle and charged once. Cells are
+   * charged before buffering or decoding them, including cells of unnumbered
+   * rows whose eventual row number might fall outside the requested band.
+   * Cells in known excluded rows or columns are not charged.
+   *
+   * See `LoadOptions.contentLimits` for a starting ingestion profile and
+   * `SECURITY.md` for the threat model.
+   */
+  contentLimits?: ContentLimits;
 }
 
 /** Open an xlsx for read-only streaming access. */
@@ -666,6 +736,11 @@ export async function loadWorkbookStream(
   source: XlsxSource,
   opts: LoadWorkbookStreamOptions = {},
 ): Promise<ReadOnlyWorkbook> {
+  // Settled here rather than inside the row iterator: a cap that cannot mean
+  // anything has to be reported from this call, not from an iterator the
+  // caller reaches later, and a band query that yields nothing never builds a
+  // budget at all.
+  const contentLimits = resolveContentLimits(opts.contentLimits);
   const archive = await openZip(
     source,
     opts.decompressionLimits === undefined ? {} : { decompressionLimits: opts.decompressionLimits },
@@ -733,5 +808,6 @@ export async function loadWorkbookStream(
     archive,
     partPathByName,
     sst.entries.map((e) => (typeof e === 'string' ? e : e.runs.map((r) => r.text).join(''))),
+    contentLimits,
   );
 }

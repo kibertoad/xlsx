@@ -35,6 +35,7 @@ import { el, findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings.js';
 import type { AutoFilter, FilterColumn } from './auto-filter.js';
 import { parseMultiCellRange, parseRange } from './cell-range.js';
+import { chargeCell, chargeRow, type ContentBudget, makeContentBudget, UNLIMITED_CONTENT_LIMITS } from './content-budget.js';
 import type { LegacyComment } from './comments.js';
 import type {
   ConditionalFormatting,
@@ -194,6 +195,12 @@ export interface WorksheetReadContext {
    * inline carries `<drawing r:id="...">`.
    */
   loadDrawing?: (relId: string) => Drawing | undefined;
+  /**
+   * Running cell / row totals for the whole read. Shared across worksheets so
+   * a cap covers the workbook rather than each sheet separately. Absent means
+   * unlimited.
+   */
+  contentBudget?: ContentBudget;
 }
 
 /** Per-worksheet state for shared-formula expansion. */
@@ -1532,6 +1539,7 @@ const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xd
  * in `tests/worksheet/row-without-r-attribute.test.ts`.
  */
 const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: WorksheetReadContext): void => {
+  const budget = ctx.contentBudget ?? makeContentBudget(UNLIMITED_CONTENT_LIMITS);
   const sharedFormulas = new Map<number, SharedFormulaCache>();
   // High-water mark, not the previous row: an `@r` that jumps backwards must
   // not send a later row without `@r` onto a row already read.
@@ -1548,6 +1556,7 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
 
   let depth = 0;
   let cell: RawCell | undefined;
+  let cellCoord = { row: 0, col: 0 };
   // Local name of the `<v>` or `<f>` whose text is being collected, and the
   // accumulator for it. Both `undefined` outside one.
   let valueTag: string | undefined;
@@ -1605,9 +1614,12 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
       // `@r` is optional on CT_Row (ECMA-376 §18.3.1.73); such a row waits for
       // its first located cell to name it.
       if (rAttr === undefined) {
+        chargeRow(budget, ws.title, undefined);
         rowIdx = 0;
       } else {
-        settleRow(rowNumberFromAttr(rAttr, 'worksheet'));
+        const row = rowNumberFromAttr(rAttr, 'worksheet');
+        chargeRow(budget, ws.title, row);
+        settleRow(row);
       }
       return;
     }
@@ -1615,6 +1627,12 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
     if (depth === 2) {
       if (local !== 'c') return;
       const attrs = saxAttributes(node.attributes);
+      const ref = attrs['r'];
+      if (rowIdx === 0 && ref !== undefined) settleRow(coordinateToTuple(ref).row);
+      // Count before retaining raw cell text, including cells whose row is
+      // unresolved until a later reference or the end of the row.
+      cellCoord = parseCellCoord(ref, rowIdx, nextCol + held.length);
+      chargeCell(budget, ws.title, cellCoord.col, rowIdx === 0 ? undefined : cellCoord.row);
       cell = {
         ref: attrs['r'],
         style: attrs['s'],
@@ -1681,9 +1699,8 @@ const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: Wo
         else held.push(cell);
       }
       if (rowIdx > 0) {
-        const coord = parseCellCoord(cell.ref, rowIdx, nextCol);
-        readCell(ws, cell, coord, ctx, sharedFormulas);
-        nextCol = coord.col + 1;
+        readCell(ws, cell, cellCoord, ctx, sharedFormulas);
+        nextCol = cellCoord.col + 1;
       }
       cell = undefined;
       return;

@@ -37,6 +37,12 @@ import { makeDefinedName } from '../workbook/defined-names.js';
 import { parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
 import { createWorkbook, type SheetRef, type SheetState, type Workbook } from '../workbook/workbook.js';
 import { parseCommentsXml } from '../worksheet/comments-xml.js';
+import {
+  type ContentLimits,
+  makeContentBudget,
+  resolveContentLimits,
+  type ResolvedContentLimits,
+} from '../worksheet/content-budget.js';
 import { parseWorksheetXml } from '../worksheet/reader.js';
 import { parseTableXml } from '../worksheet/table-xml.js';
 import {
@@ -73,6 +79,43 @@ export interface LoadOptions {
    * {@link DecompressionLimits} for the individual knobs.
    */
   decompressionLimits?: DecompressionLimits | false;
+  /**
+   * Caps on how much content the load will model. `decompressionLimits` bounds
+   * the bytes an archive inflates to; this bounds the cells and rows those
+   * bytes turn into, which is what the load spends its time on and what the
+   * Workbook it returns is made of. A small upload can inflate to a
+   * `<sheetData>` of a few hundred MB without tripping any byte limit, and the
+   * model was built for every cell of it before the caller got a chance to look
+   * at anything.
+   *
+   * This does not bound peak memory by itself. `loadWorkbook` inflates a
+   * worksheet part and decodes it to a string before the first cell of it is
+   * charged, so those bytes stay bounded by `decompressionLimits` alone; what
+   * the cap removes is the Workbook built on top of them, which outlives the
+   * part and is the larger of the two.
+   *
+   * Unlimited by default. Both counts cover one pass over the content: every
+   * worksheet of the workbook here, and one row-iteration in
+   * `loadWorkbookStream`, which materialises a row at a time and can be
+   * iterated more than once.
+   *
+   * A service that accepts spreadsheets from strangers wants a ceiling here as
+   * well as on `decompressionLimits`. Cost is close to linear in cells, so size
+   * the cap from the heap the process can spare and halve it to halve the worst
+   * case. As a starting profile for ordinary business workbooks:
+   *
+   * ```ts
+   * const wb = await loadWorkbook(source, {
+   *   decompressionLimits: { maxTotalUncompressedBytes: 256 * 1024 * 1024 },
+   *   contentLimits: { maxCells: 1_000_000, maxRows: 100_000 },
+   * });
+   * ```
+   *
+   * Exceeding either cap throws an `OpenXmlContentLimitError`, which names the
+   * cap and the cell or row that reached it. See `SECURITY.md` for the threat
+   * model both options belong to.
+   */
+  contentLimits?: ContentLimits;
 }
 
 /** Office Document relationship type: the package-root pointer to `xl/workbook.xml`. */
@@ -307,19 +350,25 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
  * yet). The next phase-3 iterations layer those in atop the same skeleton.
  */
 export async function loadWorkbook(source: XlsxSource, opts: LoadOptions = {}): Promise<Workbook> {
+  // Settled before the source is opened, so a cap that cannot mean anything is
+  // reported where the caller passed it rather than partway through a read.
+  const contentLimits = resolveContentLimits(opts.contentLimits);
   const archive = await openZip(
     source,
     opts.decompressionLimits === undefined ? {} : { decompressionLimits: opts.decompressionLimits },
   );
   try {
-    return loadWorkbookFromArchive(archive);
+    return loadWorkbookFromArchive(archive, contentLimits);
   } finally {
     archive.close();
   }
 }
 
 /** Internal: same as {@link loadWorkbook} but operating on an already-opened archive. */
-function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
+function loadWorkbookFromArchive(archive: ZipArchive, contentLimits: ResolvedContentLimits): Workbook {
+  // One budget for the whole load: a per-sheet cap would let a workbook of a
+  // thousand small sheets through a ceiling meant to bound the whole read.
+  const contentBudget = makeContentBudget(contentLimits);
   // 1. Manifest — resolves which override entries the package declares.
   if (!archive.has(ARC_CONTENT_TYPES)) {
     throw new OpenXmlSchemaError(`loadWorkbook: missing "${ARC_CONTENT_TYPES}"`);
@@ -559,6 +608,7 @@ function loadWorkbookFromArchive(archive: ZipArchive): Workbook {
     }
     const ws = parseWorksheetXml(archive.read(sheetPath), entry.name, {
       sharedStrings: sst,
+      contentBudget,
       ...(sheetRels ? { rels: sheetRels } : {}),
       ...(loadTable ? { loadTable } : {}),
       ...(loadComments ? { loadComments } : {}),
