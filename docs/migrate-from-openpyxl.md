@@ -29,7 +29,10 @@ The `XlsxSource` / `XlsxSink` abstractions decouple the I/O from the workbook,
 so the same `loadWorkbook` works against `fromBuffer`, `fromFile`,
 `fromBlob`, `fromResponse`, `fromStream`, and `fromReadable`. `loadWorkbook`
 accepts a `decompressionLimits` option (on by default) to bound the cost of
-adversarial archives — leave it on when the source is untrusted.
+adversarial archives: leave it on when the source is untrusted. Add
+`contentLimits` alongside it to cap cells and rows, which bounds the workbook a
+read builds and the time it spends building it; that one is unlimited unless
+you ask.
 
 ## Workbook creation
 
@@ -225,8 +228,14 @@ await wb.close();
 
 `iterRows` accepts `{ minRow, maxRow, minCol, maxCol }` for sub-sheet
 iteration; the SAX path stops walking the bytes once it crosses `maxRow`.
-`loadWorkbookStream` accepts the same `decompressionLimits` option as
-`loadWorkbook`.
+`loadWorkbookStream` accepts the same `decompressionLimits` and `contentLimits`
+options as `loadWorkbook`. `contentLimits` counts per traversal here rather than
+per workbook, since this reader holds one row at a time and a sheet can be
+iterated again. It counts the rows a traversal walks, not only the ones it
+yields: a band query reads or indexes everything before `minRow` to get there.
+Cells count before buffering or decoding. Cells buffered while an omitted row
+number is unresolved count even if that row later falls outside the band; cells
+in known excluded rows or columns do not count.
 
 ## What's preserved verbatim (no model)
 
@@ -275,7 +284,8 @@ editing surface.
   task → exact functions to import.
 - [Recipes](https://baseballyama.github.io/@office-kit/xlsx/docs/recipes) —
   prose-style worked examples (styling, charts, validation, streaming).
-- `SECURITY.md` — `decompressionLimits` defaults and the threat model when
+- `SECURITY.md` documents the `decompressionLimits` defaults, the
+  `contentLimits` profile to set on an ingestion path, and the threat model for
   loading untrusted input.
 
 `getSheetByIndex(wb, index)` uses the full tab order, including chartsheets. It returns `undefined` for a chartsheet, so it is not equivalent to indexing openpyxl’s worksheet-only `wb.worksheets` list.

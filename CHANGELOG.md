@@ -1,5 +1,45 @@
 # @office-kit/xlsx
 
+## 0.20.0
+
+### Minor Changes
+
+- [#177](https://github.com/office-kit/xlsx/pull/177) [`265874f`](https://github.com/office-kit/xlsx/commit/265874ffadbef26ef368189c1709753bdbd38341) Thanks [@baseballyama](https://github.com/baseballyama)! - Read common ISO 29500 Strict XLSX files through `loadWorkbook` and `loadWorkbookStream`, including mixed-namespace packages, styles, shared strings, formulas, themes and supported charts. ISO date cells and cached dates become Excel serial numbers. Saving produces Transitional XLSX. Strict content that cannot be converted safely raises an explicit error; see the README for supported date ranges and conversion limits.
+
+  Fix buffered ZIP compression of sparse binary parts, such as printer settings, so saving and reloading preserves their bytes.
+
+## 0.19.0
+
+### Minor Changes
+
+- [#169](https://github.com/office-kit/xlsx/pull/169) [`42fff5c`](https://github.com/office-kit/xlsx/commit/42fff5ca709e4d12bb4ed9e5bcc04ca3c6059c46) Thanks [@kibertoad](https://github.com/kibertoad)! - Add `contentLimits` to `loadWorkbook` and `loadWorkbookStream`: a cap on the
+  cells and rows a read will model. `decompressionLimits` bounds the bytes an
+  archive inflates to, which is not the quantity that decides what a read costs.
+  A 2 MB upload can inflate to a few hundred MB of `<sheetData>` while staying
+  inside every byte default, and the model used to be built for every cell of it
+  before the caller could look at anything.
+
+  ```ts
+  const wb = await loadWorkbook(source, {
+    contentLimits: { maxCells: 1_000_000, maxRows: 100_000 },
+  });
+  ```
+
+  Enforced inside the cell loop, so a workbook past the cap is refused in the
+  time it takes to read the cells up to it. Exceeding either cap throws the new
+  `OpenXmlContentLimitError`, exported from `@office-kit/xlsx/utils`, which names
+  the cap and the cell or row that reached it. `ContentLimits` is exported from
+  `@office-kit/xlsx/worksheet`.
+
+  Unlimited by default, so nothing changes for a caller that does not ask. The
+  counts cover one pass over the content: every worksheet of the workbook for
+  `loadWorkbook`, and one row-iteration for `loadWorkbookStream`, which holds a
+  row at a time and can be iterated again. A streaming pass counts the rows it
+  walks rather than the ones it yields, so `iterRows({ minRow })` is bounded too:
+  reaching `minRow` means indexing or reading everything before it.
+
+  `SECURITY.md` carries the recommended ingestion profile.
+
 ## 0.18.0
 
 ### Minor Changes
