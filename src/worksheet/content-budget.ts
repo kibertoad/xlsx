@@ -1,7 +1,8 @@
 // Caps on the content a read will model, and the running totals that enforce
 // them. The companion to the zip layer's decompression guard: that one bounds
 // the bytes an archive inflates to, this one bounds the cells those bytes turn
-// into, which is what decides how long a read takes and how much heap it holds.
+// into, which is what decides how long a read spends modelling them and how
+// large the model it hands back gets.
 
 import { formatSheetQualifiedRef, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlContentLimitError, OpenXmlError } from '../utils/exceptions.js';
@@ -18,10 +19,16 @@ export interface ContentLimits {
 }
 
 /** {@link ContentLimits} with every field settled; `Infinity` is "unlimited". */
-interface ResolvedContentLimits {
+export interface ResolvedContentLimits {
   readonly maxCells: number;
   readonly maxRows: number;
 }
+
+/** What a caller that passed no `contentLimits` gets. */
+export const UNLIMITED_CONTENT_LIMITS: ResolvedContentLimits = {
+  maxCells: Number.POSITIVE_INFINITY,
+  maxRows: Number.POSITIVE_INFINITY,
+};
 
 // A cap has to be a positive integer to mean anything: a NaN, a negative or a
 // zero turns `count > cap` into a gate that either never opens or never
@@ -33,25 +40,34 @@ const requirePositiveInteger = (field: string, value: number): void => {
   }
 };
 
-/** Running totals for one read, shared by every worksheet it covers. */
+/**
+ * Validate what the caller passed and settle the absent fields.
+ *
+ * Kept apart from {@link makeContentBudget} because the two happen at
+ * different times: an entry point validates once, where the caller can see the
+ * error, while each pass over the content builds its own counters from the
+ * result.
+ */
+export function resolveContentLimits(input: ContentLimits | undefined): ResolvedContentLimits {
+  if (input === undefined) return UNLIMITED_CONTENT_LIMITS;
+  if (input.maxCells !== undefined) requirePositiveInteger('maxCells', input.maxCells);
+  if (input.maxRows !== undefined) requirePositiveInteger('maxRows', input.maxRows);
+  return {
+    maxCells: input.maxCells ?? Number.POSITIVE_INFINITY,
+    maxRows: input.maxRows ?? Number.POSITIVE_INFINITY,
+  };
+}
+
+/** Running totals for one pass over the content. */
 export interface ContentBudget {
   readonly limits: ResolvedContentLimits;
   cells: number;
   rows: number;
 }
 
-/** Build the budget for one read. `undefined` limits give an unlimited budget. */
-export function makeContentBudget(input: ContentLimits | undefined): ContentBudget {
-  if (input?.maxCells !== undefined) requirePositiveInteger('maxCells', input.maxCells);
-  if (input?.maxRows !== undefined) requirePositiveInteger('maxRows', input.maxRows);
-  return {
-    limits: {
-      maxCells: input?.maxCells ?? Number.POSITIVE_INFINITY,
-      maxRows: input?.maxRows ?? Number.POSITIVE_INFINITY,
-    },
-    cells: 0,
-    rows: 0,
-  };
+/** Fresh counters against already-resolved limits. */
+export function makeContentBudget(limits: ResolvedContentLimits): ContentBudget {
+  return { limits, cells: 0, rows: 0 };
 }
 
 /**

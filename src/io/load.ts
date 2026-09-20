@@ -37,7 +37,12 @@ import { makeDefinedName } from '../workbook/defined-names.js';
 import { parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
 import { createWorkbook, type SheetRef, type SheetState, type Workbook } from '../workbook/workbook.js';
 import { parseCommentsXml } from '../worksheet/comments-xml.js';
-import { type ContentLimits, makeContentBudget } from '../worksheet/content-budget.js';
+import {
+  type ContentLimits,
+  makeContentBudget,
+  resolveContentLimits,
+  type ResolvedContentLimits,
+} from '../worksheet/content-budget.js';
 import { parseWorksheetXml } from '../worksheet/reader.js';
 import { parseTableXml } from '../worksheet/table-xml.js';
 import {
@@ -76,11 +81,18 @@ export interface LoadOptions {
   decompressionLimits?: DecompressionLimits | false;
   /**
    * Caps on how much content the load will model. `decompressionLimits` bounds
-   * the bytes an archive inflates to; this bounds the quantity that decides how
-   * long a load takes and how much heap it holds, which is the number of cells.
-   * A small upload can inflate to a `<sheetData>` of a few hundred MB without
-   * tripping any byte limit, and the model is built for every cell of it before
-   * the caller gets a chance to look at anything.
+   * the bytes an archive inflates to; this bounds the cells and rows those
+   * bytes turn into, which is what the load spends its time on and what the
+   * Workbook it returns is made of. A small upload can inflate to a
+   * `<sheetData>` of a few hundred MB without tripping any byte limit, and the
+   * model was built for every cell of it before the caller got a chance to look
+   * at anything.
+   *
+   * This does not bound peak memory by itself. `loadWorkbook` inflates a
+   * worksheet part and decodes it to a string before the first cell of it is
+   * charged, so those bytes stay bounded by `decompressionLimits` alone; what
+   * the cap removes is the Workbook built on top of them, which outlives the
+   * part and is the larger of the two.
    *
    * Unlimited by default. Both counts cover one pass over the content: every
    * worksheet of the workbook here, and one row-iteration in
@@ -338,19 +350,22 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
  * yet). The next phase-3 iterations layer those in atop the same skeleton.
  */
 export async function loadWorkbook(source: XlsxSource, opts: LoadOptions = {}): Promise<Workbook> {
+  // Settled before the source is opened, so a cap that cannot mean anything is
+  // reported where the caller passed it rather than partway through a read.
+  const contentLimits = resolveContentLimits(opts.contentLimits);
   const archive = await openZip(
     source,
     opts.decompressionLimits === undefined ? {} : { decompressionLimits: opts.decompressionLimits },
   );
   try {
-    return loadWorkbookFromArchive(archive, opts.contentLimits);
+    return loadWorkbookFromArchive(archive, contentLimits);
   } finally {
     archive.close();
   }
 }
 
 /** Internal: same as {@link loadWorkbook} but operating on an already-opened archive. */
-function loadWorkbookFromArchive(archive: ZipArchive, contentLimits: ContentLimits | undefined): Workbook {
+function loadWorkbookFromArchive(archive: ZipArchive, contentLimits: ResolvedContentLimits): Workbook {
   // One budget for the whole load: a per-sheet cap would let a workbook of a
   // thousand small sheets through a ceiling meant to bound the whole read.
   const contentBudget = makeContentBudget(contentLimits);

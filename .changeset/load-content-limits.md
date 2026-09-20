@@ -24,6 +24,8 @@ the cap and the cell or row that reached it. `ContentLimits` is exported from
 Unlimited by default, so nothing changes for a caller that does not ask. The
 counts cover one pass over the content: every worksheet of the workbook for
 `loadWorkbook`, and one row-iteration for `loadWorkbookStream`, which holds a
-row at a time and can be iterated again.
+row at a time and can be iterated again. A streaming pass counts the rows it
+walks rather than the ones it yields, so `iterRows({ minRow })` is bounded too:
+reaching `minRow` means indexing or reading everything before it.
 
 `SECURITY.md` carries the recommended ingestion profile.

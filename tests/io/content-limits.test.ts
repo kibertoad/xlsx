@@ -3,6 +3,7 @@
 // be able to say "nothing over N cells" and have the load stop there rather
 // than after the model is built.
 
+import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer, toBuffer } from '../../src/io/node.js';
@@ -182,6 +183,130 @@ describe('loadWorkbookStream with a row cap', () => {
       await expect(drain(wb.openWorksheet('Data'))).rejects.toThrow(
         'worksheet: reading row 4 of Data passes contentLimits.maxRows of 3',
       );
+    } finally {
+      await wb.close();
+    }
+  });
+});
+
+/** A one-sheet package whose `<sheetData>` is written verbatim. */
+const rawPackage = (sheetData: string): Uint8Array => {
+  const enc = new TextEncoder();
+  const decl = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+  const relNs = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const pkgRelNs = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  const mainNs = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  const ctNs = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const sheetCt = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
+  return zipSync({
+    '[Content_Types].xml': enc.encode(
+      `${decl}<Types xmlns="${ctNs}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        `<Override PartName="/xl/workbook.xml" ContentType="${sheetCt}.sheet.main+xml"/>` +
+        `<Override PartName="/xl/worksheets/sheet1.xml" ContentType="${sheetCt}.worksheet+xml"/></Types>`,
+    ),
+    '_rels/.rels': enc.encode(
+      `${decl}<Relationships xmlns="${pkgRelNs}">` +
+        `<Relationship Id="rId1" Type="${relNs}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    ),
+    'xl/workbook.xml': enc.encode(
+      `${decl}<workbook xmlns="${mainNs}" xmlns:r="${relNs}">` +
+        '<sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>',
+    ),
+    'xl/_rels/workbook.xml.rels': enc.encode(
+      `${decl}<Relationships xmlns="${pkgRelNs}">` +
+        `<Relationship Id="rId1" Type="${relNs}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+    ),
+    'xl/worksheets/sheet1.xml': enc.encode(
+      `${decl}<worksheet xmlns="${mainNs}"><sheetData>${sheetData}</sheetData></worksheet>`,
+    ),
+  });
+};
+
+describe('loadWorkbookStream with a cap that cannot mean anything', () => {
+  it('rejects it from the call rather than from the iterator', async () => {
+    // The budget used to be built inside the row generator, so this resolved
+    // and the complaint arrived later as an iterator rejection, where a caller
+    // cannot tell it from a workbook that was genuinely too big.
+    const bytes = await archive(4, 2);
+    await expect(loadWorkbookStream(fromBuffer(bytes), { contentLimits: { maxCells: 0 } })).rejects.toThrow(
+      'contentLimits.maxCells must be a positive integer; got 0',
+    );
+    await expect(loadWorkbookStream(fromBuffer(bytes), { contentLimits: { maxRows: 1.5 } })).rejects.toThrow(
+      OpenXmlError,
+    );
+  });
+
+  it('rejects it even when the band asked for would yield nothing', async () => {
+    // A band above every row returns an empty iterator that never builds a
+    // budget, so validation cannot live in the generator.
+    const bytes = await archive(4, 2);
+    await expect(loadWorkbookStream(fromBuffer(bytes), { contentLimits: { maxCells: -1 } })).rejects.toThrow(
+      'contentLimits.maxCells must be a positive integer; got -1',
+    );
+    const wb = await loadWorkbookStream(fromBuffer(bytes), { contentLimits: { maxCells: 8 } });
+    try {
+      expect(await drain(wb.openWorksheet('Data'), 99)).toHaveLength(0);
+    } finally {
+      await wb.close();
+    }
+  });
+});
+
+describe('loadWorkbookStream band queries', () => {
+  it('charges the rows the index records, not only the ones the band yields', async () => {
+    // Seeking to minRow means indexing every row of the part first, one object
+    // per row, so a cap that only counted yielded rows left the largest
+    // allocation on this path unbounded.
+    const wb = await loadWorkbookStream(fromBuffer(await archive(10, 2)), {
+      contentLimits: { maxRows: 5 },
+    });
+    try {
+      await expect(drain(wb.openWorksheet('Data'), 9)).rejects.toThrow(
+        'worksheet: reading row 6 of Data passes contentLimits.maxRows of 5',
+      );
+    } finally {
+      await wb.close();
+    }
+  });
+
+  it('yields the band when the part fits the cap', async () => {
+    const wb = await loadWorkbookStream(fromBuffer(await archive(10, 2)), {
+      contentLimits: { maxRows: 10 },
+    });
+    try {
+      expect(await drain(wb.openWorksheet('Data'), 9)).toHaveLength(2);
+    } finally {
+      await wb.close();
+    }
+  });
+
+  it('charges the rows it walks past on a sheet the index cannot seek', async () => {
+    // No `@r` anywhere: the index cannot number these rows, so the band query
+    // streams the part from the start and walks rows 1-3 to reach row 4.
+    const rows = '<row><c><v>1</v></c></row>'.repeat(5);
+    const wb = await loadWorkbookStream(fromBuffer(Buffer.from(rawPackage(rows))), {
+      contentLimits: { maxRows: 2 },
+    });
+    try {
+      await expect(drain(wb.openWorksheet('Data'), 4)).rejects.toThrow(
+        'worksheet: reading row 3 of Data passes contentLimits.maxRows of 2',
+      );
+    } finally {
+      await wb.close();
+    }
+  });
+});
+
+describe('the shape of a band-query refusal', () => {
+  it('comes from the iterRows call, since the index is built before a row is yielded', async () => {
+    const wb = await loadWorkbookStream(fromBuffer(await archive(10, 2)), {
+      contentLimits: { maxRows: 5 },
+    });
+    try {
+      const ws = wb.openWorksheet('Data');
+      expect(() => ws.iterRows({ minRow: 9 })).toThrow(OpenXmlContentLimitError);
     } finally {
       await wb.close();
     }

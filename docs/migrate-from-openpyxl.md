@@ -30,8 +30,9 @@ so the same `loadWorkbook` works against `fromBuffer`, `fromFile`,
 `fromBlob`, `fromResponse`, `fromStream`, and `fromReadable`. `loadWorkbook`
 accepts a `decompressionLimits` option (on by default) to bound the cost of
 adversarial archives: leave it on when the source is untrusted. Add
-`contentLimits` alongside it to cap cells and rows, which is what bounds the
-time and the heap a read spends; that one is unlimited unless you ask.
+`contentLimits` alongside it to cap cells and rows, which bounds the workbook a
+read builds and the time it spends building it; that one is unlimited unless
+you ask.
 
 ## Workbook creation
 
@@ -230,7 +231,8 @@ iteration; the SAX path stops walking the bytes once it crosses `maxRow`.
 `loadWorkbookStream` accepts the same `decompressionLimits` and `contentLimits`
 options as `loadWorkbook`. `contentLimits` counts per traversal here rather than
 per workbook, since this reader holds one row at a time and a sheet can be
-iterated again.
+iterated again. It counts the rows a traversal walks, not only the ones it
+yields: a band query reads or indexes everything before `minRow` to get there.
 
 ## What's preserved verbatim (no model)
 

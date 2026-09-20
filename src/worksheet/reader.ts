@@ -35,7 +35,7 @@ import { el, findChild, findChildren, type XmlNode } from '../xml/tree.js';
 import { parseRichString, type SharedStringEntry } from '../workbook/shared-strings.js';
 import type { AutoFilter, FilterColumn } from './auto-filter.js';
 import { parseMultiCellRange, parseRange } from './cell-range.js';
-import { chargeCell, chargeRow, type ContentBudget, makeContentBudget } from './content-budget.js';
+import { chargeCell, chargeRow, type ContentBudget, makeContentBudget, UNLIMITED_CONTENT_LIMITS } from './content-budget.js';
 import type { LegacyComment } from './comments.js';
 import type {
   ConditionalFormatting,
@@ -1539,7 +1539,7 @@ const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xd
  * in `tests/worksheet/row-without-r-attribute.test.ts`.
  */
 const readSheetData = (ws: Worksheet, text: string, span: SheetDataSpan, ctx: WorksheetReadContext): void => {
-  const budget = ctx.contentBudget ?? makeContentBudget(undefined);
+  const budget = ctx.contentBudget ?? makeContentBudget(UNLIMITED_CONTENT_LIMITS);
   const sharedFormulas = new Map<number, SharedFormulaCache>();
   // High-water mark, not the previous row: an `@r` that jumps backwards must
   // not send a later row without `@r` onto a row already read.
