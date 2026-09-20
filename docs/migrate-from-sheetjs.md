@@ -178,6 +178,11 @@ stay on SheetJS or reach for a format-specific library:
 
 [msoffcrypto]: https://github.com/nolze/msoffcrypto-tool
 
+Passing a `.xls` or an encrypted xlsx to `loadWorkbook` throws
+`OpenXmlUnsupportedFormatError`, whose `format` field is `'legacy-xls'` or
+`'encrypted-xlsx'`, so an upload handler can route the file to SheetJS or ask
+for the password without matching on the message.
+
 The narrower surface is the trade. One format means the model can be typed to
 the OOXML schema rather than to a lowest common denominator, so charts, pivot
 pass-through, tables, data validation and conditional formatting are reachable

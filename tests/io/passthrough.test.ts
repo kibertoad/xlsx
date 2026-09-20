@@ -15,14 +15,14 @@ import { openZip } from '../../src/zip/reader.js';
 
 const td = new TextDecoder();
 
-describe('Encrypted xlsx detection', () => {
+describe('CFB compound document detection', () => {
   it('throws OpenXmlNotImplementedError for a CFB compound document', async () => {
-    // Synthesise the OLE/CFB magic bytes — Excel's encrypted-document wrapper
-    // starts with this 8-byte signature.
+    // Only the 8-byte OLE/CFB signature, with no directory to classify the
+    // container by. `tests/zip/cfb.test.ts` covers the classified cases.
     const cfb = new Uint8Array(512);
     cfb.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1], 0);
     await expect(openZip(fromBuffer(cfb))).rejects.toThrowError(OpenXmlNotImplementedError);
-    await expect(openZip(fromBuffer(cfb))).rejects.toThrowError(/Encrypted xlsx/i);
+    await expect(openZip(fromBuffer(cfb))).rejects.toThrowError(/OLE compound file/);
   });
 });
 

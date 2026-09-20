@@ -272,8 +272,12 @@ editing surface.
   `OpenXmlNotImplementedError` is thrown if the archive byte size or
   central-directory offset crosses 4 GiB. xlsx in practice stays well under
   that.
-- **Encrypted xlsx** — decrypt with [`msoffcrypto-tool`][msoffcrypto] (or
-  similar) first; @office-kit/xlsx has no decryption path.
+- **Encrypted xlsx**: decrypt with [`msoffcrypto-tool`][msoffcrypto] (or
+  similar) first; @office-kit/xlsx has no decryption path. Loading one throws
+  `OpenXmlUnsupportedFormatError` with `format: 'encrypted-xlsx'`.
+- **Legacy `.xls`**: openpyxl does not read it either. Loading one throws
+  `OpenXmlUnsupportedFormatError` with `format: 'legacy-xls'`; convert the file
+  to `.xlsx` first.
 
 [msoffcrypto]: https://github.com/nolze/msoffcrypto-tool
 

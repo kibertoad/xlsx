@@ -408,8 +408,10 @@ map, including the formats that stay out of scope.
   Query metadata / customXml / customUI in Transitional files: byte-identical passthrough so
   Excel 365 still renders parts we don't model. The `<workbook>` body
   extras and per-sheet rels chain are preserved end-to-end.
-- ✅ Encrypted xlsx detection (CFB Compound Document magic): clear error
-  pointing at `msoffcrypto-tool` for decryption.
+- ✅ CFB Compound Document detection: an encrypted xlsx gets an error
+  pointing at `msoffcrypto-tool` for decryption, and a legacy `.xls` gets one
+  saying to convert it to `.xlsx`. Both are `OpenXmlUnsupportedFormatError`,
+  whose `format` field says which one you got.
 - ✅ ISO 29500 Strict input: workbook/worksheet metadata, strings, styles,
   formulas, ISO date cells, themes and supported drawings/charts are normalized
   at the workbook loading boundary, including mixed-namespace packages.
