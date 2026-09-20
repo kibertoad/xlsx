@@ -578,7 +578,9 @@ Every error thrown by @office-kit/xlsx is a subclass of \`OpenXmlError\`
 Encrypted xlsx files (CFB Compound Documents) are detected and rejected
 with a clear error pointing at
 [\`msoffcrypto-tool\`](https://github.com/nolze/msoffcrypto-tool); decrypt
-externally first, then load the resulting plain xlsx.
+externally first, then load the resulting plain xlsx. A legacy \`.xls\` is
+a CFB Compound Document too and is rejected with its own error saying to
+convert it to \`.xlsx\`; both are \`OpenXmlNotImplementedError\`.
 
 ISO 29500 strict packages (Excel's "Strict Open XML Spreadsheet" Save As
 entry) keep the \`.xlsx\` extension but use the \`purl.oclc.org\` namespace

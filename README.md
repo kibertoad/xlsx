@@ -401,8 +401,9 @@ map, including the formats that stay out of scope.
   Query metadata / customXml / customUI: byte-identical passthrough so
   Excel 365 still renders parts we don't model. The `<workbook>` body
   extras and per-sheet rels chain are preserved end-to-end.
-- ✅ Encrypted xlsx detection (CFB Compound Document magic): clear error
-  pointing at `msoffcrypto-tool` for decryption.
+- ✅ CFB Compound Document detection: an encrypted xlsx gets an error
+  pointing at `msoffcrypto-tool` for decryption, and a legacy `.xls` gets one
+  saying to convert it to `.xlsx`.
 - ✅ ISO 29500 strict detection: a file saved from Excel as "Strict Open XML
   Spreadsheet" carries the `.xlsx` extension but a different namespace family,
   so `loadWorkbook` and `loadWorkbookStream` throw an

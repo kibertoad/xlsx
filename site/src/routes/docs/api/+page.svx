@@ -93,7 +93,8 @@ createWriteOnlyWorkbook(sink: XlsxSink): Promise<WriteOnlyWorkbook>
 
 ## Errors
 
-- **Encrypted workbook** — we detect the CFB Compound Document magic and throw `EncryptedWorkbookError`. Decrypt with [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool) first.
+- **Encrypted workbook** — we detect the CFB Compound Document magic and throw `OpenXmlNotImplementedError`. Decrypt with [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool) first.
+- **Legacy `.xls`** — also a CFB Compound Document, told apart from an encrypted xlsx by its `Workbook` / `Book` stream. Throws `OpenXmlNotImplementedError` with a message saying to convert the file to `.xlsx` first.
 - **ISO 29500 strict package**: a file saved through Excel's "Strict Open XML Spreadsheet" entry keeps the `.xlsx` extension but uses the `purl.oclc.org` namespace family, which this library does not read. `loadWorkbook` and `loadWorkbookStream` throw `OpenXmlNotImplementedError`; re-save the file as "Excel Workbook (.xlsx)" to get the transitional form.
 - **ZIP64 write** — workbooks with > 65 535 entries get a ZIP64 EOCD record + locator. Read works too.
 - **Malformed XML** — every XML parse path runs through a single hardened SAX layer. Errors include the file part path so you know which `xl/...` part triggered it.

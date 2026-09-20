@@ -10,17 +10,23 @@
 
 import type { XlsxSource } from '../io/source.js';
 import { OpenXmlIoError, OpenXmlNotImplementedError } from '../utils/exceptions.js';
+import { classifyCfb, isCfbCompoundDocument, type CfbContent } from './cfb.js';
 import type { DecompressionLimits } from './decompression-guard.js';
 import { openRandomAccessArchive } from './random-access-reader.js';
 
-const CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
-
-const isCfbCompoundDocument = (bytes: Uint8Array): boolean => {
-  if (bytes.length < CFB_MAGIC.length) return false;
-  for (let i = 0; i < CFB_MAGIC.length; i++) {
-    if (bytes[i] !== CFB_MAGIC[i]) return false;
-  }
-  return true;
+// The two known kinds of CFB input need opposite advice: an encrypted xlsx has
+// to be decrypted and a legacy `.xls` has to be converted. Telling the owner of
+// an old `.xls` to decrypt it sends them looking for a password that was never
+// set.
+const CFB_REJECTIONS: Record<CfbContent, string> = {
+  'encrypted-ooxml': 'Encrypted xlsx is not supported. Decrypt with msoffcrypto-tool first.',
+  'legacy-workbook':
+    'This is a legacy .xls (BIFF) workbook, which @office-kit/xlsx does not read. ' +
+    'Convert it to .xlsx first (Save As in Excel, or `soffice --headless --convert-to xlsx`).',
+  unknown:
+    'The input is an OLE compound file rather than an xlsx package. It is either a ' +
+    'password-protected xlsx (decrypt with msoffcrypto-tool first) or a legacy Office ' +
+    'format such as .xls (convert it to .xlsx first).',
 };
 
 export interface ZipArchive {
@@ -80,15 +86,12 @@ export async function openZip(source: XlsxSource, opts: OpenZipOptions = {}): Pr
     throw new OpenXmlIoError('openZip: failed to read source bytes', { cause });
   }
 
-  // Encrypted xlsx files (Excel 2007+ password protection) wrap the real
-  // package inside an OLE Compound File Binary container with the magic
-  // signature `D0 CF 11 E0 A1 B1 1A E1`. Detect that early and surface a clear
-  // "decrypt first" error rather than letting fflate fail with a generic
-  // invalid-zip message.
+  // Neither an encrypted xlsx nor a legacy `.xls` is a zip: both are OLE
+  // Compound File Binary containers. Reject them here with advice that fits
+  // the one at hand rather than letting the zip reader fail with a generic
+  // invalid-archive message.
   if (isCfbCompoundDocument(bytes)) {
-    throw new OpenXmlNotImplementedError(
-      'Encrypted xlsx is not supported. Decrypt with msoffcrypto-tool first.',
-    );
+    throw new OpenXmlNotImplementedError(CFB_REJECTIONS[classifyCfb(bytes)]);
   }
 
   return openRandomAccessArchive(bytes, opts.decompressionLimits);
