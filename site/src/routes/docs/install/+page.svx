@@ -52,6 +52,7 @@ Types are bundled. `tsconfig.json` should have `"moduleResolution": "bundler"` (
 
 - **ZIP64 write** — fflate's writer doesn't emit ZIP64 EOCD, so we fail fast on workbooks with > 65 535 entries. Read works.
 - **Random-access streaming reader** — the SAX `iterRows` API is in place; per-cell random access against a streaming source is buffered.
-- **Encrypted xlsx decryption** — we detect CFB Compound Documents and throw a clear error pointing at [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool); decrypt first, then load.
+- **Encrypted xlsx decryption**: a password-protected xlsx is rejected with an error pointing at [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool); decrypt first, then load.
+- **Legacy `.xls`**: rejected with an error saying to convert the file to `.xlsx` first. Both errors are `OpenXmlUnsupportedFormatError`, and its `format` field says which one you got.
 
 Next: <a href="{base}/docs/getting-started">Getting started →</a>

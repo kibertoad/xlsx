@@ -403,7 +403,8 @@ map, including the formats that stay out of scope.
   extras and per-sheet rels chain are preserved end-to-end.
 - ✅ CFB Compound Document detection: an encrypted xlsx gets an error
   pointing at `msoffcrypto-tool` for decryption, and a legacy `.xls` gets one
-  saying to convert it to `.xlsx`.
+  saying to convert it to `.xlsx`. Both are `OpenXmlUnsupportedFormatError`,
+  whose `format` field says which one you got.
 - ✅ ISO 29500 strict detection: a file saved from Excel as "Strict Open XML
   Spreadsheet" carries the `.xlsx` extension but a different namespace family,
   so `loadWorkbook` and `loadWorkbookStream` throw an

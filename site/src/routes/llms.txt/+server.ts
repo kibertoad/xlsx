@@ -61,7 +61,7 @@ name, you know where to import it from.
 | \`@office-kit/xlsx/chart\`       | Legacy \`c:\` chart kinds — \`makeBarChart\`, \`makeLineChart\`, \`makeAreaChart\`, \`makePieChart\`, \`makeDoughnutChart\`, \`makeScatterChart\`, \`makeRadarChart\`, \`makeBubbleChart\`, \`makeStockChart\`, \`makeSurfaceChart\`, \`makeOfPieChart\`. Series builder \`makeBarSeries\`. Top-level wrapper \`makeChartSpace\`. Modern \`cx:\` chartex kinds — \`makeSunburstChart\`, \`makeTreemapChart\`, \`makeWaterfallChart\`, \`makeHistogramChart\`, \`makeParetoChart\`, \`makeFunnelChart\`, \`makeBoxWhiskerChart\`, \`makeRegionMapChart\` |
 | \`@office-kit/xlsx/chartsheet\`  | Standalone chartsheets (\`addChartsheet\` lives on \`@office-kit/xlsx/workbook\`; chartsheet shape and helpers live here) |
 | \`@office-kit/xlsx/drawing\`     | \`addImageAt\`, \`addChartAt\`, \`loadImage\`, \`detectImageFormat\`, \`detectImageDimensions\`; \`makeAbsoluteAnchor\`, \`makeOneCellAnchor\`, \`makeTwoCellAnchor\`, \`anchorMarkerFromCellRef\`; \`makeDrawing\`, \`makePictureDrawingItem\`, \`makeChartDrawingItem\`, \`listImagesOnSheet\`, \`listChartsOnSheet\`, \`removeAllImages\`, \`removeAllCharts\`, \`removeAllDrawingItems\`; DML preset geometry / effect helpers |
-| \`@office-kit/xlsx/utils\`       | A1 ↔ row/col conversion (\`coordinateFromString\`, \`coordinateToTuple\`, \`tupleToCoordinate\`, \`columnLetterFromIndex\`, \`columnIndexFromLetter\`, \`rangeBoundaries\`, \`boundariesToRangeString\`, \`parseSheetRange\`, \`formatSheetQualifiedRef\`, validators \`isValidCellRef\` / \`isValidRangeRef\` / \`isValidColumnLetter\` / \`isValidColumnNumber\` / \`isValidRowNumber\`); Excel date helpers (\`excelToDate\`, \`dateToExcel\`, \`excelToDuration\`, \`durationToExcel\`, \`toIso8601\`, \`fromIso8601\`); EMU/pixel/point unit conversion; \`escapeCellString\` / \`unescapeCellString\`; \`inferCellType\` + \`ERROR_CODES\`; error hierarchy \`OpenXmlError\`, \`OpenXmlIoError\`, \`OpenXmlSchemaError\`, \`OpenXmlDecompressionBombError\`, \`OpenXmlInvalidWorkbookError\`, \`OpenXmlNotImplementedError\` |
+| \`@office-kit/xlsx/utils\`       | A1 ↔ row/col conversion (\`coordinateFromString\`, \`coordinateToTuple\`, \`tupleToCoordinate\`, \`columnLetterFromIndex\`, \`columnIndexFromLetter\`, \`rangeBoundaries\`, \`boundariesToRangeString\`, \`parseSheetRange\`, \`formatSheetQualifiedRef\`, validators \`isValidCellRef\` / \`isValidRangeRef\` / \`isValidColumnLetter\` / \`isValidColumnNumber\` / \`isValidRowNumber\`); Excel date helpers (\`excelToDate\`, \`dateToExcel\`, \`excelToDuration\`, \`durationToExcel\`, \`toIso8601\`, \`fromIso8601\`); EMU/pixel/point unit conversion; \`escapeCellString\` / \`unescapeCellString\`; \`inferCellType\` + \`ERROR_CODES\`; error hierarchy \`OpenXmlError\`, \`OpenXmlIoError\`, \`OpenXmlSchemaError\`, \`OpenXmlDecompressionBombError\`, \`OpenXmlInvalidWorkbookError\`, \`OpenXmlNotImplementedError\`, \`OpenXmlUnsupportedFormatError\` |
 | \`@office-kit/xlsx/packaging\`   | Low-level OPC (Open Packaging Conventions) parts — escape hatch only |
 | \`@office-kit/xlsx/xml\`         | Hardened XML reader/writer — escape hatch only |
 | \`@office-kit/xlsx/zip\`         | ZIP reader/writer with decompression-bomb defense — escape hatch only |
@@ -571,6 +571,7 @@ Every error thrown by @office-kit/xlsx is a subclass of \`OpenXmlError\`
 | \`OpenXmlDecompressionBombError\`    | Archive exceeded \`decompressionLimits\` (per-entry size, total size, or compression ratio)        |
 | \`OpenXmlInvalidWorkbookError\`      | Workbook structurally invalid (missing parts, broken relationships)                                  |
 | \`OpenXmlNotImplementedError\`       | Feature is not yet supported (e.g. ZIP64 write, encrypted decryption, ISO 29500 strict input)       |
+| \`OpenXmlUnsupportedFormatError\`    | Input is another file format: an encrypted xlsx, a legacy \`.xls\`, or some other OLE compound file    |
 
 \`decompressionLimits\` is **on by default** in both \`loadWorkbook\` and
 \`loadWorkbookStream\`. Keep it on when reading untrusted input.
@@ -580,7 +581,10 @@ with a clear error pointing at
 [\`msoffcrypto-tool\`](https://github.com/nolze/msoffcrypto-tool); decrypt
 externally first, then load the resulting plain xlsx. A legacy \`.xls\` is
 a CFB Compound Document too and is rejected with its own error saying to
-convert it to \`.xlsx\`; both are \`OpenXmlNotImplementedError\`.
+convert it to \`.xlsx\`. Both are \`OpenXmlUnsupportedFormatError\`, a subclass
+of \`OpenXmlNotImplementedError\` whose \`format\` field is
+\`'encrypted-xlsx'\`, \`'legacy-xls'\` or \`'compound-file'\` (a compound file
+that is neither). Branch on \`format\`, because the message wording can change.
 
 ISO 29500 strict packages (Excel's "Strict Open XML Spreadsheet" Save As
 entry) keep the \`.xlsx\` extension but use the \`purl.oclc.org\` namespace
