@@ -39,7 +39,7 @@ export {
 } from './datetime.js';
 export { cssRecordToInlineStyle } from './css.js';
 export { escapeCellString, unescapeCellString } from './escape.js';
-export type { OpenXmlErrorOptions } from './exceptions.js';
+export type { OpenXmlErrorOptions, UnsupportedFormat } from './exceptions.js';
 export {
   OpenXmlContentLimitError,
   OpenXmlDecompressionBombError,
@@ -48,6 +48,7 @@ export {
   OpenXmlIoError,
   OpenXmlNotImplementedError,
   OpenXmlSchemaError,
+  OpenXmlUnsupportedFormatError,
 } from './exceptions.js';
 export type { CellDataType } from './inference.js';
 export { ERROR_CODES, inferCellType } from './inference.js';

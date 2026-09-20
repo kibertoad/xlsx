@@ -35,7 +35,33 @@ export class OpenXmlInvalidWorkbookError extends OpenXmlError {
 
 /** Thrown for features the port has chosen not to implement (yet). */
 export class OpenXmlNotImplementedError extends OpenXmlError {
-  override readonly name = 'OpenXmlNotImplementedError';
+  override readonly name: string = 'OpenXmlNotImplementedError';
+}
+
+/**
+ * What an input turned out to be when it is a file format this library does
+ * not read: `encrypted-xlsx` is a password-protected xlsx, `legacy-xls` a BIFF
+ * `.xls`, and `compound-file` an OLE compound file that is neither (another
+ * legacy Office format, or a file too damaged to tell).
+ */
+export type UnsupportedFormat = 'encrypted-xlsx' | 'legacy-xls' | 'compound-file';
+
+/**
+ * Thrown by {@link openZip} / {@link loadWorkbook} / {@link loadWorkbookStream}
+ * when the input is a recognised file format other than an xlsx package.
+ * Subclass of {@link OpenXmlNotImplementedError} so existing
+ * `catch (OpenXmlNotImplementedError)` paths still see it. Branch on
+ * {@link OpenXmlUnsupportedFormatError.format} to answer "ask for the password"
+ * differently from "ask for a re-save"; the message wording is free to change.
+ */
+export class OpenXmlUnsupportedFormatError extends OpenXmlNotImplementedError {
+  override readonly name = 'OpenXmlUnsupportedFormatError';
+  readonly format: UnsupportedFormat;
+
+  constructor(format: UnsupportedFormat, message: string, options?: OpenXmlErrorOptions) {
+    super(message, options);
+    this.format = format;
+  }
 }
 
 /**

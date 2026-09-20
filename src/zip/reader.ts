@@ -9,19 +9,33 @@
 // ZIP64 / non-standard archives.
 
 import type { XlsxSource } from '../io/source.js';
-import { OpenXmlIoError, OpenXmlNotImplementedError } from '../utils/exceptions.js';
+import { OpenXmlIoError, OpenXmlUnsupportedFormatError, type UnsupportedFormat } from '../utils/exceptions.js';
+import { isRawBiffWorkbook } from './biff.js';
+import { classifyCfb, isCfbCompoundDocument } from './cfb.js';
 import type { DecompressionLimits } from './decompression-guard.js';
 import { openRandomAccessArchive } from './random-access-reader.js';
 
-const CFB_MAGIC = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
-
-const isCfbCompoundDocument = (bytes: Uint8Array): boolean => {
-  if (bytes.length < CFB_MAGIC.length) return false;
-  for (let i = 0; i < CFB_MAGIC.length; i++) {
-    if (bytes[i] !== CFB_MAGIC[i]) return false;
-  }
-  return true;
+// The two known kinds of CFB input need opposite advice: an encrypted xlsx has
+// to be decrypted and a legacy `.xls` has to be converted. Telling the owner of
+// an old `.xls` to decrypt it sends them looking for a password that was never
+// set. The `.xls` advice still mentions passwords: BIFF encryption lives inside
+// the `Workbook` stream, so a protected `.xls` looks like any other from here,
+// and the headless conversion fails on it.
+const UNSUPPORTED_FORMAT_MESSAGES: Record<UnsupportedFormat, string> = {
+  'encrypted-xlsx': 'Encrypted xlsx is not supported. Decrypt with msoffcrypto-tool first.',
+  'legacy-xls':
+    'This is a legacy .xls (BIFF) workbook, which @office-kit/xlsx does not read. ' +
+    'Convert it to .xlsx first: open it in Excel or LibreOffice and save it as .xlsx, or run ' +
+    '`soffice --headless --convert-to xlsx`. A password-protected .xls has to be opened with ' +
+    'its password and re-saved, which the headless conversion cannot do.',
+  'compound-file':
+    'The input is an OLE compound file rather than an xlsx package. It is either a ' +
+    'password-protected xlsx (decrypt with msoffcrypto-tool first) or a legacy Office ' +
+    'format such as .xls (convert it to .xlsx first).',
 };
+
+const unsupportedFormat = (format: UnsupportedFormat): OpenXmlUnsupportedFormatError =>
+  new OpenXmlUnsupportedFormatError(format, UNSUPPORTED_FORMAT_MESSAGES[format]);
 
 export interface ZipArchive {
   /** Sorted list of all entry paths in the archive. */
@@ -80,16 +94,13 @@ export async function openZip(source: XlsxSource, opts: OpenZipOptions = {}): Pr
     throw new OpenXmlIoError('openZip: failed to read source bytes', { cause });
   }
 
-  // Encrypted xlsx files (Excel 2007+ password protection) wrap the real
-  // package inside an OLE Compound File Binary container with the magic
-  // signature `D0 CF 11 E0 A1 B1 1A E1`. Detect that early and surface a clear
-  // "decrypt first" error rather than letting fflate fail with a generic
-  // invalid-zip message.
-  if (isCfbCompoundDocument(bytes)) {
-    throw new OpenXmlNotImplementedError(
-      'Encrypted xlsx is not supported. Decrypt with msoffcrypto-tool first.',
-    );
-  }
+  // Neither an encrypted xlsx nor a legacy `.xls` is a zip: both are OLE
+  // Compound File Binary containers. Reject them here with advice that fits
+  // the one at hand rather than letting the zip reader fail with a generic
+  // invalid-archive message.
+  if (isCfbCompoundDocument(bytes)) throw unsupportedFormat(classifyCfb(bytes));
+  // A `.xls` from Excel 4.0 or earlier has no compound file around it.
+  if (isRawBiffWorkbook(bytes)) throw unsupportedFormat('legacy-xls');
 
   return openRandomAccessArchive(bytes, opts.decompressionLimits);
 }

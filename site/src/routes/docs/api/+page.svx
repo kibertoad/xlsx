@@ -93,8 +93,9 @@ createWriteOnlyWorkbook(sink: XlsxSink): Promise<WriteOnlyWorkbook>
 
 ## Errors
 
-- **Encrypted workbook** — we detect the CFB Compound Document magic and throw `EncryptedWorkbookError`. Decrypt with [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool) first.
-- **ISO 29500 strict package**: a file saved through Excel's "Strict Open XML Spreadsheet" entry keeps the `.xlsx` extension but uses the `purl.oclc.org` namespace family, which this library does not read. `loadWorkbook` and `loadWorkbookStream` throw `OpenXmlNotImplementedError`; re-save the file as "Excel Workbook (.xlsx)" to get the transitional form.
+- **Encrypted workbook**: we detect the CFB Compound Document magic and throw `OpenXmlUnsupportedFormatError` with `format: 'encrypted-xlsx'`. Decrypt with [`msoffcrypto-tool`](https://github.com/nolze/msoffcrypto-tool) first.
+- **Legacy `.xls`**: also a CFB Compound Document, told apart from an encrypted xlsx by the `Workbook` / `Book` stream in its root storage. Throws `OpenXmlUnsupportedFormatError` with `format: 'legacy-xls'` and a message saying to convert the file to `.xlsx` first. A compound file that is neither gets `format: 'compound-file'`. The class extends `OpenXmlNotImplementedError`; branch on `format`, since the message wording can change.
+- **Unsupported Strict content**: supported ISO 29500 Strict packages load and save as Transitional XLSX. Strict features that cannot be converted throw `OpenXmlNotImplementedError`; see the [README limitations](https://github.com/office-kit/xlsx#limitations) for the supported scope.
 - **ZIP64 write** — workbooks with > 65 535 entries get a ZIP64 EOCD record + locator. Read works too.
 - **Malformed XML** — every XML parse path runs through a single hardened SAX layer. Errors include the file part path so you know which `xl/...` part triggered it.
 
