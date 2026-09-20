@@ -9,7 +9,6 @@ import { SaxesParser } from 'saxes';
 import {
   type Cell,
   type CellValue,
-  type ExcelErrorCode,
   type FormulaKind,
   setArrayFormula,
   setDataTableFormula,
@@ -21,11 +20,14 @@ import type { Drawing } from '../drawing/drawing.js';
 import { translateFormula } from '../formula/translate.js';
 import type { Relationships } from '../packaging/relationships.js';
 import { findById } from '../packaging/relationships.js';
+import { parseCellDate } from '../utils/cell-date.js';
+import { parseCellErrorCode } from '../utils/cell-error.js';
 import { parseCellNumber } from '../utils/cell-number.js';
+import { unknownCellType } from '../utils/cell-text.js';
+import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import { coordinateToTuple, derivedRowNumber, rowNumberFromAttr, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
-import { ERROR_CODES } from '../utils/inference.js';
 import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { localNameOf, MARKUP_COMPAT_NS, qname, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { isWhitespaceOnly, parseXml, rejectDtdDeclarations } from '../xml/parser.js';
@@ -180,6 +182,8 @@ export interface WorksheetReadContext {
    * per-run formatting Excel stored survives.
    */
   sharedStrings: ReadonlyArray<SharedStringEntry>;
+  /** Workbook epoch used to normalize ISO date formula caches to numeric serials. */
+  date1904?: boolean;
   /** This worksheet's `_rels/sheetN.xml.rels`. Used to resolve external hyperlink targets and table parts. */
   rels?: Relationships;
   /** Resolves a worksheet-rels rId pointing at xl/tables/tableN.xml into a parsed TableDefinition. */
@@ -1810,13 +1814,18 @@ const readCell = (
       break;
     }
     case 'e': {
-      const code = raw.value;
-      if (code === undefined || !ERROR_CODES.has(code)) {
-        throw new OpenXmlSchemaError(`worksheet: unknown error code "${code}" in <c t="e">`);
-      }
-      value = { kind: 'error', code: code as ExcelErrorCode };
+      // A blank `<v>` carries no token, so it is an empty cell the way it is
+      // under `t="n"` and `t="b"`, and `<c t="e"/>` is written back as `<c/>`.
+      const code = parseCellErrorCode(raw.value, ws.title, coord.col, coord.row);
+      value = code === null ? null : { kind: 'error', code };
       break;
     }
+    case 'd':
+      // ISO 29500 strict stores a date as ISO 8601 text rather than a serial.
+      // The transitional XSD vendored under tests/conformance/ omits `d`, so
+      // conformance passing does not imply this branch is unreachable.
+      value = parseCellDate(raw.value, ws.title, coord.col, coord.row);
+      break;
     case 'str':
       value = raw.value ?? '';
       break;
@@ -1824,7 +1833,7 @@ const readCell = (
       value = readInlineString(raw.inline);
       break;
     default:
-      throw new OpenXmlSchemaError(`worksheet: unknown cell type t="${t}"`);
+      throw unknownCellType(t, ws.title, coord.col, coord.row);
   }
   setCell(ws, coord.row, coord.col, value, styleId);
 };
@@ -1880,14 +1889,13 @@ const decodeCachedValue = (
   sheet: string,
   coord: { row: number; col: number },
 ): number | string | boolean | undefined => {
-  if (raw === undefined) return undefined;
   switch (t) {
     case 'n':
       // An empty `<v/>` under the (default) numeric type carries no number.
       return parseCellNumber(raw, sheet, coord.col, coord.row) ?? undefined;
     case 'b': {
-      const text = raw.trim();
-      if (text === '') return undefined;
+      const text = raw?.trim();
+      if (text === undefined || text === '') return undefined;
       const parsed = parseXsdBoolean(text);
       if (parsed === undefined) {
         // Dropping it instead would lose the cached result *and* the `t="b"`
@@ -1899,20 +1907,35 @@ const decodeCachedValue = (
       }
       return parsed;
     }
+    case 'd': {
+      const value = parseCellDate(raw, sheet, coord.col, coord.row);
+      if (value === null) return undefined;
+      return value instanceof Date
+        ? dateToExcel(value, { epoch: ctx.date1904 ? 'mac' : 'windows' })
+        : durationToExcel(value.ms);
+    }
+    case 'e':
+      // The cached result of an errored formula is an error token, held as the
+      // text it is stored as. Checking it here is what keeps the cell loadable
+      // and saveable as a pair: the writer emits it back into `<v>` verbatim,
+      // and a `t="e"` payload that is no token at all would only be caught on
+      // save, far from the file it came out of.
+      return parseCellErrorCode(raw, sheet, coord.col, coord.row) ?? undefined;
     case 's': {
       // Excel writes a cached string result as `t="str"`, but other producers
       // put it in the sst, where the `<v>` is an index and not the text. The
       // model holds the text it points at, so the index never reaches a
       // consumer (or the writer) as if it were the result. A rich-text entry
       // flattens: a cached result carries no run formatting.
-      if (raw === '') return undefined;
+      if (raw === undefined || raw === '') return undefined;
       const sst = resolveSharedString(raw, ctx);
       return typeof sst === 'string' ? sst : richTextToString(sst.runs);
     }
-    default:
-      // `t="str"`, `t="e"` and whatever a non-Excel producer invents are all
-      // already the text Excel displays.
+    case 'str':
+    case 'inlineStr':
       return raw;
+    default:
+      throw unknownCellType(t, sheet, coord.col, coord.row);
   }
 };
 

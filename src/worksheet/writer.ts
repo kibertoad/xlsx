@@ -10,6 +10,7 @@
 import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getCoordinate } from '../cell/cell.js';
 import type { Relationships } from '../packaging/relationships.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
+import { isExcelErrorToken } from '../utils/cell-error.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import {
   escapeXmlAttr as escapeXmlAttrShared,
@@ -18,7 +19,6 @@ import {
 } from '../utils/escape.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import { normalizeFormulaText } from '../utils/formula-text.js';
-import { ERROR_CODES } from '../utils/inference.js';
 import type { SharedStringEntry, SharedStringsTable } from '../workbook/shared-strings.js';
 import { addSharedRichText, addSharedString } from '../workbook/shared-strings.js';
 import { MARKUP_COMPAT_NS, SHEET_MAIN_NS, X14_NS } from '../xml/namespaces.js';
@@ -363,7 +363,15 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
     return serializeFormulaCell(ref, styleAttr, value as FormulaValue);
   }
   if (typeof value === 'object' && value !== null && (value as { kind?: string }).kind === 'error') {
+    // `ExcelErrorCode` is open at `#${string}` so that a token Excel adds after
+    // this release survives a load and save, which leaves the token shape as
+    // the only thing standing between a hand-built cell value and a `<v>` that
+    // carries markup into the saved part. No character the shape admits needs
+    // escaping, so the token goes in as it is once it has passed.
     const code = (value as { kind: 'error'; code: ExcelErrorCode }).code;
+    if (!isExcelErrorToken(code)) {
+      throw new OpenXmlSchemaError(`worksheet: invalid error token at ${ref}`);
+    }
     return `<c r="${ref}"${styleAttr} t="e"><v>${code}</v></c>`;
   }
   if (typeof value === 'object' && value !== null && (value as { kind?: string }).kind === 'rich-text') {
@@ -461,7 +469,11 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   let vEl = '';
   const cached = f.cachedValue;
   if (f.cachedValueType === 'error') {
-    if (typeof cached !== 'string' || !ERROR_CODES.has(cached)) {
+    // Any token shaped like one goes back out, not only the listed ones: a
+    // spilled formula Excel cached as a token this release has never heard of
+    // is the case the reader keeps the cell for, and gating on `ERROR_CODES`
+    // here would fail the save of a file that loaded cleanly.
+    if (typeof cached !== 'string' || !isExcelErrorToken(cached)) {
       throw new OpenXmlSchemaError(`worksheet: invalid cached formula error at ${ref}`);
     }
     valueAttr = ' t="e"';

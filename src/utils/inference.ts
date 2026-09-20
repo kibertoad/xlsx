@@ -11,8 +11,22 @@ import { startsWithEquals } from './formula-text.js';
  */
 export type CellDataType = 'n' | 's' | 'b' | 'd' | 'f' | 'e';
 
-/** Excel error tokens. Anything outside this set is treated as a string. */
+/**
+ * Excel error tokens this library knows by name. On a write, a string outside
+ * this set is text, so the set is what {@link inferCellType} and `makeErrorValue`
+ * accept as an error.
+ *
+ * It is not a closed description of the format: Excel has added nine tokens
+ * since 2018 and can add more, so a `t="e"` cell read out of a file keeps
+ * whatever token it carries, listed here or not, as long as the token is
+ * shaped like one (`isExcelErrorToken` in `./cell-error.js`).
+ *
+ * Adding a token here changes what a write does with the matching string:
+ * {@link inferCellType} and `bindValue` turn it into an error value instead of
+ * text, and `makeErrorValue` starts accepting it.
+ */
 export const ERROR_CODES: ReadonlySet<string> = new Set([
+  // Pre-2018, and all a transitional-conformance file can hold.
   '#NULL!',
   '#DIV/0!',
   '#VALUE!',
@@ -21,6 +35,16 @@ export const ERROR_CODES: ReadonlySet<string> = new Set([
   '#NUM!',
   '#N/A',
   '#GETTING_DATA',
+  // Excel 365: dynamic arrays, Power Query, linked data types, Python.
+  '#SPILL!',
+  '#CALC!',
+  '#FIELD!',
+  '#BLOCKED!',
+  '#CONNECT!',
+  '#BUSY!',
+  '#UNKNOWN!',
+  '#PYTHON!',
+  '#EXTERNAL!',
 ]);
 
 /**

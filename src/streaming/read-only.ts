@@ -24,9 +24,11 @@ import {
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { DecompressionLimits } from '../zip/decompression-guard.js';
 import { type ZipArchive, openZip } from '../zip/reader.js';
-import type { CellValue, ExcelErrorCode } from '../cell/cell.js';
+import type { CellValue } from '../cell/cell.js';
+import { parseCellDate } from '../utils/cell-date.js';
+import { parseCellErrorCode } from '../utils/cell-error.js';
+import { unknownCellType } from '../utils/cell-text.js';
 import { unescapeCellString } from '../utils/escape.js';
-import { ERROR_CODES } from '../utils/inference.js';
 import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
 import { parseXml } from '../xml/parser.js';
@@ -107,18 +109,22 @@ const decodeCellValue = (
       // shared-string indexes. Numeric values have stricter validation.
       return parseXsdBoolean(vText) ?? null;
     case 'e': {
-      if (!vText || !ERROR_CODES.has(vText)) return null;
-      return { kind: 'error', code: vText as ExcelErrorCode };
+      // A blank `<v>` carries no token, so it is an empty cell the way it is
+      // under `t="n"` and `t="b"`.
+      const code = parseCellErrorCode(vText, sheet, col, row);
+      return code === null ? null : { kind: 'error', code };
     }
+    case 'd':
+      return parseCellDate(vText, sheet, col, row);
     case 'str':
       return vText ?? '';
     case 'inlineStr':
       return inlineText ?? '';
     default:
-      // An unhandled `t` (`"d"`, or something not in ST_CellType at all). The
-      // type says nothing about what the text holds, so there is no finiteness
-      // rule to apply; loadWorkbook rejects the cell type outright instead.
-      return vText !== undefined && vText !== '' ? Number.parseFloat(vText) : null;
+      // A `t` outside ST_CellType says nothing about what the `<v>` holds, so
+      // there is no rule to read it by. `loadWorkbook` refuses it, and the two
+      // entry points have to answer the same bytes the same way.
+      throw unknownCellType(t, sheet, col, row);
   }
 };
 
