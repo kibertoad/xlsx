@@ -1,14 +1,13 @@
 // Public `loadWorkbook` entry point.
 //
-// **This is the minimum-skeleton stage**: open zip → parse manifest → resolve
-// workbook part path → parse the `<sheets>` list → for each sheet, allocate an
-// empty Worksheet (title + sheetId + state). Reading the actual cell content /
-// styles / sharedStrings / theme / docProps happens in the next iterations of
-// the loop.
+// The walk: open zip → parse the manifest → resolve the workbook part through
+// the root rels → parse `<sheets>` → read sharedStrings, styles, theme and
+// docProps → read each sheet part (cells, merges, tables, comments, drawings,
+// charts) → capture whatever is left in the archive into `wb.passthrough`.
 //
-// The skeleton is enough to round-trip through openpyxl's `genuine/empty.xlsx`
-// fixture (3 empty sheets) and to give the rest of phase 3 a stable scaffolding
-// to layer onto.
+// The workbook-owned parts (sharedStrings, styles, theme) are found through
+// the workbook rels first and only then at their conventional path, because a
+// legal package may put them anywhere.
 
 import { normalizeStrictArchive } from './strict.js';
 import { findUserShapesRId, parseChartXml } from '../chart/chart-xml.js';
@@ -346,9 +345,24 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
 }
 
 /**
- * Load a workbook from any {@link XlsxSource}. Currently produces a scaffold
- * Workbook: each Worksheet is empty (no cells / styles / shared strings / theme
- * yet). The next phase-3 iterations layer those in atop the same skeleton.
+ * Load a workbook from any {@link XlsxSource} into a fully populated
+ * {@link Workbook}: every worksheet's cells, formulas, merges, tables,
+ * comments, drawings and charts, plus the shared strings, the stylesheet, the
+ * theme, defined names and the docProps. Parts this library does not model
+ * (the VBA project, pivot caches, slicers, external links, printer settings,
+ * custom XML, ...) are kept verbatim on `wb.passthrough` so saving the
+ * workbook again reproduces them.
+ *
+ * The package is read in full and the returned Workbook holds every cell.
+ * `loadWorkbookStream` from `@office-kit/xlsx/streaming` walks a sheet row by
+ * row instead, for a file larger than the memory you can give it.
+ *
+ * Malformed input throws an `OpenXmlError` subclass rather than returning a
+ * partial workbook, and a `.xls` or an encrypted package throws
+ * `OpenXmlUnsupportedFormatError`. Both caps in {@link LoadOptions} apply
+ * here: `decompressionLimits` bounds what the archive may inflate to and is on
+ * by default, `contentLimits` bounds the cells and rows the load will model
+ * and is unlimited by default.
  */
 export async function loadWorkbook(source: XlsxSource, opts: LoadOptions = {}): Promise<Workbook> {
   // Settled before the source is opened, so a cap that cannot mean anything is

@@ -54,6 +54,19 @@ describe('docProps + theme passthrough through save', () => {
     expect(wb2.properties?.creator).toBeDefined();
   });
 
+  // The CoreProperties docstring promises the timestamps are written through
+  // as-is. Excel stamps `modified` on every save; we don't, because that would
+  // make the output of two identical saves differ.
+  it('leaves created / modified exactly as the caller set them', async () => {
+    const { createWorkbook, addWorksheet } = await import('../../src/workbook/workbook.js');
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Plain');
+    wb.properties = { created: '2020-01-02T03:04:05Z', modified: '2020-01-02T03:04:05Z' };
+    const wb2 = await loadWorkbook(fromBuffer(await workbookToBytes(wb)));
+    expect(wb2.properties?.created).toBe('2020-01-02T03:04:05Z');
+    expect(wb2.properties?.modified).toBe('2020-01-02T03:04:05Z');
+  });
+
   it('round-trips app (extended) properties through save', async () => {
     const bytes = readFileSync(resolve(FIXTURES, 'empty.xlsx'));
     const wb = await loadWorkbook(fromBuffer(bytes));
