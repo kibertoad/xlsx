@@ -364,6 +364,33 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
  * here: `decompressionLimits` bounds what the archive may inflate to and is on
  * by default, `contentLimits` bounds the cells and rows the load will model
  * and is unlimited by default.
+ *
+ * What a failure means, for a caller checking a file it did not produce:
+ *
+ * - `OpenXmlIoError`: the bytes are not a readable zip. A CSV, a PDF or a
+ *   truncated upload lands here, and the message names what the leading bytes
+ *   look like whenever a magic number identifies them.
+ * - `OpenXmlDecompressionBombError`: the archive inflates past the
+ *   {@link LoadOptions.decompressionLimits} caps. A subclass of the above, so
+ *   test for it first when the distinction matters.
+ * - `OpenXmlNotImplementedError`: an OOXML feature this library does not read
+ *   yet, such as an ISO 29500 strict part it cannot convert.
+ * - `OpenXmlUnsupportedFormatError`: the input is a different Office format
+ *   altogether. A subclass of the above, carrying a `format` of
+ *   `'encrypted-xlsx' | 'legacy-xls' | 'compound-file'`, so "ask for the
+ *   password" is answerable apart from "ask for a re-save".
+ * - `OpenXmlSchemaError`: invalid options, or OOXML that is unreadable or
+ *   contradicts the spec.
+ * - `OpenXmlContentLimitError`: the read exceeds the
+ *   {@link LoadOptions.contentLimits} caps. This does not validate the rest
+ *   of the workbook. It extends `OpenXmlError`
+ *   directly, so a catch ladder written around the others misses it.
+ *
+ * Retrying unchanged bytes and options does not resolve parsing or validation
+ * errors. Correct invalid options or supply a supported file; changing a limit
+ * may allow a read to proceed but does not guarantee success. Source I/O errors
+ * can be transient; see `OpenXmlIoError`. Branch on the class, not the message
+ * text, which names parts and offsets and changes between releases.
  */
 export async function loadWorkbook(source: XlsxSource, opts: LoadOptions = {}): Promise<Workbook> {
   // Settled before the source is opened, so a cap that cannot mean anything is

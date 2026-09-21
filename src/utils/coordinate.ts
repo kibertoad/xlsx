@@ -5,7 +5,7 @@
 // only at the entry points, with bounded Map caches for the bidirectional
 // column letter <-> index mapping.
 
-import { OpenXmlSchemaError } from './exceptions.js';
+import { describeArg, OpenXmlSchemaError } from './exceptions.js';
 
 /** Maximum column index Excel accepts (XFD). */
 export const MAX_COL = 16384;
@@ -379,6 +379,17 @@ export function parseSheetRange(input: string): {
   range: string;
   bounds: CellRangeBoundaries;
 } {
+  // `exec` coerces, so a non-string argument from a JS caller used to be
+  // matched as "[object Object]" and reported as a missing delimiter in it.
+  // parseSheetRange is exported from @office-kit/xlsx/utils, so this is its
+  // own front door, not a re-check of something upstream cleared. The address
+  // helpers in src/workbook guard before they reach here so that their message
+  // names the function the caller actually called.
+  if (typeof input !== 'string') {
+    throw new OpenXmlSchemaError(
+      `parseSheetRange: expected a string such as "Sheet1!A1", received ${describeArg(input)}`,
+    );
+  }
   const m = SHEET_RANGE_RE.exec(input);
   if (m === null) throw new OpenXmlSchemaError(`parseSheetRange: missing "!" delimiter in "${input}"`);
   const quoted = m[1];

@@ -71,6 +71,30 @@ describe('migrate-from-sheetjs: API map', () => {
     expect(text).toEqual([['Share', '50.0%']]);
   });
 
+  it('the formatting-only cell walk the guide spells out', async () => {
+    const cell = await import('../../src/cell/index.js');
+    const styles = await import('../../src/styles/index.js');
+    const workbook = await import('../../src/workbook/index.js');
+    const worksheet = await import('../../src/worksheet/index.js');
+
+    const wb = workbook.createWorkbook();
+    const ws = workbook.addWorksheet(wb, 'Data');
+    worksheet.setCell(ws, 1, 1, 'a');
+    worksheet.setCell(ws, 2, 1, null, styles.registerCellStyle(wb, { numberFormat: '#,##0' }));
+
+    const kept: unknown[] = [];
+    for (const c of worksheet.iterCells(ws)) {
+      if (cell.isEmptyCell(c)) continue;
+      kept.push(c.value);
+    }
+    expect(kept).toEqual(['a']);
+
+    const box = worksheet.getValueExtent(ws);
+    expect(box).toEqual({ minRow: 1, maxRow: 1, minCol: 1, maxCol: 1 });
+    if (box === undefined) throw new Error('expected a value extent');
+    expect([...worksheet.iterValues(ws, box)]).toEqual([['a']]);
+  });
+
   it('the cellDates replacement the guide points at', async () => {
     const styles = await import('../../src/styles/index.js');
     const workbook = await import('../../src/workbook/index.js');

@@ -1,6 +1,8 @@
 // Tests for iterCells — flat per-worksheet cell iterator.
 
 import { describe, expect, it } from 'vitest';
+import { isEmptyCell } from '../../src/cell/cell.js';
+import { registerCellStyle } from '../../src/styles/cell-style.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import { iterCells, setCell } from '../../src/worksheet/worksheet.js';
 
@@ -29,6 +31,20 @@ describe('iterCells', () => {
     setCell(ws, 5, 5, 'c');
     expect([...iterCells(ws, { minRow: 2, maxRow: 4 })].map((c) => c.value)).toEqual(['b']);
     expect([...iterCells(ws, { minCol: 5 })].map((c) => c.value)).toEqual(['c']);
+  });
+
+  // Excel writes `<c r="A6" s="4"/>` for every position it has ever formatted,
+  // and the reader keeps them. Callers porting from a library that drops such
+  // cells need the empty ones to be visible here, and skippable.
+  it('yields cells that carry only formatting, which isEmptyCell filters out', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const shaded = registerCellStyle(wb, { numberFormat: '#,##0' });
+    setCell(ws, 1, 1, 'a');
+    setCell(ws, 1, 2, null, shaded);
+    setCell(ws, 1, 3, 'c');
+    expect([...iterCells(ws)].map((c) => c.value)).toEqual(['a', null, 'c']);
+    expect([...iterCells(ws)].filter((c) => !isEmptyCell(c)).map((c) => c.value)).toEqual(['a', 'c']);
   });
 
   it('walks rows in numerical order even when inserted out of order', () => {
