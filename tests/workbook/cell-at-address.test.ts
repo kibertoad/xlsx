@@ -43,7 +43,7 @@ describe('getCellAtAddress', () => {
   it('names the argument when a Worksheet is passed where the address goes', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'Data');
-    const call = () => (getCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, ws, 'A1');
+    const call = () => Reflect.apply(getCellAtAddress, undefined, [wb, ws, 'A1']);
     expect(call).toThrow(OpenXmlSchemaError);
     expect(call).toThrow(/getCellAtAddress: address must be a sheet-qualified A1 string/);
     expect(call).toThrow(/received an object/);
@@ -56,7 +56,7 @@ describe('getCellAtAddress', () => {
   it('names the argument when a Worksheet is passed where the workbook goes', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'Data');
-    const call = () => (getCellAtAddress as unknown as (...a: unknown[]) => unknown)(ws, 'Data!A1');
+    const call = () => Reflect.apply(getCellAtAddress, undefined, [ws, 'Data!A1']);
     expect(call).toThrow(OpenXmlSchemaError);
     expect(call).toThrow(/getCellAtAddress: first argument must be the Workbook/);
     expect(call).toThrow(/getCellByCoord/);

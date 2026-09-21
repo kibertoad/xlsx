@@ -44,7 +44,7 @@ describe('setCellAtAddress', () => {
   it('names the argument when a Worksheet is passed where the address goes', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'Data');
-    const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, ws, 'A1', 'x');
+    const call = () => Reflect.apply(setCellAtAddress, undefined, [wb, ws, 'A1', 'x']);
     expect(call).toThrow(OpenXmlSchemaError);
     expect(call).toThrow(/address must be a sheet-qualified A1 string/);
     expect(call).toThrow(/received an object/);
@@ -57,7 +57,7 @@ describe('setCellAtAddress', () => {
   it('names the argument when a Worksheet is passed where the workbook goes', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'Data');
-    const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(ws, 'Data!A1', 'x');
+    const call = () => Reflect.apply(setCellAtAddress, undefined, [ws, 'Data!A1', 'x']);
     expect(call).toThrow(OpenXmlSchemaError);
     expect(call).toThrow(/setCellAtAddress: first argument must be the Workbook/);
     expect(call).toThrow(/setCellByCoord/);
@@ -67,7 +67,7 @@ describe('setCellAtAddress', () => {
   it('reports a missing address as undefined rather than as a bad string', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Data');
-    const call = () => (setCellAtAddress as unknown as (...a: unknown[]) => unknown)(wb, undefined, 'x');
+    const call = () => Reflect.apply(setCellAtAddress, undefined, [wb, undefined, 'x']);
     expect(call).toThrow(/received undefined/);
     // No argument was swapped, so the getCellByCoord advice would misdirect.
     expect(call).not.toThrow(/setCellByCoord/);
