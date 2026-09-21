@@ -123,6 +123,51 @@ a serial under `yyyy-mm-dd` as `2024-03-14`, and `1.1 + 2.2` under `General` as
 `3.3`. Its docstring lists the format codes it covers and the ones it falls back
 on.
 
+## Blank cells that carry only formatting
+
+Excel can store a cell that carries formatting but no value, for example
+`<c r="A6" s="4"/>`: a style id and no `<v>`. With default parse options,
+SheetJS omits blank stub cells; its [`sheetStubs` option](https://docs.sheetjs.com/docs/csf/cell/#cell-types)
+can retain them. `@office-kit/xlsx` keeps explicit styled cells because the
+formatting is part of the file and has to survive the round-trip. They arrive as
+a `Cell` whose `value` is `null` and whose `styleId` points into
+`wb.styles.cellXfs`.
+
+Code that infers structure from which cells exist will see the difference. A
+blank column containing explicit styled cells can appear in the cell stream
+here, each with a `null` value. Filter on the value when the task should ignore
+blank cells. Row or column formatting alone does not materialise every cell.
+
+```ts
+import { isEmptyCell } from '@office-kit/xlsx/cell';
+import { iterCells } from '@office-kit/xlsx/worksheet';
+
+for (const cell of iterCells(ws)) {
+  if (isEmptyCell(cell)) continue;
+  // ... only cells holding a value reach here
+}
+```
+
+The same split runs through the extent helpers. `getCellExtent(ws)` bounds the
+materialised cells, including formatting-only cells; `getValueExtent(ws)` stops at the
+last cell holding a value. Passing the latter as the iteration bounds keeps
+trailing formatted rows and columns out of the walk instead of filtering them
+afterwards:
+
+```ts
+import { getValueExtent, iterRows } from '@office-kit/xlsx/worksheet';
+
+const box = getValueExtent(ws);
+if (box !== undefined) {
+  for (const row of iterRows(ws, box)) {
+    // ...
+  }
+}
+```
+
+`getValueExtent` counts the empty string as no value too, which is what a
+converter that writes `<c t="str"><v></v></c>` leaves behind.
+
 ## Options with no equivalent
 
 **`cellDates`**: not applicable. SheetJS can turn date-formatted cells into
