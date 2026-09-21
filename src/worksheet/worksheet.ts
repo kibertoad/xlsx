@@ -564,13 +564,13 @@ export function* iterValues(ws: Worksheet, opts: IterRowsOptions = {}): Iterable
  * per row in the bounding box — use this when the caller wants only the
  * populated cells without row boundaries or rectangular padding.
  *
- * Populated means materialised, not "holds a value": Excel keeps a cell for
- * every position it has ever formatted (`<c r="A6" s="4"/>`, a style id and no
- * `<v>`), and those reach the caller with `value === null`. Readers coming
+ * Populated means materialised, not "holds a value": explicit styled cells
+ * (`<c r="A6" s="4"/>`, a style id and no `<v>`) reach the caller with
+ * `value === null`. Readers coming
  * from a library that drops them will see a blank-but-formatted column arrive
  * as present-and-empty cells rather than as a gap. Skip them with
- * `if (isEmptyCell(cell)) continue;`, or pass {@link getValueExtent}'s box as
- * the bounds to stop the walk at the last value instead.
+ * `if (isEmptyCell(cell)) continue;`. Passing {@link getValueExtent}'s box as
+ * the bounds removes trailing blanks but retains blanks inside that box.
  */
 export function* iterCells(ws: Worksheet, opts: IterRowsOptions = {}): IterableIterator<Cell> {
   for (const row of iterRows(ws, opts)) {

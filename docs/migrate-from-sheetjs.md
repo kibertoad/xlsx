@@ -125,18 +125,18 @@ on.
 
 ## Blank cells that carry only formatting
 
-Excel materialises a cell for every position that has ever been formatted, even
-once its value is gone: `<c r="A6" s="4"/>`, a style id and no `<v>`. SheetJS
-drops those on read, so `ws['A6']` is `undefined` and a blank-but-styled column
-looks like a gap in the cell set. `@office-kit/xlsx` keeps them, because the
+Excel can store a cell that carries formatting but no value, for example
+`<c r="A6" s="4"/>`: a style id and no `<v>`. With default parse options,
+SheetJS omits blank stub cells; its [`sheetStubs` option](https://docs.sheetjs.com/docs/csf/cell/#cell-types)
+can retain them. `@office-kit/xlsx` keeps explicit styled cells because the
 formatting is part of the file and has to survive the round-trip. They arrive as
 a `Cell` whose `value` is `null` and whose `styleId` points into
 `wb.styles.cellXfs`.
 
 Code that infers structure from which cells exist will see the difference. A
-blank column that separated two tables under SheetJS no longer separates them
-here: every cell in it is present, each with a `null` value. Filter on the value
-to get SheetJS's cell set back.
+blank column containing explicit styled cells can appear in the cell stream
+here, each with a `null` value. Filter on the value when the task should ignore
+blank cells. Row or column formatting alone does not materialise every cell.
 
 ```ts
 import { isEmptyCell } from '@office-kit/xlsx/cell';
@@ -148,8 +148,8 @@ for (const cell of iterCells(ws)) {
 }
 ```
 
-The same split runs through the extent helpers. `getCellExtent(ws)` is Excel's
-used range and counts formatting-only cells; `getValueExtent(ws)` stops at the
+The same split runs through the extent helpers. `getCellExtent(ws)` bounds the
+materialised cells, including formatting-only cells; `getValueExtent(ws)` stops at the
 last cell holding a value. Passing the latter as the iteration bounds keeps
 trailing formatted rows and columns out of the walk instead of filtering them
 afterwards:
