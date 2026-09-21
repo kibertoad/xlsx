@@ -173,9 +173,9 @@ describe('parseSheetRange', () => {
     expect(out.sheet).toBe("Bob's Data");
   });
 
-  it.each([null, undefined, 1, true, Symbol('address'), [], {}])(
-    'rejects a non-string address without coercion: %s',
-    (value) => {
+  it.each([null, undefined, 1, true, Symbol('address'), [], {}].map((value) => ({ value })))(
+    'rejects a non-string address without coercion: $value',
+    ({ value }) => {
       expect(() => Reflect.apply(parseSheetRange, undefined, [value])).toThrow(OpenXmlSchemaError);
     },
   );
