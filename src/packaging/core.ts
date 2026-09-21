@@ -14,14 +14,18 @@ import { serializeXml } from '../xml/serializer.js';
 /**
  * Set of properties exposed under `docProps/core.xml`. All fields are optional;
  * the workbook only emits those that are set. Timestamps are stored as ISO-8601
- * strings (the W3CDTF subset) — no Date conversion happens at this layer;
- * phase-3 saveWorkbook is responsible for stamping `modified` to `now()` on
- * each save.
+ * strings (the W3CDTF subset), with no Date conversion at this layer.
+ *
+ * Saving writes these fields through untouched: `created` and `modified` keep
+ * whatever the workbook was loaded with, and a workbook built from scratch
+ * carries neither until the caller sets them. Saving does not implicitly
+ * change document timestamps; a producer that wants Excel's behaviour stamps
+ * `modified: new Date().toISOString()` itself before saving.
  */
 export interface CoreProperties {
   category?: string;
   contentStatus?: string;
-  /** ISO-8601 W3CDTF; auto-stamped on save in phase 3. */
+  /** ISO-8601 W3CDTF; written through as-is on save. */
   created?: string;
   creator?: string;
   description?: string;
@@ -31,7 +35,7 @@ export interface CoreProperties {
   lastModifiedBy?: string;
   /** ISO-8601 W3CDTF. */
   lastPrinted?: string;
-  /** ISO-8601 W3CDTF; auto-stamped on save in phase 3. */
+  /** ISO-8601 W3CDTF; written through as-is on save. */
   modified?: string;
   revision?: string;
   subject?: string;
