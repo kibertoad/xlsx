@@ -18,8 +18,8 @@ import { serializeXml } from '../xml/serializer.js';
  *
  * Saving writes these fields through untouched: `created` and `modified` keep
  * whatever the workbook was loaded with, and a workbook built from scratch
- * carries neither until the caller sets them. That keeps `saveWorkbook` output
- * deterministic; a producer that wants Excel's behaviour stamps
+ * carries neither until the caller sets them. Saving does not implicitly
+ * change document timestamps; a producer that wants Excel's behaviour stamps
  * `modified: new Date().toISOString()` itself before saving.
  */
 export interface CoreProperties {

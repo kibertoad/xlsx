@@ -350,12 +350,13 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
  * comments, drawings and charts, plus the shared strings, the stylesheet, the
  * theme, defined names and the docProps. Parts this library does not model
  * (the VBA project, pivot caches, slicers, external links, printer settings,
- * custom XML, ...) are kept verbatim on `wb.passthrough` so saving the
- * workbook again reproduces them.
+ * custom XML, ...) are retained on `wb.passthrough` for saving. Strict OOXML
+ * XML is normalized to Transitional; opaque binary parts remain unchanged.
  *
  * The package is read in full and the returned Workbook holds every cell.
  * `loadWorkbookStream` from `@office-kit/xlsx/streaming` walks a sheet row by
- * row instead, for a file larger than the memory you can give it.
+ * row instead to reduce worksheet memory use. Both loaders keep the compressed
+ * archive in memory; streaming does not make source buffering bounded.
  *
  * Malformed input throws an `OpenXmlError` subclass rather than returning a
  * partial workbook, and a `.xls` or an encrypted package throws

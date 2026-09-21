@@ -55,8 +55,7 @@ describe('docProps + theme passthrough through save', () => {
   });
 
   // The CoreProperties docstring promises the timestamps are written through
-  // as-is. Excel stamps `modified` on every save; we don't, because that would
-  // make the output of two identical saves differ.
+  // as-is, without implicitly changing document metadata.
   it('leaves created / modified exactly as the caller set them', async () => {
     const { createWorkbook, addWorksheet } = await import('../../src/workbook/workbook.js');
     const wb = createWorkbook();
