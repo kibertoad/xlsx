@@ -25,7 +25,8 @@ const openError = async (bytes: Uint8Array): Promise<Error> => {
   try {
     await openZip(fromBuffer(bytes));
   } catch (err) {
-    return err as Error;
+    if (err instanceof Error) return err;
+    throw err;
   }
   throw new Error('expected openZip to reject');
 };
@@ -102,8 +103,23 @@ describe('openZip names what the leading bytes look like', () => {
   it('a whole zip with a corrupt central directory does not read as truncated', async () => {
     const err = await openError(await zipWithCorruptCentralDirectory());
     expect(err).toBeInstanceOf(OpenXmlIoError);
-    expect(err.message).toMatch(/central directory is present but unreadable/);
+    expect(err.message).toMatch(/end-of-central-directory signature was found/);
     expect(err.message).not.toMatch(/truncated or partially uploaded/);
+  });
+
+  it('an EOCD signature alone does not prove the central directory is present', async () => {
+    const bytes = new Uint8Array(64);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint32(42, EOCD_SIG, true);
+    view.setUint16(50, 1, true);
+    view.setUint16(52, 1, true);
+    view.setUint32(58, 0, true); // Points at a local header; no directory exists.
+    view.setUint16(10, 99, true); // Also prevents permissive fallback decoding.
+    const err = await openError(bytes);
+    expect(err).toBeInstanceOf(OpenXmlIoError);
+    expect(err.message).toMatch(/end-of-central-directory signature was found/);
+    expect(err.message).not.toMatch(/central directory is present/);
   });
 
   it('says nothing extra about bytes no magic number identifies', async () => {

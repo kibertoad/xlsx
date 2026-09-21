@@ -364,18 +364,18 @@ export function parseSheetEntries(workbookRoot: XmlNode): SheetEntry[] {
  *   altogether. A subclass of the above, carrying a `format` of
  *   `'encrypted-xlsx' | 'legacy-xls' | 'compound-file'`, so "ask for the
  *   password" is answerable apart from "ask for a re-save".
- * - `OpenXmlSchemaError`: the archive opened, and the OOXML inside it is
- *   unreadable or contradicts the spec.
- * - `OpenXmlContentLimitError`: the workbook is valid and larger than the
- *   {@link LoadOptions.contentLimits} caps allowed. It extends `OpenXmlError`
+ * - `OpenXmlSchemaError`: invalid options, or OOXML that is unreadable or
+ *   contradicts the spec.
+ * - `OpenXmlContentLimitError`: the read exceeds the
+ *   {@link LoadOptions.contentLimits} caps. This does not validate the rest
+ *   of the workbook. It extends `OpenXmlError`
  *   directly, so a catch ladder written around the others misses it.
  *
- * All of them are permanent for the same bytes and the same {@link LoadOptions}:
- * reject the file rather than retry. Raising a cap is the one thing that turns
- * a failure into a success, and only for the two classes that name a cap. The
- * single transient case is documented on `OpenXmlIoError`. Branch on the class
- * and never on the message text, which names parts and offsets and changes
- * between releases.
+ * Retrying unchanged bytes and options does not resolve parsing or validation
+ * errors. Correct invalid options or supply a supported file; changing a limit
+ * may allow a read to proceed but does not guarantee success. Source I/O errors
+ * can be transient; see `OpenXmlIoError`. Branch on the class, not the message
+ * text, which names parts and offsets and changes between releases.
  */
 export async function loadWorkbook(source: XlsxSource, opts: LoadOptions = {}): Promise<Workbook> {
   // Settled before the source is opened, so a cap that cannot mean anything is

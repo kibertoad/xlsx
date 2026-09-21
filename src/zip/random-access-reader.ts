@@ -315,20 +315,15 @@ const looksLikeText = (b: Uint8Array): boolean => {
 };
 
 /**
- * Whether an End-of-Central-Directory record was located before the failure.
- * This is what separates the two things a leading local-file-header signature
- * can mean: with no EOCD the entries begin and the index that should follow
- * them never arrives, which is what a truncated upload looks like; with one
- * present the archive ends where it should and its central directory is
- * corrupt, so the same four bytes say only that the file started out as a zip.
+ * Whether an End-of-Central-Directory signature was located before failure.
+ * Finding the signature does not prove the directory or archive is complete.
  */
 type EocdState = 'absent' | 'present';
 
 /**
  * Name what the leading bytes are, for the error a caller sees when something
  * that passed an extension check turns out not to be an xlsx. States only what
- * a magic number actually says and returns `undefined` rather than guessing,
- * so a wrong guess never displaces the real message.
+ * the prefix suggests as a best-effort hint, without replacing the ZIP error.
  *
  * The OLE compound-document signature is absent on purpose: `openZip` rejects
  * that container before any of this runs, with a message that names it.
@@ -336,8 +331,8 @@ type EocdState = 'absent' | 'present';
 const describeLeadingBytes = (b: Uint8Array, eocd: EocdState): string | undefined => {
   if (b.length >= 4 && u32(b, 0) === SIG_LFH) {
     return eocd === 'absent'
-      ? 'a zip whose entries begin but whose central directory never arrives, the shape of a truncated or partially uploaded file'
-      : 'a zip whose central directory is present but unreadable';
+      ? 'a zip with no end-of-central-directory signature, possibly a truncated or partially uploaded file'
+      : 'a zip that cannot be read even though an end-of-central-directory signature was found';
   }
   if (startsWith(b, PDF_MAGIC)) return 'a PDF';
   if (startsWith(b, UTF8_BOM)) return 'text with a UTF-8 byte-order mark, such as a CSV saved under an .xlsx name';
@@ -358,18 +353,17 @@ const notAZipError = (bytes: Uint8Array, eocd: EocdState, cause: unknown): OpenX
  * Open a buffered xlsx archive in random-access mode. The archive bytes stay
  * resident; entries inflate on demand inside `read(path)`.
  *
- * Falls back to `fflate.unzipSync` when the central directory uses ZIP64
- * sentinel values (entry count == 0xFFFF or any size field == 0xFFFFFFFF) so
- * external ZIP64 archives still load. xlsx files in the wild fit comfortably in
- * ZIP32; the fallback exists for safety.
+ * Falls back to `fflate.unzipSync` for some malformed ZIP32 directories.
+ * ZIP64 archives are parsed directly and fail closed on malformed metadata.
  *
  * `decompressionLimits` opts the archive into the zip-bomb safeguards
  * documented on {@link DecompressionLimits}; pass `false` to disable. Defaults
- * fit any legitimate xlsx.
+ * bound resource use and may need adjustment for large trusted workbooks.
  *
- * Every failure here is an {@link OpenXmlIoError} and every one of them is
- * permanent for these bytes: the same input fails the same way, so a caller
- * validating an upload should reject it rather than retry.
+ * Invalid archives throw {@link OpenXmlIoError}; configured limits can throw
+ * its {@link OpenXmlDecompressionBombError} subclass. Invalid limit options
+ * throw {@link OpenXmlSchemaError}. Retrying the same bytes and options does
+ * not resolve these failures.
  */
 export function openRandomAccessArchive(
   bytes: Uint8Array,
@@ -732,8 +726,8 @@ function openViaUnzipSync(
   try {
     entries = unzipSync(bytes);
   } catch (cause) {
-    // Only reachable after `findEocd` succeeded, so the archive is not short
-    // of its trailer however badly the central directory itself reads.
+    // Only reachable after `findEocd` succeeded, but the signature alone does not prove
+    // that the directory or archive is complete.
     throw notAZipError(bytes, 'present', cause);
   }
   // fflate's `unzipSync` returns already-inflated bytes — we can't abort the

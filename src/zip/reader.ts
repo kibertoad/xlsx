@@ -83,12 +83,11 @@ export interface OpenZipOptions {
  * stays at compressed-archive size, plus per-entry inflate scratch, plus a few
  * MB at most of small entries kept for re-reads, rather than holding every
  * uncompressed entry resident. The fflate `unzipSync` fallback is preserved
- * internally for ZIP64 / non-standard archives the random-access reader
+ * internally for some malformed ZIP32 archives the random-access reader
  * rejects, and it does hold every entry inflated.
  *
  * Throws {@link OpenXmlIoError} when the bytes are not a readable zip, and
- * when the source itself fails to produce them. Those two are the only reason
- * a caller has to look past the class: see the error-handling contract on
+ * when the source itself fails to produce them. See the error contract on
  * {@link OpenXmlIoError}. An OLE compound file or a raw BIFF workbook throws
  * {@link OpenXmlUnsupportedFormatError} instead, carrying the format it
  * recognised.

@@ -11,18 +11,16 @@ export interface OpenXmlErrorOptions {
 }
 
 /**
- * Base class for every error this library throws. Catching it is how a caller
- * separates "the file was not what it claimed to be" from a bug.
+ * Base class for errors reported by this library, including invalid input,
+ * invalid API arguments, unsupported features and configured resource limits.
  *
- * The contract, for a service that loads files it did not produce:
+ * For loads, retrying unchanged bytes with unchanged options does not resolve
+ * parsing or validation errors. Source I/O failures may be transient; inspect
+ * their cause and the source's retry semantics. A limit error does not establish
+ * that the rest of the workbook is valid.
  *
- * - An `OpenXmlError` means the input was rejected. With the same bytes the
- *   load fails the same way, so reject the file and tell the user; retrying
- *   changes nothing. The one exception is a source that failed to hand over
- *   its bytes at all, described on {@link OpenXmlIoError}.
- * - Anything that is **not** an `OpenXmlError` is a bug in this library.
- *   Nothing here is meant to escape as a `TypeError` or a raw `fflate` /
- *   `saxes` error, so those are worth reporting.
+ * Unexpected native errors from library internals are worth reporting, but an
+ * error outside this hierarchy can also originate in caller-provided code.
  *
  * Which subclass arrives says where the input broke, not how badly, and the
  * subclass is stable for a given kind of damage. Message text is not: it names
@@ -47,12 +45,11 @@ export class OpenXmlError extends Error {
  * message names it, so a CSV renamed to `.xlsx` says so rather than only
  * "not a valid zip".
  *
- * It is also the one class that is not always permanent. `openZip: failed to
- * read source bytes` comes from the `XlsxSource`, not from the payload,
- * and wraps the underlying fs / fetch / stream error as its `cause`; a retry
- * can succeed. Every other `OpenXmlIoError` is a verdict on the bytes. When
- * the bytes are already in memory (`fromBuffer`) the source cannot fail, so
- * every `OpenXmlIoError` from that load is permanent.
+ * Source read failures preserve the fs / fetch / stream error as `cause` and
+ * may be transient. Recreate a consumed source before retrying when necessary.
+ * Corrupt archive bytes require a corrected file. This class is also used by
+ * write APIs and is the parent of {@link OpenXmlDecompressionBombError}, so
+ * the class alone does not determine whether retrying can help.
  */
 export class OpenXmlIoError extends OpenXmlError {
   override readonly name: string = 'OpenXmlIoError';
@@ -64,8 +61,8 @@ export class OpenXmlIoError extends OpenXmlError {
  * (unreadable XML, a missing required relationship, a cell whose declared type
  * does not match its value).
  *
- * On load this means a file that is a zip but not a usable xlsx, and it is
- * permanent. The same class also guards the write-side model, where it reports
+ * Also used for invalid load options and API arguments. The same class guards
+ * the write-side model, where it reports
  * the calling code's mistake rather than a file's: a duplicate sheet title, a
  * merge overlapping an existing one, a style id belonging to another
  * workbook's pool.
@@ -89,8 +86,8 @@ export class OpenXmlInvalidWorkbookError extends OpenXmlError {
  * input that is a real Office format this library does not read, such as an
  * encrypted xlsx or a legacy `.xls`.
  *
- * Permanent, and the only class where the user can act on it directly: the
- * message says what to do (decrypt the file, re-save it as `.xlsx`).
+ * A supported representation is needed, for example by decrypting the file
+ * or re-saving it as `.xlsx` before loading.
  */
 export class OpenXmlNotImplementedError extends OpenXmlError {
   override readonly name: string = 'OpenXmlNotImplementedError';
@@ -129,8 +126,9 @@ export class OpenXmlUnsupportedFormatError extends OpenXmlNotImplementedError {
  * see it, while letting callers branch on bomb-specific recovery (reject the
  * upload, log a security event, etc.).
  *
- * Permanent, and the one class that says the input may be hostile rather than
- * merely broken.
+ * A cap can also reject a legitimate large workbook. Review the input and
+ * resource budget before changing the limits; the error does not establish
+ * whether the file is valid or hostile.
  */
 export class OpenXmlDecompressionBombError extends OpenXmlIoError {
   override readonly name = 'OpenXmlDecompressionBombError';
@@ -139,7 +137,7 @@ export class OpenXmlDecompressionBombError extends OpenXmlIoError {
 /**
  * Thrown when a read exceeds the cell or row cap configured through
  * `contentLimits` on {@link loadWorkbook} / {@link loadWorkbookStream}. The
- * workbook is valid; it is larger than the caller allowed. Extends
+ * read stopped at the limit, so the remaining content is not validated. Extends
  * {@link OpenXmlError} directly rather than {@link OpenXmlIoError}, since
  * nothing failed at the I/O layer and a caller wants to tell "too big" apart
  * from "corrupt" to answer an upload with the right status.

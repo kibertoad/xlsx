@@ -253,9 +253,10 @@ const wb = await loadWorkbook(fromResponse(response));
 
 ### When a load fails
 
-Every failure is an `OpenXmlError` subclass from `@office-kit/xlsx/utils`, and
-the subclass is the contract. Anything that is not an `OpenXmlError` is a bug
-in this library, not a rejected file.
+Library-reported failures use `OpenXmlError` subclasses from
+`@office-kit/xlsx/utils`. Branch on the subclass. Unexpected native errors
+from library internals are worth reporting; caller-provided code can also
+throw errors outside this hierarchy.
 
 | Class                           | What happened                                                                     |
 | ------------------------------- | --------------------------------------------------------------------------------- |
@@ -263,8 +264,8 @@ in this library, not a rejected file.
 | `OpenXmlDecompressionBombError` | The archive inflates past the `decompressionLimits` caps (subclass of the above)  |
 | `OpenXmlNotImplementedError`    | An OOXML feature this library does not read yet, such as an unconvertible ISO 29500 strict part |
 | `OpenXmlUnsupportedFormatError` | The input is a different Office format: encrypted xlsx, legacy `.xls` (subclass of the above) |
-| `OpenXmlSchemaError`            | The archive opened; the OOXML inside is unreadable or contradicts the spec        |
-| `OpenXmlContentLimitError`      | The workbook is valid and larger than the `contentLimits` caps allowed            |
+| `OpenXmlSchemaError`            | Invalid options, or OOXML that is unreadable or contradicts the spec        |
+| `OpenXmlContentLimitError`      | The read exceeds `contentLimits`; remaining content has not been validated            |
 
 `OpenXmlContentLimitError` extends `OpenXmlError` directly rather than any of
 the others, so a catch ladder built out of the rows above it misses the
@@ -272,15 +273,12 @@ too-big case. `OpenXmlUnsupportedFormatError` carries a `format` of
 `'encrypted-xlsx' | 'legacy-xls' | 'compound-file'`, which is how you answer
 "ask for the password" apart from "ask for a re-save".
 
-For a service validating uploads, the question is usually "tell the user, or
-retry and investigate". With the same bytes and the same options, every one of
-these fails the same way, so the answer is to reject the file. Raising a cap is
-the one thing that turns a failure into a success, and only for the two rows
-that name a cap. The other exception is the source itself failing to hand over
-its bytes, which `fromFile` / `fromResponse` can do transiently: that arrives
-as `OpenXmlIoError` with message `openZip: failed to read source bytes` and the
-fs / fetch error as its `cause`. With `fromBuffer` the source cannot fail, so
-every error from that load is final.
+For a service validating uploads, retrying the same bytes and options does not
+resolve parsing or validation errors. Correct invalid options or supply a
+supported file. Raising a resource cap may allow a read to continue, but does
+not guarantee that the remaining content is valid. Source I/O errors preserve
+the underlying fs / fetch / stream error as `cause` and may be transient;
+recreate a consumed source before retrying when necessary.
 
 ```ts
 import { loadWorkbook } from '@office-kit/xlsx/io';
@@ -294,8 +292,8 @@ async function readUpload(upload: Uint8Array): Promise<Loaded> {
   try {
     return { ok: true, workbook: await loadWorkbook(fromBuffer(upload)) };
   } catch (err) {
-    // The file was rejected. The message is meant to be shown, and a retry
-    // with the same bytes returns here again.
+    // Loading these in-memory bytes with the default options failed.
+    // Return the diagnostic; unchanged bytes and options will fail again.
     if (err instanceof OpenXmlError) return { ok: false, reason: err.message };
     // Not a verdict on the file, so let a bug surface as a bug.
     throw err;
@@ -307,10 +305,9 @@ Files that are not xlsx at all reach `loadWorkbook` routinely, because uploads
 get validated by extension. Where a magic number identifies the input, the
 message says so rather than only "not a valid zip": a CSV or plain text, a
 UTF-8 or UTF-16 byte-order mark, a PDF, and a file that begins with zip
-entries. That last one is reported two ways, because the fix differs: entries
-with no trailer at all is what a truncated or partially uploaded file looks
-like, while a trailer that is present with an unreadable central directory is a
-whole file that got corrupted. An OLE compound file or a raw BIFF workbook is
+entries. A missing end-of-central-directory signature suggests a truncated or
+partially uploaded file. When that signature is found, the message reports it
+without assuming that the rest of the archive is complete. An OLE compound file or a raw BIFF workbook is
 recognised earlier still and throws `OpenXmlUnsupportedFormatError`.
 
 Branch on the class, not on the message. Messages name parts, byte offsets and
