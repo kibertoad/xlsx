@@ -145,3 +145,17 @@ export class OpenXmlDecompressionBombError extends OpenXmlIoError {
 export class OpenXmlContentLimitError extends OpenXmlError {
   override readonly name = 'OpenXmlContentLimitError';
 }
+
+/**
+ * Name an argument's type for an error message, without putting the value in
+ * it. Internal (not re-exported from `@office-kit/xlsx/utils`): it exists so a
+ * public function handed the wrong argument from JS says what it received
+ * instead of interpolating an object and reporting `[object Object]`.
+ */
+export function describeArg(v: unknown): string {
+  if (v === null) return 'null';
+  if (v === undefined) return 'undefined';
+  if (Array.isArray(v)) return 'an array';
+  const t = typeof v;
+  return t === 'object' ? 'an object' : `a ${t}`;
+}

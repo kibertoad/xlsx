@@ -1,6 +1,7 @@
 // Tests for getCellAtAddress — sheet-qualified A1 → Cell lookup.
 
 import { describe, expect, it } from 'vitest';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addWorksheet, createWorkbook, getCellAtAddress } from '../../src/workbook/workbook.js';
 import { getCellAddress, setCell } from '../../src/worksheet/worksheet.js';
 
@@ -34,6 +35,32 @@ describe('getCellAtAddress', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Data');
     expect(() => getCellAtAddress(wb, 'Data!A1:B5')).toThrow(/range/);
+  });
+
+  // The signature is (wb, address), and the mistake it invites is (wb, ws,
+  // ref). Before, the Worksheet was coerced into the message as
+  // "[object Object]" and blamed for a missing "!".
+  it('names the argument when a Worksheet is passed where the address goes', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    const call = () => Reflect.apply(getCellAtAddress, undefined, [wb, ws, 'A1']);
+    expect(call).toThrow(OpenXmlSchemaError);
+    expect(call).toThrow(/getCellAtAddress: address must be a sheet-qualified A1 string/);
+    expect(call).toThrow(/received an object/);
+    expect(call).toThrow(/getCellByCoord/);
+    expect(call).not.toThrow(/\[object Object\]/);
+  });
+
+  // The mirror mistake: the Worksheet lands in the workbook slot, which used
+  // to reach getSheet and die on `wb.sheets` with a bare TypeError.
+  it('names the argument when a Worksheet is passed where the workbook goes', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'Data');
+    const call = () => Reflect.apply(getCellAtAddress, undefined, [ws, 'Data!A1']);
+    expect(call).toThrow(OpenXmlSchemaError);
+    expect(call).toThrow(/getCellAtAddress: first argument must be the Workbook/);
+    expect(call).toThrow(/getCellByCoord/);
+    expect(call).not.toThrow(/is not iterable/);
   });
 
   it('round-trips through getCellAddress', () => {

@@ -173,7 +173,29 @@ describe('parseSheetRange', () => {
     expect(out.sheet).toBe("Bob's Data");
   });
 
+  it.each([null, undefined, 1, true, Symbol('address'), [], {}].map((value) => ({ value })))(
+    'rejects a non-string address without coercion: $value',
+    ({ value }) => {
+      expect(() => Reflect.apply(parseSheetRange, undefined, [value])).toThrow(OpenXmlSchemaError);
+    },
+  );
+
+  it('does not invoke caller-defined string coercion', () => {
+    const address = { toString() { throw new Error('must not coerce'); } };
+    expect(() => Reflect.apply(parseSheetRange, undefined, [address])).toThrow(OpenXmlSchemaError);
+  });
+
   it('throws when there is no "!"', () => {
     expect(() => parseSheetRange('Sheet1A1:B5')).toThrowError(OpenXmlSchemaError);
+  });
+
+  // The regex coerces whatever it is handed, so a non-string from a JS caller
+  // used to come back as a missing delimiter in "[object Object]".
+  it('names the type it received instead of stringifying a non-string', () => {
+    const call = () => Reflect.apply(parseSheetRange, undefined, [{ title: 'Data' }]);
+    expect(call).toThrowError(OpenXmlSchemaError);
+    expect(call).toThrow(/received an object/);
+    expect(call).not.toThrow(/\[object Object\]/);
+    expect(() => Reflect.apply(parseSheetRange, undefined, [undefined])).toThrow(/received undefined/);
   });
 });
