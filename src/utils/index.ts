@@ -37,6 +37,7 @@ export {
   toIso8601,
   WINDOWS_EPOCH_MS,
 } from './datetime.js';
+export { MAX_CELL_TEXT_LENGTH } from './cell-text.js';
 export { cssRecordToInlineStyle } from './css.js';
 export { escapeCellString, unescapeCellString } from './escape.js';
 export type { OpenXmlErrorOptions, UnsupportedFormat } from './exceptions.js';
