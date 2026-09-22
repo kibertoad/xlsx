@@ -35,7 +35,7 @@ export function makeDefinedName(opts: Partial<DefinedName> & { name: string; val
 
 // ---- Workbook ergonomic helpers -----------------------------------------
 
-import { type CellRangeBoundaries, parseSheetRange } from '../utils/coordinate.js';
+import { type CellRangeBoundaries, formatSheetQualifiedRef, parseSheetRange } from '../utils/coordinate.js';
 import type { Worksheet } from '../worksheet/worksheet.js';
 import { getRangeAddress } from '../worksheet/worksheet.js';
 import type { Workbook } from './workbook.js';
@@ -136,18 +136,23 @@ export const getDefinedNameTarget = (
 ): DefinedNameTarget[] | undefined => {
   const dn = getDefinedName(wb, name, scope);
   if (!dn) return undefined;
-  // Defined-name values use `,` as the leg separator. Sheet titles can
-  // themselves contain commas inside `'...'` quotes — split on commas that
-  // aren't inside an unbalanced single-quoted segment.
+  return splitDefinedNameLegs(dn.value).map((leg) => parseSheetRange(leg));
+};
+
+/**
+ * Split a defined-name value on the `,` that separates its legs. A sheet title
+ * can hold a comma of its own inside `'...'` quotes, so only commas outside a
+ * quoted segment count. A doubled `''` is the escape for a literal apostrophe
+ * and does not end the segment.
+ */
+const splitDefinedNameLegs = (value: string): string[] => {
   const legs: string[] = [];
   let current = '';
   let inQuote = false;
-  for (let i = 0; i < dn.value.length; i++) {
-    const c = dn.value[i];
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
     if (c === "'") {
-      // Doubled `''` inside a quoted run is the escape for a literal apostrophe
-      // — skip the second one without flipping the state.
-      if (inQuote && dn.value[i + 1] === "'") {
+      if (inQuote && value[i + 1] === "'") {
         current += "''";
         i++;
         continue;
@@ -164,7 +169,7 @@ export const getDefinedNameTarget = (
     current += c;
   }
   if (current.length > 0) legs.push(current);
-  return legs.map((leg) => parseSheetRange(leg));
+  return legs;
 };
 
 /**
@@ -248,11 +253,32 @@ export const listPrintTitles = (wb: Workbook): ReadonlyArray<DefinedName> =>
 /**
  * Define the print-area for a given sheet. Excel uses the built-in
  * `_xlnm.Print_Area` defined name with sheet scope.
+ *
+ * `ref` may be a plain range (`'A1:E20'`), which is qualified with the title of
+ * the sheet at `sheetIndex`, or an already sheet-qualified one
+ * (`"'Report'!$A$1:$E$20"`), which is stored as given. A multi-area print range
+ * is a comma-separated list and each leg is qualified on its own, since Excel
+ * reads an unqualified leg as belonging to whatever sheet is active rather than
+ * to this one.
+ *
+ * Throws {@link OpenXmlSchemaError} when `sheetIndex` names no sheet on `wb`:
+ * the value has to carry that sheet's title, and a name scoped to a sheet that
+ * does not exist is one Excel reports as an error in the Name Manager.
  */
 export const setPrintArea = (wb: Workbook, sheetIndex: number, ref: string): DefinedName => {
+  const sheet = wb.sheets[sheetIndex];
+  if (sheet === undefined) {
+    throw new OpenXmlSchemaError(
+      `setPrintArea: sheetIndex ${sheetIndex} names no sheet on this workbook (it has ${wb.sheets.length})`,
+    );
+  }
+  const title = sheet.sheet.title;
+  const value = splitDefinedNameLegs(ref)
+    .map((leg) => (leg.includes('!') ? leg : formatSheetQualifiedRef(title, leg.trim())))
+    .join(',');
   return addDefinedName(wb, {
     name: '_xlnm.Print_Area',
-    value: ref,
+    value,
     scope: sheetIndex,
   });
 };

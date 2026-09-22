@@ -8,6 +8,7 @@ import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   addDefinedName,
   getDefinedName,
+  getDefinedNameTarget,
   removeDefinedName,
   setPrintArea,
   setPrintTitles,
@@ -50,8 +51,43 @@ describe('setPrintArea / setPrintTitles', () => {
     addWorksheet(wb, 'Report');
     const dn = setPrintArea(wb, 0, 'A1:E20');
     expect(dn.name).toBe('_xlnm.Print_Area');
-    expect(dn.value).toBe('A1:E20');
+    // Excel reads an unqualified print area as belonging to whatever sheet is
+    // active, so the value has to name the sheet the scope points at.
+    expect(dn.value).toBe('Report!A1:E20');
     expect(dn.scope).toBe(0);
+  });
+
+  it('setPrintArea quotes a sheet title that needs it', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Quarter 1');
+    expect(setPrintArea(wb, 0, '$A$1:$E$20').value).toBe("'Quarter 1'!$A$1:$E$20");
+  });
+
+  it('setPrintArea leaves an already-qualified ref alone', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    expect(setPrintArea(wb, 0, "'Report'!$A$1:$E$20").value).toBe("'Report'!$A$1:$E$20");
+  });
+
+  it('setPrintArea qualifies every leg of a multi-area range', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    expect(setPrintArea(wb, 0, 'A1:B2,D1:E2').value).toBe('Report!A1:B2,Report!D1:E2');
+  });
+
+  it('setPrintArea writes a value getDefinedNameTarget can read back', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Quarter 1');
+    setPrintArea(wb, 0, 'A1:B2,D1:E2');
+    const targets = getDefinedNameTarget(wb, '_xlnm.Print_Area', 0);
+    expect(targets?.map((t) => t.sheet)).toEqual(['Quarter 1', 'Quarter 1']);
+    expect(targets?.map((t) => t.range)).toEqual(['A1:B2', 'D1:E2']);
+  });
+
+  it('setPrintArea throws when sheetIndex names no sheet', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    expect(() => setPrintArea(wb, 3, 'A1:E20')).toThrow(OpenXmlSchemaError);
   });
 
   it('setPrintTitles formats both rows + cols with sheet prefix', () => {
@@ -86,7 +122,7 @@ describe('setPrintArea / setPrintTitles', () => {
     const wb2 = await loadWorkbook(fromBuffer(bytes));
     const pa = getDefinedName(wb2, '_xlnm.Print_Area', 0);
     const pt = getDefinedName(wb2, '_xlnm.Print_Titles', 0);
-    expect(pa?.value).toBe('A1:E20');
+    expect(pa?.value).toBe('A!A1:E20');
     expect(pt?.value).toBe("'A'!$1:$1");
   });
 });
