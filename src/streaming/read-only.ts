@@ -7,7 +7,13 @@
 // in memory.
 
 import { normalizeStrictArchive } from '../io/strict.js';
-import { makeSharedStrings, parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
+import {
+  makeSharedStrings,
+  parseRichString,
+  parseSharedStringsXml,
+  type SharedStringEntry,
+  type SharedStringsTable,
+} from '../workbook/shared-strings.js';
 import { ARC_CONTENT_TYPES, ARC_ROOT_RELS, localNameOf } from '../xml/namespaces.js';
 import { findById, findByType, makeRelationships, relsFromBytes } from '../packaging/relationships.js';
 import { manifestFromBytes } from '../packaging/manifest.js';
@@ -28,9 +34,9 @@ import type { CellValue } from '../cell/cell.js';
 import { parseCellDate } from '../utils/cell-date.js';
 import { parseCellErrorCode } from '../utils/cell-error.js';
 import { unknownCellType } from '../utils/cell-text.js';
-import { unescapeCellString } from '../utils/escape.js';
 import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { iterParse, type SaxEvent, type SaxInput } from '../xml/iterparse.js';
+import { el, type XmlNode } from '../xml/tree.js';
 import { parseXml } from '../xml/parser.js';
 import { assertNotStrictRelTypes, assertNotStrictRoot } from '../xml/strict-package.js';
 import type { XlsxSource } from '../io/source.js';
@@ -58,6 +64,13 @@ export interface IterRowsOptions {
 export interface ReadOnlyCell {
   readonly row: number;
   readonly col: number;
+  /**
+   * The same `CellValue` `loadWorkbook` reports for the cell, rich text
+   * included: a shared or inline string built from `<r>` runs arrives as
+   * `{ kind: 'rich-text', runs }`, not as the runs joined. Use
+   * `cellValueAsString` from `@office-kit/xlsx/cell` when only the text
+   * matters.
+   */
   readonly value: CellValue;
   readonly styleId: number;
 }
@@ -83,11 +96,15 @@ const relsPathFor = (partPath: string): string => {
   return `${partPath.slice(0, i)}/_rels/${partPath.slice(i + 1)}.rels`;
 };
 
+/** A shared or inline string as a cell value: runs when it has them, text otherwise. */
+const richStringValue = (entry: SharedStringEntry): CellValue =>
+  typeof entry === 'string' ? entry : { kind: 'rich-text', runs: entry.runs };
+
 const decodeCellValue = (
   t: string,
   vText: string | undefined,
-  inlineText: string | undefined,
-  sst: ReadonlyArray<string>,
+  inline: SharedStringEntry | undefined,
+  sst: ReadonlyArray<SharedStringEntry>,
   sheet: string,
   col: number,
   row: number,
@@ -99,10 +116,15 @@ const decodeCellValue = (
       // and a null here would be indistinguishable from an empty cell.
       return parseCellNumber(vText, sheet, col, row);
     case 's': {
+      // A missing `<v>` or an index with no entry stays empty here where
+      // `loadWorkbook` throws. That leniency is deliberate and pinned by test:
+      // a streaming pass over a huge sheet should not lose every row after a
+      // corrupt cell. See the note on `loadWorkbookStream`.
       if (vText === undefined) return null;
       const idx = Number.parseInt(vText, 10);
       if (!Number.isInteger(idx) || idx < 0 || idx >= sst.length) return null;
-      return sst[idx] ?? null;
+      const entry = sst[idx];
+      return entry === undefined ? null : richStringValue(entry);
     }
     case 'b':
       // Invalid boolean values stay empty in this reader, like out-of-range
@@ -119,7 +141,10 @@ const decodeCellValue = (
     case 'str':
       return vText ?? '';
     case 'inlineStr':
-      return inlineText ?? '';
+      // `<is>` is a CT_Rst, the same shape as an `<si>` in sharedStrings.xml,
+      // so a body built from `<r>` runs keeps its per-run formatting instead of
+      // collapsing to the concatenated text.
+      return inline === undefined ? '' : richStringValue(inline);
     default:
       // A `t` outside ST_CellType says nothing about what the `<v>` holds, so
       // there is no rule to read it by. `loadWorkbook` refuses it, and the two
@@ -144,7 +169,7 @@ const decodeCellValue = (
 async function* iterSheetRows(
   title: string,
   sheetInput: SaxInput,
-  sst: ReadonlyArray<string>,
+  sst: ReadonlyArray<SharedStringEntry>,
   opts: IterRowsOptions,
   contentLimits: ResolvedContentLimits,
 ): AsyncIterableIterator<ReadOnlyCell[]> {
@@ -165,7 +190,13 @@ async function* iterSheetRows(
   let nextRow = 1;
   let currentCells: ReadOnlyCell[] = [];
   let nextCol = 1;
-  let pendingCells: Array<{ col: number; type: string; text: string; inline: string; styleId: number }> = [];
+  let pendingCells: Array<{
+    col: number;
+    type: string;
+    text: string;
+    inline: SharedStringEntry | undefined;
+    styleId: number;
+  }> = [];
   const settleRow = (row: number): void => {
     currentRow = row;
     nextRow = Math.max(nextRow, row + 1);
@@ -185,10 +216,11 @@ async function* iterSheetRows(
   let cellStyleId = 0;
   let inV = false;
   let vText = '';
-  let inIs = false;
-  let inIsT = false;
-  let isText = '';
-  let isRunText = '';
+  // `<is>` is collected as a node tree and handed to the same `parseRichString`
+  // `loadWorkbook` uses, rather than keeping a second definition of CT_Rst
+  // here. The subtree is a handful of runs, so it costs nothing beside a row.
+  let isNode: XmlNode | undefined;
+  const isStack: XmlNode[] = [];
 
   let checkedRoot = false;
   for await (const ev of iterParse(sheetInput)) {
@@ -198,9 +230,22 @@ async function* iterSheetRows(
         assertNotStrictRoot(e.name);
         checkedRoot = true;
       }
+      // Inside `<is>`, every descendant belongs to the subtree, so this runs
+      // ahead of the local-name switch rather than through it.
+      if (isStack.length > 0) {
+        const child = el(e.name, { ...e.attrs });
+        isStack[isStack.length - 1]?.children.push(child);
+        isStack.push(child);
+        continue;
+      }
       const local = localNameOf(e.name);
       if (!inSheetData) {
         if (local === 'sheetData') inSheetData = true;
+        continue;
+      }
+      if (local === 'is' && cellOpen) {
+        isNode = el(e.name);
+        isStack.push(isNode);
         continue;
       }
       switch (local) {
@@ -251,20 +296,12 @@ async function* iterSheetRows(
             chargeCell(budget, title, cellCol, cellRow === 0 ? undefined : cellRow);
           }
           vText = '';
-          isText = '';
+          isNode = undefined;
+          isStack.length = 0;
           break;
         }
         case 'v':
           if (cellOpen) inV = true;
-          break;
-        case 'is':
-          if (cellOpen) inIs = true;
-          break;
-        case 't':
-          if (inIs) {
-            inIsT = true;
-            isRunText = '';
-          }
           break;
         default:
           break;
@@ -273,10 +310,20 @@ async function* iterSheetRows(
     }
     if (e.kind === 'text') {
       if (inV) vText += e.text;
-      else if (inIsT) isRunText += e.text;
+      else if (isStack.length > 0) {
+        // Text events for one element accumulate before `parseRichString` sees
+        // them, so a chunk boundary inside a `<t>` cannot split an escape
+        // sequence, and adjacent runs cannot join into one.
+        const top = isStack[isStack.length - 1];
+        if (top !== undefined) top.text = (top.text ?? '') + e.text;
+      }
       continue;
     }
     // end
+    if (isStack.length > 0) {
+      isStack.pop();
+      continue;
+    }
     const local = localNameOf(e.name);
     if (!inSheetData) continue;
     switch (local) {
@@ -304,10 +351,11 @@ async function* iterSheetRows(
         break;
       }
       case 'c': {
+        const inline = isNode === undefined ? undefined : parseRichString(isNode);
         if (cellOpen && cellRow === 0 && cellCol >= minCol && cellCol <= maxCol) {
-          pendingCells.push({ col: cellCol, type: cellType, text: vText, inline: isText, styleId: cellStyleId });
+          pendingCells.push({ col: cellCol, type: cellType, text: vText, inline, styleId: cellStyleId });
         } else if (cellOpen && cellCol >= minCol && cellCol <= maxCol && cellRow >= minRow && cellRow <= maxRow) {
-          const value = decodeCellValue(cellType, vText, isText, sst, title, cellCol, cellRow);
+          const value = decodeCellValue(cellType, vText, inline, sst, title, cellCol, cellRow);
           currentCells.push({ row: cellRow, col: cellCol, value, styleId: cellStyleId });
         }
         cellOpen = false;
@@ -315,17 +363,6 @@ async function* iterSheetRows(
       }
       case 'v':
         inV = false;
-        break;
-      case 'is':
-        inIs = false;
-        break;
-      case 't':
-        if (inIsT) {
-          // Decode each complete <t>, so SAX chunks can split an escape but
-          // adjacent rich-text runs cannot accidentally create one.
-          isText += unescapeCellString(isRunText);
-          inIsT = false;
-        }
         break;
       default:
         break;
@@ -600,7 +637,7 @@ const makeStreamingReadOnlyWorksheet = (
   title: string,
   archive: ZipArchive,
   partPath: string,
-  sst: ReadonlyArray<string>,
+  sst: ReadonlyArray<SharedStringEntry>,
   indexes: RowIndexCache,
   contentLimits: ResolvedContentLimits,
 ): ReadOnlyWorksheet => {
@@ -681,7 +718,7 @@ const makeStreamingReadOnlyWorkbook = (
   date1904: boolean,
   archive: ZipArchive,
   partPathByName: ReadonlyMap<string, string>,
-  sst: ReadonlyArray<string>,
+  sst: ReadonlyArray<SharedStringEntry>,
   contentLimits: ResolvedContentLimits,
 ): ReadOnlyWorkbook => {
   // Weak keys let unused worksheet handles release their indexed bytes. The
@@ -738,7 +775,17 @@ export interface LoadWorkbookStreamOptions {
   contentLimits?: ContentLimits;
 }
 
-/** Open an xlsx for read-only streaming access. */
+/**
+ * Open an xlsx for read-only streaming access.
+ *
+ * Cell values match what {@link loadWorkbook} reports for the same bytes, rich
+ * text included. Where the two differ is in how much they tolerate: this reader
+ * reports a cell as empty for a `t="s"` index with no shared string behind it
+ * and for a `t="b"` value outside `xsd:boolean`, both of which `loadWorkbook`
+ * rejects. A pass over a sheet too large to model should not lose every row
+ * after one corrupt cell. A malformed number still throws, because a `null`
+ * there could not be told apart from an empty cell.
+ */
 export async function loadWorkbookStream(
   source: XlsxSource,
   opts: LoadWorkbookStreamOptions = {},
@@ -816,7 +863,7 @@ export async function loadWorkbookStream(
       parseDate1904(workbookRoot),
       archive,
       partPathByName,
-      sst.entries.map((e) => (typeof e === 'string' ? e : e.runs.map((r) => r.text).join(''))),
+      sst.entries,
       contentLimits,
     );
   } catch (cause) {
