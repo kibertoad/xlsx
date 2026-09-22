@@ -191,7 +191,7 @@ const makeWriteOnlyWorksheet = (state: WorkbookState, title: string, sheetId: nu
   const appendRow = async (row: WriteOnlyRowItem[]): Promise<void> => {
     if (closed) throw new OpenXmlIoError('appendRow: worksheet already closed');
     flushHeader();
-    const r = nextRow++;
+    const r = nextRow;
     let xml = `<row r="${r}">`;
     for (let i = 0; i < row.length; i++) {
       const item = row[i];
@@ -214,6 +214,11 @@ const makeWriteOnlyWorksheet = (state: WorkbookState, title: string, sheetId: nu
       xml += serializeCell(cell, dummyCtx, state.strings.serialize);
     }
     xml += '</row>';
+    // The row number is claimed only once every cell has serialised. A cell the
+    // writer refuses throws out of appendRow before anything is written, and a
+    // caller that shortens the value and appends again has to land on this row
+    // rather than leave a hole Excel reads as an empty row.
+    nextRow++;
     writeText(xml);
   };
 
