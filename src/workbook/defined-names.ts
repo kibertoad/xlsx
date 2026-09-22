@@ -35,7 +35,7 @@ export function makeDefinedName(opts: Partial<DefinedName> & { name: string; val
 
 // ---- Workbook ergonomic helpers -----------------------------------------
 
-import { type CellRangeBoundaries, parseSheetRange } from '../utils/coordinate.js';
+import { type CellRangeBoundaries, parseSheetRange, quoteSheetName } from '../utils/coordinate.js';
 import type { Worksheet } from '../worksheet/worksheet.js';
 import { getRangeAddress } from '../worksheet/worksheet.js';
 import type { Workbook } from './workbook.js';
@@ -268,10 +268,15 @@ export const setPrintTitles = (
   opts: { rows?: string; cols?: string; sheetName: string },
 ): DefinedName => {
   const parts: string[] = [];
-  // The wire form is "Sheet!$1:$1,Sheet!$A:$A"; both refs share the sheet
-  // prefix.
-  if (opts.cols !== undefined) parts.push(`'${opts.sheetName}'!${opts.cols}`);
-  if (opts.rows !== undefined) parts.push(`'${opts.sheetName}'!${opts.rows}`);
+  // The wire form is "'Sheet'!$1:$1,'Sheet'!$A:$A"; both refs share the sheet
+  // prefix, quoted the way Excel quotes it for this built-in name whether or
+  // not the title needs it. `quoteSheetName` doubles an apostrophe inside the
+  // title, which a raw `'${title}'` did not: `Bob's Sheet` produced
+  // `'Bob's Sheet'!$1:$1`, a reference neither Excel nor `parseSheetRange`
+  // can read.
+  const prefix = quoteSheetName(opts.sheetName);
+  if (opts.cols !== undefined) parts.push(`${prefix}!${opts.cols}`);
+  if (opts.rows !== undefined) parts.push(`${prefix}!${opts.rows}`);
   if (parts.length === 0) {
     throw new OpenXmlSchemaError('setPrintTitles: at least one of rows or cols must be set');
   }

@@ -8,6 +8,7 @@ import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   addDefinedName,
   getDefinedName,
+  getDefinedNameTarget,
   removeDefinedName,
   setPrintArea,
   setPrintTitles,
@@ -68,6 +69,25 @@ describe('setPrintArea / setPrintTitles', () => {
     expect(dnRows.value).toBe("'A'!$1:$1");
     const dnCols = setPrintTitles(wb, 0, { cols: '$A:$A', sheetName: 'A' });
     expect(dnCols.value).toBe("'A'!$A:$A");
+  });
+
+  it('doubles an apostrophe in the sheet name so the reference stays readable', () => {
+    // `Bob's Sheet` is a title `validateSheetTitle` accepts. A raw `'${title}'`
+    // produced `'Bob's Sheet'!$1:$1`, which closes the quoted name after
+    // `Bob` and leaves `s Sheet'!$1:$1` as garbage.
+    const wb = createWorkbook();
+    addWorksheet(wb, "Bob's Sheet");
+    const dn = setPrintTitles(wb, 0, { rows: '$1:$1', sheetName: "Bob's Sheet" });
+    expect(dn.value).toBe("'Bob''s Sheet'!$1:$1");
+  });
+
+  it('writes a Print_Titles value getDefinedNameTarget can read back', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, "Bob's Sheet");
+    setPrintTitles(wb, 0, { rows: '$1:$1', cols: '$A:$A', sheetName: "Bob's Sheet" });
+    const targets = getDefinedNameTarget(wb, '_xlnm.Print_Titles', 0);
+    expect(targets?.map((t) => t.sheet)).toEqual(["Bob's Sheet", "Bob's Sheet"]);
+    expect(targets?.map((t) => t.range)).toEqual(['$A:$A', '$1:$1']);
   });
 
   it('setPrintTitles throws OpenXmlSchemaError when neither rows nor cols is supplied', () => {

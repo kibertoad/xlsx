@@ -403,6 +403,21 @@ export function parseSheetRange(input: string): {
 const BARE_SHEET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
+ * A sheet title wrapped in the single quotes Excel's reference syntax uses,
+ * with any apostrophe inside it doubled (`Bob's Sheet` becomes `'Bob''s
+ * Sheet'`). The doubling lives here rather than at each call site: a reference
+ * built with a raw `'${title}'` breaks on every title containing an
+ * apostrophe, and `validateSheetTitle` allows those.
+ *
+ * Use {@link formatSheetQualifiedRef} unless the caller has to quote
+ * unconditionally, which is what Excel itself does for the built-in
+ * `_xlnm.Print_Area` / `_xlnm.Print_Titles` names.
+ */
+export function quoteSheetName(sheet: string): string {
+  return `'${sheet.replace(/'/g, "''")}'`;
+}
+
+/**
  * Inverse of {@link parseSheetRange}: format a sheet title + range (or
  * single-cell ref) as `Sheet1!A1` or `'Quarter 1'!A1` per Excel's
  * sheet-qualified syntax. Single quotes inside the title are escaped by
@@ -414,5 +429,5 @@ const BARE_SHEET_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
  */
 export function formatSheetQualifiedRef(sheet: string, ref: string): string {
   if (BARE_SHEET_NAME.test(sheet)) return `${sheet}!${ref}`;
-  return `'${sheet.replace(/'/g, "''")}'!${ref}`;
+  return `${quoteSheetName(sheet)}!${ref}`;
 }
