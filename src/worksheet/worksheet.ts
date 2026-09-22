@@ -1592,7 +1592,7 @@ export function getColumnDimension(ws: Worksheet, col: number): ColumnDimension 
 
 /**
  * A width or a height a caller can ask for. Excel refuses neither of the
- * values this rejects, it reinterprets them: a `NaN` width opens as a hidden
+ * values this rejects; it reinterprets them. A `NaN` width opens as a hidden
  * zero-width column and a negative one as Excel's widest column, so what the
  * caller asked for is silently not what they get. The bulk setters skip an
  * entry on this predicate rather than throwing, so the two can never disagree

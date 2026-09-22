@@ -599,11 +599,11 @@ const serializeCols = (cols: ReadonlyMap<number, ColumnDimension>): string => {
 
 /**
  * `columnDimensions` and `rowDimensions` are documented as directly writable,
- * so a size reaches here without necessarily having passed a setter. A
- * non-finite one is the value Excel cannot carry: it opens the file and turns
- * the column into `width="0" hidden="1"`, so the column vanishes with no
- * warning. A negative size opens as something Excel renders, and a loaded
- * worksheet can carry one, so it is written back untouched.
+ * so a size reaches here without necessarily having passed a setter. Excel
+ * opens a part carrying `width="NaN"` and turns the column into
+ * `width="0" hidden="1"`, so the column vanishes with nothing to say why. A
+ * negative size is one a loaded worksheet can carry, so it is written back
+ * untouched rather than failing the save.
  */
 const assertWritableSize = (element: string, attr: string, value: number): void => {
   if (!Number.isFinite(value)) {
