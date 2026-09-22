@@ -26,7 +26,7 @@ export interface DefinedName {
 export function makeDefinedName(opts: Partial<DefinedName> & { name: string; value: string }): DefinedName {
   return {
     name: opts.name,
-    value: normalizeFormulaText(opts.value),
+    value: normalizeFormulaText(opts.value, `makeDefinedName "${opts.name}"`),
     ...(opts.scope !== undefined ? { scope: opts.scope } : {}),
     ...(opts.hidden !== undefined ? { hidden: opts.hidden } : {}),
     ...(opts.comment !== undefined ? { comment: opts.comment } : {}),

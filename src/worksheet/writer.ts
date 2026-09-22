@@ -458,7 +458,7 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   // dynamic array. We never synthesise a prefix here — we only echo what the
   // source contained — so we can't emit a form Excel didn't itself author.
   const fAttrStr = fAttrs.length > 0 ? ` ${fAttrs.join(' ')}` : '';
-  const normalized = normalizeFormulaText(f.formula);
+  const normalized = normalizeFormulaText(f.formula, `worksheet: <f> at ${ref}`);
   if ((f.t === 'normal' || f.t === 'array') && normalized.length === 0) {
     throw new OpenXmlSchemaError(`worksheet: ${f.t} formula must not be empty at ${ref}`);
   }
@@ -665,7 +665,8 @@ const serializeCfRule = (rule: ConditionalFormattingRule): string => {
   const inner: string[] = [];
   for (const f of rule.formulas) {
     const at = `priority ${rule.priority}`;
-    const text = escapeXmlTextVerbatim(normalizeFormulaText(f), 'worksheet: conditional-formatting formula', at);
+    const normalized = normalizeFormulaText(f, `worksheet: <formula> at ${at}`);
+    const text = escapeXmlTextVerbatim(normalized, 'worksheet: conditional-formatting formula', at);
     inner.push(`<formula>${text}</formula>`);
   }
   if (rule.innerXml) inner.push(rule.innerXml);
@@ -697,11 +698,13 @@ const serializeDataValidation = (dv: DataValidation): string => {
 
   const formulas: string[] = [];
   if (dv.formula1 !== undefined) {
-    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula1), 'worksheet: data-validation formula1', sqref);
+    const normalized = normalizeFormulaText(dv.formula1, `worksheet: <formula1> at ${sqref}`);
+    const text = escapeXmlTextVerbatim(normalized, 'worksheet: data-validation formula1', sqref);
     formulas.push(`<formula1>${text}</formula1>`);
   }
   if (dv.formula2 !== undefined) {
-    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula2), 'worksheet: data-validation formula2', sqref);
+    const normalized = normalizeFormulaText(dv.formula2, `worksheet: <formula2> at ${sqref}`);
+    const text = escapeXmlTextVerbatim(normalized, 'worksheet: data-validation formula2', sqref);
     formulas.push(`<formula2>${text}</formula2>`);
   }
   if (formulas.length === 0) return `<dataValidation${attrs}/>`;
