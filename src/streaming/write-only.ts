@@ -15,6 +15,7 @@ import {
   type Stylesheet,
 } from '../styles/stylesheet.js';
 import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
+import { MAX_COL } from '../utils/coordinate.js';
 import { escapeXmlAttr } from '../utils/escape.js';
 import { OpenXmlIoError } from '../utils/exceptions.js';
 import { utf8ByteLength } from '../utils/utf8.js';
@@ -219,6 +220,16 @@ const makeWriteOnlyWorksheet = (state: WorkbookState, title: string, sheetId: nu
 
   const setColumnWidth = (col: number, width: number): void => {
     if (closed) throw new OpenXmlIoError('setColumnWidth: worksheet already closed');
+    // The modelled writer validates these in `setColumnDimension`; this path
+    // formats `<col>` itself, so it has to run the same checks. Without them a
+    // `NaN` width reached the part as `width="NaN"`, which is no `xsd:double`,
+    // and an off-grid index as `min="0"` / `min="99999"`.
+    if (!Number.isInteger(col) || col < 1 || col > MAX_COL) {
+      throw new OpenXmlIoError(`setColumnWidth: col ${col} out of range [1, ${MAX_COL}]`);
+    }
+    if (!Number.isFinite(width) || width < 0) {
+      throw new OpenXmlIoError(`setColumnWidth: width must be a non-negative finite number; got ${String(width)}`);
+    }
     if (headerFlushed) {
       throw new OpenXmlIoError(
         'setColumnWidth: must be called before the first appendRow — column widths are emitted as part of the worksheet header',

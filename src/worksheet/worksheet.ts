@@ -1591,6 +1591,23 @@ export function getColumnDimension(ws: Worksheet, col: number): ColumnDimension 
 }
 
 /**
+ * A width or a height goes into the part as an `xsd:double`, and `NaN` /
+ * `Infinity` have no lexical form there: `width="NaN"` is a worksheet no
+ * schema validator accepts and Excel offers to repair. A negative one is
+ * meaningless. `setDefaultColumnWidth` and `setDefaultRowHeight` already reject
+ * both, so this is the same rule applied to the per-column and per-row setters.
+ *
+ * Excel's own ceilings (255 characters wide, 409 points tall) are deliberately
+ * not enforced: a value past them is still a well-formed double that Excel
+ * clamps on open, so rejecting one would refuse a file that works.
+ */
+const validateDimensionSize = (fn: string, field: string, value: number): void => {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new OpenXmlSchemaError(`${fn}: ${field} must be a non-negative finite number; got ${String(value)}`);
+  }
+};
+
+/**
  * Set a single-column ColumnDimension entry covering `col`. Shadows any
  * existing run that overlaps — runs are not split for now (callers that need
  * range-spanning entries can write directly into `ws.columnDimensions`).
@@ -1601,6 +1618,7 @@ export function setColumnDimension(
   opts: Partial<Omit<ColumnDimension, 'min' | 'max'>>,
 ): ColumnDimension {
   validateRowCol(1, col);
+  if (opts.width !== undefined) validateDimensionSize('setColumnDimension', 'width', opts.width);
   // Strip any existing entry that covers this column. Multi-col runs that
   // straddle `col` are dropped wholesale — phase-5 minimum scope.
   for (const [key, dim] of ws.columnDimensions) {
@@ -1613,6 +1631,7 @@ export function setColumnDimension(
 
 /** Convenience: set a column's width, leaving other fields untouched. */
 export function setColumnWidth(ws: Worksheet, col: number, width: number): ColumnDimension {
+  validateDimensionSize('setColumnWidth', 'width', width);
   const existing = getColumnDimension(ws, col);
   return setColumnDimension(ws, col, { ...existing, width, customWidth: true });
 }
@@ -1963,6 +1982,7 @@ export function getRowDimension(ws: Worksheet, row: number): RowDimension | unde
 }
 
 export function setRowDimension(ws: Worksheet, row: number, opts: Partial<RowDimension>): RowDimension {
+  if (opts.height !== undefined) validateDimensionSize('setRowDimension', 'height', opts.height);
   validateRowCol(row, 1);
   const entry = makeRowDimension(opts);
   ws.rowDimensions.set(row, entry);
@@ -1971,6 +1991,7 @@ export function setRowDimension(ws: Worksheet, row: number, opts: Partial<RowDim
 
 /** Convenience: set a row's height, marking customHeight=true. */
 export function setRowHeight(ws: Worksheet, row: number, height: number): RowDimension {
+  validateDimensionSize('setRowHeight', 'height', height);
   const existing = getRowDimension(ws, row);
   return setRowDimension(ws, row, { ...existing, height, customHeight: true });
 }
