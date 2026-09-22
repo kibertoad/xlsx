@@ -7,10 +7,10 @@
 // band. They now pair the whole band against the existing runs in one pass.
 //
 // This measures the shape of the curve rather than an absolute time, so it
-// does not encode one machine's speed. Each measurement repeats the band until
-// it is well clear of the timer's noise floor: a ratio between two
-// single-millisecond samples turns on one GC pause, which would fail a correct
-// build on a shared CI runner.
+// does not encode one machine's speed. Each measurement repeats the band
+// enough times to clear the timer's noise floor: a ratio between two
+// single-millisecond samples turns on one GC pause, which would fail a
+// correct build on a shared CI runner.
 //
 // Excluded from the default `pnpm test` run (see vitest.config.ts). Run
 // explicitly:
@@ -27,7 +27,7 @@ const PERF_GATE = process.env['PERF_GATE'] === '1';
 const SMALL_BAND = 4_000;
 const LARGE_BAND = 8_000;
 const REPEATS = 40;
-/// Linear work doubles when the band doubles. The ceiling leaves room for timer
+// Linear work doubles when the band doubles. The ceiling leaves room for timer
 // noise and for the allocation the wider band does per entry, while still
 // failing if the per-column scan comes back and squares the ratio.
 const MAX_RATIO = 3;
