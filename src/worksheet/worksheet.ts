@@ -1591,18 +1591,27 @@ export function getColumnDimension(ws: Worksheet, col: number): ColumnDimension 
 }
 
 /**
- * A width or a height goes into the part as an `xsd:double`, and `NaN` /
- * `Infinity` have no lexical form there: `width="NaN"` is a worksheet no
- * schema validator accepts and Excel offers to repair. A negative one is
- * meaningless. `setDefaultColumnWidth` and `setDefaultRowHeight` already reject
- * both, so this is the same rule applied to the per-column and per-row setters.
+ * A width or a height a caller can ask for. `NaN` and `Infinity` have no
+ * `xsd:double` form, so they reach the part as `width="NaN"`, which Excel
+ * offers to repair; a negative size has no meaning in the grid. The bulk
+ * setters skip an entry on this predicate rather than throwing, so the two can
+ * never disagree about what a usable size is.
  *
  * Excel's own ceilings (255 characters wide, 409 points tall) are deliberately
  * not enforced: a value past them is still a well-formed double that Excel
  * clamps on open, so rejecting one would refuse a file that works.
  */
+export const isUsableDimensionSize = (value: number): boolean => Number.isFinite(value) && value >= 0;
+
+/**
+ * Guards a size the caller passed by hand. Sizes already in the model are not
+ * re-checked: every mutator that flips `hidden` or `outlineLevel` re-submits
+ * the existing entry through {@link setColumnDimension}, and a worksheet read
+ * from a file can carry a negative width that has to survive a round-trip.
+ * Keeping an unwritable value out of the part is the serializer's job.
+ */
 const validateDimensionSize = (fn: string, field: string, value: number): void => {
-  if (!Number.isFinite(value) || value < 0) {
+  if (!isUsableDimensionSize(value)) {
     throw new OpenXmlSchemaError(`${fn}: ${field} must be a non-negative finite number; got ${String(value)}`);
   }
 };
@@ -1618,7 +1627,6 @@ export function setColumnDimension(
   opts: Partial<Omit<ColumnDimension, 'min' | 'max'>>,
 ): ColumnDimension {
   validateRowCol(1, col);
-  if (opts.width !== undefined) validateDimensionSize('setColumnDimension', 'width', opts.width);
   // Strip any existing entry that covers this column. Multi-col runs that
   // straddle `col` are dropped wholesale — phase-5 minimum scope.
   for (const [key, dim] of ws.columnDimensions) {
@@ -1685,9 +1693,7 @@ export function setDefaultColumnWidth(ws: Worksheet, width: number | undefined):
     delete (ws as { defaultColumnWidth?: number }).defaultColumnWidth;
     return;
   }
-  if (!Number.isFinite(width) || width < 0) {
-    throw new OpenXmlSchemaError(`setDefaultColumnWidth: width must be a non-negative number; got ${width}`);
-  }
+  validateDimensionSize('setDefaultColumnWidth', 'width', width);
   ws.defaultColumnWidth = width;
 }
 
@@ -1701,9 +1707,7 @@ export function setDefaultRowHeight(ws: Worksheet, height: number | undefined): 
     delete (ws as { defaultRowHeight?: number }).defaultRowHeight;
     return;
   }
-  if (!Number.isFinite(height) || height < 0) {
-    throw new OpenXmlSchemaError(`setDefaultRowHeight: height must be a non-negative number; got ${height}`);
-  }
+  validateDimensionSize('setDefaultRowHeight', 'height', height);
   ws.defaultRowHeight = height;
 }
 
@@ -1872,6 +1876,17 @@ const effectiveLength = (cell: Cell, wb: { styles: { cellXfs: ReadonlyArray<{ fo
 };
 
 /**
+ * Autofit derives a width from `padding` / `min` / `max` and hands it to
+ * {@link setColumnWidth}. Checking them here means the error names the option
+ * the caller passed, and lands before any column has been resized.
+ */
+const validateAutofitSizes = (fn: string, opts: { padding?: number; min?: number; max?: number }): void => {
+  if (opts.padding !== undefined) validateDimensionSize(fn, 'padding', opts.padding);
+  if (opts.min !== undefined) validateDimensionSize(fn, 'min', opts.min);
+  if (opts.max !== undefined) validateDimensionSize(fn, 'max', opts.max);
+};
+
+/**
  * Approximate autofit for a column. Scans every populated cell in `col` (or in
  * `[opts.minRow, opts.maxRow]`), measures `cellValueAsString` length, and sets
  * the column width to `max(length) + padding`, clamped to `[opts.min ?? 4,
@@ -1898,6 +1913,7 @@ export function autofitColumn(
     workbook?: { styles: { cellXfs: ReadonlyArray<{ fontId: number }>; fonts: ReadonlyArray<{ size?: number }> } };
   } = {},
 ): ColumnDimension | undefined {
+  validateAutofitSizes('autofitColumn', opts);
   const padding = opts.padding ?? 2;
   const minWidth = opts.min ?? 4;
   const maxWidth = Math.min(opts.max ?? 80, 255);
@@ -1931,6 +1947,7 @@ export function autofitColumns(
     workbook?: { styles: { cellXfs: ReadonlyArray<{ fontId: number }>; fonts: ReadonlyArray<{ size?: number }> } };
   } = {},
 ): void {
+  validateAutofitSizes('autofitColumns', opts);
   const padding = opts.padding ?? 2;
   const minWidth = opts.min ?? 4;
   const maxWidth = Math.min(opts.max ?? 80, 255);
@@ -1953,7 +1970,9 @@ export function autofitColumns(
  * - an array `[12, 16, 20]` interpreted positionally starting at
  * column `startCol` (default 1), or
  * - a `Record<number, number>` keyed by 1-based column index.
- * Each entry sets `customWidth: true`.
+ * Each entry sets `customWidth: true`. An entry that is not a usable width
+ * (not a number, non-finite, negative) is skipped, which is what lets a caller
+ * pass a sparse array.
  */
 export function setColumnWidths(
   ws: Worksheet,
@@ -1963,14 +1982,14 @@ export function setColumnWidths(
   if (Array.isArray(widths)) {
     for (let i = 0; i < widths.length; i++) {
       const w = widths[i];
-      if (typeof w !== 'number' || !Number.isFinite(w)) continue;
+      if (typeof w !== 'number' || !isUsableDimensionSize(w)) continue;
       setColumnWidth(ws, startCol + i, w);
     }
   } else {
     for (const [k, w] of Object.entries(widths as Record<number, number>)) {
       const col = Number.parseInt(k, 10);
       if (!Number.isInteger(col) || col < 1) continue;
-      if (typeof w !== 'number' || !Number.isFinite(w)) continue;
+      if (typeof w !== 'number' || !isUsableDimensionSize(w)) continue;
       setColumnWidth(ws, col, w);
     }
   }
@@ -1982,7 +2001,6 @@ export function getRowDimension(ws: Worksheet, row: number): RowDimension | unde
 }
 
 export function setRowDimension(ws: Worksheet, row: number, opts: Partial<RowDimension>): RowDimension {
-  if (opts.height !== undefined) validateDimensionSize('setRowDimension', 'height', opts.height);
   validateRowCol(row, 1);
   const entry = makeRowDimension(opts);
   ws.rowDimensions.set(row, entry);
@@ -1999,7 +2017,9 @@ export function setRowHeight(ws: Worksheet, row: number, height: number): RowDim
 /**
  * Set heights for many rows in one call. `heights` accepts an array (positional
  * from `startRow`, default 1) or a `Record<number, number>` keyed by 1-based
- * row index. Each entry sets `customHeight: true`.
+ * row index. Each entry sets `customHeight: true`. An entry that is not a
+ * usable height (not a number, non-finite, negative) is skipped, the same way
+ * {@link setColumnWidths} treats widths.
  */
 export function setRowHeights(
   ws: Worksheet,
@@ -2009,14 +2029,14 @@ export function setRowHeights(
   if (Array.isArray(heights)) {
     for (let i = 0; i < heights.length; i++) {
       const h = heights[i];
-      if (typeof h !== 'number' || !Number.isFinite(h)) continue;
+      if (typeof h !== 'number' || !isUsableDimensionSize(h)) continue;
       setRowHeight(ws, startRow + i, h);
     }
   } else {
     for (const [k, h] of Object.entries(heights as Record<number, number>)) {
       const row = Number.parseInt(k, 10);
       if (!Number.isInteger(row) || row < 1) continue;
-      if (typeof h !== 'number' || !Number.isFinite(h)) continue;
+      if (typeof h !== 'number' || !isUsableDimensionSize(h)) continue;
       setRowHeight(ws, row, h);
     }
   }

@@ -15,12 +15,13 @@ import {
   type Stylesheet,
 } from '../styles/stylesheet.js';
 import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
-import { MAX_COL } from '../utils/coordinate.js';
+import { isValidColumnNumber, MAX_COL } from '../utils/coordinate.js';
 import { escapeXmlAttr } from '../utils/escape.js';
-import { OpenXmlIoError } from '../utils/exceptions.js';
+import { OpenXmlIoError, OpenXmlSchemaError } from '../utils/exceptions.js';
 import { utf8ByteLength } from '../utils/utf8.js';
 import { makeSharedStrings } from '../workbook/shared-strings.js';
 import { validateSheetTitle } from '../workbook/workbook.js';
+import { isUsableDimensionSize } from '../worksheet/worksheet.js';
 import { serializeCell } from '../worksheet/writer.js';
 import {
   ARC_CONTENT_TYPES,
@@ -220,15 +221,15 @@ const makeWriteOnlyWorksheet = (state: WorkbookState, title: string, sheetId: nu
 
   const setColumnWidth = (col: number, width: number): void => {
     if (closed) throw new OpenXmlIoError('setColumnWidth: worksheet already closed');
-    // The modelled writer validates these in `setColumnDimension`; this path
-    // formats `<col>` itself, so it has to run the same checks. Without them a
-    // `NaN` width reached the part as `width="NaN"`, which is no `xsd:double`,
-    // and an off-grid index as `min="0"` / `min="99999"`.
-    if (!Number.isInteger(col) || col < 1 || col > MAX_COL) {
-      throw new OpenXmlIoError(`setColumnWidth: col ${col} out of range [1, ${MAX_COL}]`);
+    // This path formats `<col>` itself instead of going through
+    // `setColumnDimension`, so the grid bound and the size rule have to be
+    // checked here as well. Same error type as the modelled setter, so one
+    // `catch` covers a caller that writes through both writers.
+    if (!isValidColumnNumber(col)) {
+      throw new OpenXmlSchemaError(`setColumnWidth: col ${col} out of range [1, ${MAX_COL}]`);
     }
-    if (!Number.isFinite(width) || width < 0) {
-      throw new OpenXmlIoError(`setColumnWidth: width must be a non-negative finite number; got ${String(width)}`);
+    if (!isUsableDimensionSize(width)) {
+      throw new OpenXmlSchemaError(`setColumnWidth: width must be a non-negative finite number; got ${String(width)}`);
     }
     if (headerFlushed) {
       throw new OpenXmlIoError(
