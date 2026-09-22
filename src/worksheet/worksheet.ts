@@ -1591,15 +1591,16 @@ export function getColumnDimension(ws: Worksheet, col: number): ColumnDimension 
 }
 
 /**
- * A width or a height a caller can ask for. `NaN` and `Infinity` have no
- * `xsd:double` form, so they reach the part as `width="NaN"`, which Excel
- * offers to repair; a negative size has no meaning in the grid. The bulk
- * setters skip an entry on this predicate rather than throwing, so the two can
- * never disagree about what a usable size is.
+ * A width or a height a caller can ask for. Excel refuses neither of the
+ * values this rejects, it reinterprets them: a `NaN` width opens as a hidden
+ * zero-width column and a negative one as Excel's widest column, so what the
+ * caller asked for is silently not what they get. The bulk setters skip an
+ * entry on this predicate rather than throwing, so the two can never disagree
+ * about what a usable size is.
  *
  * Excel's own ceilings (255 characters wide, 409 points tall) are deliberately
- * not enforced: a value past them is still a well-formed double that Excel
- * clamps on open, so rejecting one would refuse a file that works.
+ * not enforced: Excel keeps a value past them as written rather than refusing
+ * it, so rejecting one here would refuse a file that opens fine.
  */
 export const isUsableDimensionSize = (value: number): boolean => Number.isFinite(value) && value >= 0;
 

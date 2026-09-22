@@ -599,10 +599,11 @@ const serializeCols = (cols: ReadonlyMap<number, ColumnDimension>): string => {
 
 /**
  * `columnDimensions` and `rowDimensions` are documented as directly writable,
- * so a size reaches here without necessarily having passed a setter. `NaN` and
- * `Infinity` have no `xsd:double` form: `width="NaN"` fails schema validation
- * and Excel offers to repair the file. A negative size is a well-formed double
- * that a loaded worksheet can carry, so it is written back untouched.
+ * so a size reaches here without necessarily having passed a setter. A
+ * non-finite one is the value Excel cannot carry: it opens the file and turns
+ * the column into `width="0" hidden="1"`, so the column vanishes with no
+ * warning. A negative size opens as something Excel renders, and a loaded
+ * worksheet can carry one, so it is written back untouched.
  */
 const assertWritableSize = (element: string, attr: string, value: number): void => {
   if (!Number.isFinite(value)) {

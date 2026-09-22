@@ -1,8 +1,8 @@
-// A `<col width>` / `<row ht>` is an `xsd:double`. `NaN` and `Infinity` have no
-// lexical form there, so `width="NaN"` reaches Excel as a part that fails
-// schema validation and gets offered for repair. A size the caller supplies is
-// refused at the setter; the serializer is the backstop for the dimension maps,
-// which the public API lets a caller write into directly.
+// Excel opens a part carrying `width="NaN"` without complaint and turns the
+// column into `width="0" hidden="1"`, so the column disappears and nothing
+// says why. A size the caller supplies is refused at the setter; the serializer
+// is the backstop for the dimension maps, which the public API lets a caller
+// write into directly.
 
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
@@ -62,8 +62,8 @@ describe('a size the caller passes in', () => {
   });
 
   it('is accepted past Excel ceilings of 255 characters and 409 points', () => {
-    // A value past them is a well-formed double that Excel clamps on open, so
-    // refusing it would refuse a file that works.
+    // Excel keeps a value past its own ceiling as written rather than refusing
+    // it, so rejecting one here would refuse a file that opens fine.
     expect(setColumnWidth(sheet(), 1, 1000).width).toBe(1000);
     expect(setRowHeight(sheet(), 1, 500).height).toBe(500);
   });
