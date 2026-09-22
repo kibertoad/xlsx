@@ -118,6 +118,26 @@ describe('the two readers agree on rich text', () => {
     });
   });
 
+  it('reads a CDATA section inside an inline string the same way', async () => {
+    const { unzipSync, zipSync } = await import('fflate');
+    const archive = unzipSync(await sharedStringPackage());
+    const dec = new TextDecoder();
+    const enc = new TextEncoder();
+    let sheet = dec.decode(archive['xl/worksheets/sheet1.xml'] as Uint8Array);
+    sheet = sheet
+      .replace(/<c r="A1" t="s"><v>0<\/v><\/c>/, '<c r="A1" t="inlineStr"><is><t><![CDATA[a<b]]></t></is></c>')
+      .replace(
+        /<c r="A2" t="s"><v>1<\/v><\/c>/,
+        '<c r="A2" t="inlineStr"><is><r><rPr><b/></rPr><t>x<![CDATA[&y]]></t></r></is></c>',
+      );
+    archive['xl/worksheets/sheet1.xml'] = enc.encode(sheet);
+    const bytes = zipSync(archive);
+    const streamed = await streamedValues(bytes);
+    expect(streamed).toEqual(await modelledValues(bytes));
+    expect(streamed[0]).toBe('a<b');
+    expect(streamed[1]).toEqual({ kind: 'rich-text', runs: [{ text: 'x&y', font: { b: true } }] });
+  });
+
   it('round-trips a write-only export through the streaming reader', async () => {
     // Write with one entry point and read with the other, which is the shape a
     // streaming export-then-verify pipeline has. These two strings fit the
