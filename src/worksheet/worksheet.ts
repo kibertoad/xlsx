@@ -1601,73 +1601,121 @@ const columnPatchOf = (dim: ColumnDimension | undefined): ColumnDimensionPatch =
 };
 
 /**
+ * File `piece` under its `min`, which is the key the rest of the map uses.
+ *
+ * A key that is already taken means the map held two runs covering the same
+ * column, or an entry filed under a key that is not its own `min`. Only one of
+ * them can hold the key, and the one already there is the one {@link
+ * getColumnDimension} answers with for those columns, so the piece gives up
+ * the columns it cannot claim and keeps the rest of its span.
+ */
+const fileColumnPiece = (ws: Worksheet, piece: ColumnDimension): void => {
+  let min = piece.min;
+  while (min <= piece.max && ws.columnDimensions.has(min)) min++;
+  if (min > piece.max) return;
+  ws.columnDimensions.set(min, min === piece.min ? piece : { ...piece, min });
+};
+
+/**
+ * Detach `cols` from the runs covering them: each covering run is removed and
+ * the columns it covered on either side are re-filed as runs of their own, so
+ * a loaded `<col min="1" max="16384" width="12"/>` survives an edit to one
+ * column in the middle of it. Returns the run each column was covered by, for
+ * the caller to derive that column's new fields from.
+ *
+ * `cols` must be ascending, free of duplicates, and already validated.
+ *
+ * One pass over the existing runs, pairing each against `cols` by binary
+ * search, so splitting a band costs O(runs * log cols + cols) rather than one
+ * scan of the whole map per column.
+ */
+const splitColumnRuns = (ws: Worksheet, cols: ReadonlyArray<number>): Map<number, ColumnDimension> => {
+  const coveringRun = new Map<number, ColumnDimension>();
+  if (cols.length === 0) return coveringRun;
+
+  // Index of the first entry of `cols` >= `from`, or cols.length when none.
+  const lowerBound = (from: number): number => {
+    let lo = 0;
+    let hi = cols.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((cols[mid] as number) < from) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+
+  // Collected during the walk and filed after it: a Map iteration also visits
+  // entries inserted while it runs, and a piece paired against `cols` a second
+  // time would be split again.
+  const pieces: ColumnDimension[] = [];
+  for (const [key, dim] of ws.columnDimensions) {
+    let i = lowerBound(dim.min);
+    if (i >= cols.length || (cols[i] as number) > dim.max) continue;
+    ws.columnDimensions.delete(key);
+    // Walk the columns inside this run, recording it as their base and keeping
+    // the gaps between them as runs in their own right.
+    let gapStart = dim.min;
+    for (; i < cols.length; i++) {
+      const col = cols[i] as number;
+      if (col > dim.max) break;
+      // First run covering a column wins, the way `getColumnDimension` resolves
+      // a column that two runs claim.
+      if (!coveringRun.has(col)) coveringRun.set(col, dim);
+      if (col > gapStart) pieces.push({ ...dim, min: gapStart, max: col - 1 });
+      gapStart = col + 1;
+    }
+    if (gapStart <= dim.max) pieces.push({ ...dim, min: gapStart, max: dim.max });
+  }
+  for (const piece of pieces) fileColumnPiece(ws, piece);
+  return coveringRun;
+};
+
+/**
  * Rewrite the entries for `cols`, deriving each column's new fields from
- * whatever run covered it before. `patch` returns the fields to keep; an
- * `undefined` or empty result leaves the column with no entry of its own.
+ * whatever run covered it before. `patch` returns the fields the column keeps;
+ * `undefined` leaves it with no entry of its own.
  *
- * A run wider than the columns being rewritten is split rather than dropped:
- * the parts of `[min, max]` that nobody asked about keep the run's fields under
- * their own keys. A loaded `<col min="1" max="16384" width="12"/>` therefore
- * survives an edit to one column in the middle of it.
- *
- * One pass over the existing runs, pairing each against the target columns by
- * binary search, so rewriting a band costs O(runs * log cols + cols) rather
- * than one scan of the whole map per column.
+ * `cols` must be ascending, free of duplicates, and already validated.
  */
 const rewriteColumnEntries = (
   ws: Worksheet,
   cols: ReadonlyArray<number>,
   patch: (existing: ColumnDimension | undefined, col: number) => ColumnDimensionPatch | undefined,
 ): void => {
-  if (cols.length === 0) return;
-  const targets = [...new Set(cols)].sort((a, b) => a - b);
-  for (const col of targets) validateRowCol(1, col);
-
-  // Index of the first target >= `from`, or targets.length when there is none.
-  const lowerBound = (from: number): number => {
-    let lo = 0;
-    let hi = targets.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if ((targets[mid] as number) < from) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo;
-  };
-
-  const coveringRun = new Map<number, ColumnDimension>();
-  const remainders: ColumnDimension[] = [];
-  for (const [key, dim] of [...ws.columnDimensions]) {
-    let i = lowerBound(dim.min);
-    if (i >= targets.length || (targets[i] as number) > dim.max) continue;
-    ws.columnDimensions.delete(key);
-    // Walk the targets inside this run, recording it as their base and keeping
-    // the gaps between them as runs in their own right.
-    let gapStart = dim.min;
-    for (; i < targets.length; i++) {
-      const col = targets[i] as number;
-      if (col > dim.max) break;
-      coveringRun.set(col, dim);
-      if (col > gapStart) remainders.push({ ...dim, min: gapStart, max: col - 1 });
-      gapStart = col + 1;
-    }
-    if (gapStart <= dim.max) remainders.push({ ...dim, min: gapStart, max: dim.max });
-  }
-
-  for (const col of targets) {
+  const coveringRun = splitColumnRuns(ws, cols);
+  for (const col of cols) {
     const fields = patch(coveringRun.get(col), col);
-    if (fields === undefined) continue;
-    const entry = makeColumnDimension(col, fields);
-    // `makeColumnDimension` drops undefined fields, so an all-undefined patch
-    // leaves nothing but the span, which is not worth an entry.
-    if (Object.keys(entry).length > 2) ws.columnDimensions.set(col, entry);
+    if (fields !== undefined) ws.columnDimensions.set(col, makeColumnDimension(col, fields));
   }
-  // After the targets, so a remainder can never overwrite one: a split run's
-  // pieces and its rewritten columns are disjoint by construction, but the
-  // insertion order is what keeps that true if the file held overlapping runs.
-  for (const piece of remainders) {
-    if (!ws.columnDimensions.has(piece.min)) ws.columnDimensions.set(piece.min, piece);
-  }
+};
+
+/**
+ * Apply one patch per column in a single pass over the runs, so a bulk edit
+ * costs one walk of the entry map rather than one walk per column.
+ */
+const applyColumnPatches = (ws: Worksheet, patches: ReadonlyMap<number, ColumnDimensionPatch>): void => {
+  const cols = [...patches.keys()].sort((a, b) => a - b);
+  for (const col of cols) validateRowCol(1, col);
+  rewriteColumnEntries(ws, cols, (existing, col) => ({
+    ...columnPatchOf(existing),
+    ...patches.get(col),
+  }));
+};
+
+/**
+ * Rewrite one column's entry from whatever run covered it, and return the
+ * entry the worksheet now holds for that column.
+ */
+const patchColumnEntry = (
+  ws: Worksheet,
+  col: number,
+  patch: (existing: ColumnDimension | undefined) => ColumnDimensionPatch,
+): ColumnDimension => {
+  validateRowCol(1, col);
+  const entry = makeColumnDimension(col, patch(splitColumnRuns(ws, [col]).get(col)));
+  ws.columnDimensions.set(col, entry);
+  return entry;
 };
 
 /**
@@ -1684,28 +1732,28 @@ export function setColumnDimension(
   col: number,
   opts: Partial<Omit<ColumnDimension, 'min' | 'max'>>,
 ): ColumnDimension {
-  validateRowCol(1, col);
-  const entry = makeColumnDimension(col, opts);
-  rewriteColumnEntries(ws, [col], () => opts);
-  // `rewriteColumnEntries` skips an entry with no fields; this returns what the
-  // column would carry either way, which is what callers read.
-  return ws.columnDimensions.get(col) ?? entry;
+  return patchColumnEntry(ws, col, () => opts);
 }
 
 /** Convenience: set a column's width, leaving other fields untouched. */
 export function setColumnWidth(ws: Worksheet, col: number, width: number): ColumnDimension {
-  const existing = getColumnDimension(ws, col);
-  return setColumnDimension(ws, col, { ...columnPatchOf(existing), width, customWidth: true });
+  return patchColumnEntry(ws, col, (existing) => ({
+    ...columnPatchOf(existing),
+    width,
+    customWidth: true,
+  }));
 }
 
 /**
- * `[fromCol, toCol]` as the column list the rewrite primitive takes, validated
- * the way each bulk helper used to validate it for itself.
+ * `[fromCol, toCol]` as the column list the rewrite primitive takes. The band
+ * is validated before it is built, so a range running past the last column is
+ * rejected instead of materialized.
  */
 const columnBand = (fn: string, fromCol: number, toCol: number): number[] => {
   if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
     throw new OpenXmlSchemaError(`${fn}: invalid column range [${fromCol}, ${toCol}]`);
   }
+  validateRowCol(1, toCol);
   const cols: number[] = [];
   for (let c = fromCol; c <= toCol; c++) cols.push(c);
   return cols;
@@ -1724,8 +1772,7 @@ const withoutColumnFields = (
 
 /** Convenience: hide a column. */
 export function hideColumn(ws: Worksheet, col: number): ColumnDimension {
-  const existing = getColumnDimension(ws, col);
-  return setColumnDimension(ws, col, { ...columnPatchOf(existing), hidden: true });
+  return patchColumnEntry(ws, col, (existing) => ({ ...columnPatchOf(existing), hidden: true }));
 }
 
 /**
@@ -1734,7 +1781,8 @@ export function hideColumn(ws: Worksheet, col: number): ColumnDimension {
  * remain).
  */
 export function unhideColumn(ws: Worksheet, col: number): void {
-  unhideColumns(ws, col, col);
+  validateRowCol(1, col);
+  rewriteColumnEntries(ws, [col], (existing) => withoutColumnFields(existing, ['hidden']));
 }
 
 /** Bulk-hide every column in `[fromCol, toCol]`. */
@@ -1831,9 +1879,6 @@ export function ungroupRows(ws: Worksheet, fromRow: number, toRow: number): void
  */
 export function groupColumns(ws: Worksheet, fromCol: number, toCol: number, level = 1): void {
   validateOutlineLevel(level);
-  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
-    throw new OpenXmlSchemaError(`groupColumns: invalid column range [${fromCol}, ${toCol}]`);
-  }
   rewriteColumnEntries(ws, columnBand('groupColumns', fromCol, toCol), (existing) => ({
     ...columnPatchOf(existing),
     outlineLevel: level,
@@ -1993,10 +2038,12 @@ export function autofitColumns(
       if (len > cur) widest.set(col, len);
     }
   }
+  const patches = new Map<number, ColumnDimensionPatch>();
   for (const [col, w] of widest) {
     if (w === 0) continue;
-    setColumnWidth(ws, col, Math.max(minWidth, Math.min(maxWidth, w + padding)));
+    patches.set(col, { width: Math.max(minWidth, Math.min(maxWidth, w + padding)), customWidth: true });
   }
+  applyColumnPatches(ws, patches);
 }
 
 /**
@@ -2011,20 +2058,22 @@ export function setColumnWidths(
   widths: ReadonlyArray<number> | Record<number, number>,
   startCol = 1,
 ): void {
+  const patches = new Map<number, ColumnDimensionPatch>();
   if (Array.isArray(widths)) {
     for (let i = 0; i < widths.length; i++) {
       const w = widths[i];
       if (typeof w !== 'number' || !Number.isFinite(w)) continue;
-      setColumnWidth(ws, startCol + i, w);
+      patches.set(startCol + i, { width: w, customWidth: true });
     }
   } else {
     for (const [k, w] of Object.entries(widths as Record<number, number>)) {
       const col = Number.parseInt(k, 10);
       if (!Number.isInteger(col) || col < 1) continue;
       if (typeof w !== 'number' || !Number.isFinite(w)) continue;
-      setColumnWidth(ws, col, w);
+      patches.set(col, { width: w, customWidth: true });
     }
   }
+  applyColumnPatches(ws, patches);
 }
 
 /** Look up a row's dimension entry. */

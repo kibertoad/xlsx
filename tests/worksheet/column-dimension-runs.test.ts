@@ -7,8 +7,10 @@ import { describe, expect, it } from 'vitest';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { addWorksheet, createWorkbook, getSheet } from '../../src/workbook/workbook.js';
 import {
+  autofitColumns,
   collapseColumnGroup,
   expandColumnGroup,
   getColumnDimension,
@@ -16,6 +18,7 @@ import {
   hideColumn,
   hideColumns,
   setCell,
+  setColumnDimension,
   setColumnWidth,
   setColumnWidths,
   ungroupColumns,
@@ -139,10 +142,20 @@ describe('bulk column edits', () => {
     expect(widths(ws, 1, 10)).toEqual([12, 12, 12, 12, 12, 12, 12, 12, 12, 12]);
   });
 
-  it('setColumnWidths assigns a different width per column in one pass', () => {
+  it('setColumnWidths splits the run once for the whole band', () => {
     const ws = withRun();
     setColumnWidths(ws, [30, 31, 32], 2);
     expect(widths(ws, 1, 6)).toEqual([12, 30, 31, 32, 12, 12]);
+    expect(getColumnDimension(ws, 2)?.customWidth).toBe(true);
+  });
+
+  it('autofitColumns keeps the rest of a run when it widens one column', () => {
+    const ws = withRun();
+    setCell(ws, 1, 3, 'a considerably longer value');
+    autofitColumns(ws);
+    expect(getColumnDimension(ws, 3)?.width).toBeGreaterThan(12);
+    expect(widths(ws, 1, 2)).toEqual([12, 12]);
+    expect(widths(ws, 4, 10)).toEqual([12, 12, 12, 12, 12, 12, 12]);
   });
 
   it('unhideColumns over a band that holds no entries is a no-op', () => {
@@ -150,5 +163,55 @@ describe('bulk column edits', () => {
     const ws = addWorksheet(wb, 'S');
     unhideColumns(ws, 1, 5);
     expect(ws.columnDimensions.size).toBe(0);
+  });
+});
+
+describe('column entries the helpers write', () => {
+  it('setColumnDimension with no fields still registers the column', () => {
+    const ws = withRun();
+    const entry = setColumnDimension(ws, 5, {});
+    expect(entry).toEqual({ min: 5, max: 5 });
+    // The caller gets the entry the sheet holds, so mutating it is a write.
+    expect(getColumnDimension(ws, 5)).toBe(entry);
+    expect(widths(ws, 4, 6)).toEqual([12, undefined, 12]);
+  });
+
+  it('rejects a band past the last column before building it', () => {
+    const ws = withRun();
+    expect(() => hideColumns(ws, 1, 50_000_000)).toThrow(OpenXmlSchemaError);
+    expect(() => hideColumns(ws, 1, 50_000_000)).toThrow(/out of range/);
+    expect(ws.columnDimensions.size).toBe(1);
+  });
+
+  it('unhideColumn rejects a column outside the sheet under its own name', () => {
+    const ws = withRun();
+    expect(() => unhideColumn(ws, 0)).toThrow(/Worksheet col 0 out of range/);
+  });
+});
+
+describe('runs that overlap each other', () => {
+  it('keeps the columns only the second run covers', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'S');
+    ws.columnDimensions.set(1, { min: 1, max: 10, width: 11 });
+    ws.columnDimensions.set(5, { min: 5, max: 20, width: 22 });
+    setColumnWidth(ws, 7, 99);
+    // 1-10 read as the first run before the edit and still do; 11-20 keep the
+    // second run's width instead of losing it with the split.
+    expect(widths(ws, 1, 20)).toEqual([
+      11, 11, 11, 11, 11, 11, 99, 11, 11, 11, 22, 22, 22, 22, 22, 22, 22, 22, 22, 22,
+    ]);
+  });
+
+  it('gives up only the columns an entry filed under a foreign key claims', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'S');
+    ws.columnDimensions.set(1, { min: 1, max: 10, width: 11 });
+    // A caller-written entry whose key is not its `min`. Column 3 is the one
+    // key the split cannot have, so it is the only one that loses its width.
+    ws.columnDimensions.set(3, { min: 50, max: 60, width: 33 });
+    setColumnWidth(ws, 2, 99);
+    expect(widths(ws, 1, 10)).toEqual([11, 99, undefined, 11, 11, 11, 11, 11, 11, 11]);
+    expect(getColumnDimension(ws, 55)?.width).toBe(33);
   });
 });

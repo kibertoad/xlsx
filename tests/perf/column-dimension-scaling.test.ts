@@ -1,21 +1,22 @@
 // Scaling gate for the bulk column-dimension helpers.
 //
-// `hideColumns` / `unhideColumns` / `groupColumns` and friends used to call
+// `hideColumns` / `unhideColumns` / `setColumnWidths` and friends used to call
 // `getColumnDimension` + `setColumnDimension` once per column, and each of
 // those scans the whole `columnDimensions` map. Hiding N columns therefore
-// scanned a map that grew as it went, which is quadratic: 2000 columns took
-// 23 ms and 4000 took 61 ms on the machine this was written on. They now pair
-// the whole band against the existing runs in one pass.
+// scanned a map that grew as it went, so the cost rose with the square of the
+// band. They now pair the whole band against the existing runs in one pass.
 //
-// This measures the shape of the curve rather than an absolute time, so it does
-// not encode one machine's speed. Excluded from the default `pnpm test` run
-// (see vitest.config.ts). Run explicitly:
+// This measures the shape of the curve rather than an absolute time, so it
+// does not encode one machine's speed. Each measurement repeats the band until
+// it is well clear of the timer's noise floor: a ratio between two
+// single-millisecond samples turns on one GC pause, which would fail a correct
+// build on a shared CI runner.
+//
+// Excluded from the default `pnpm test` run (see vitest.config.ts). Run
+// explicitly:
 //
 //   pnpm test:perf
 //   PERF_GATE=1 pnpm test:perf   # asserts the ratio, as CI does
-//
-// PERF_GATE off by default: a loaded machine can skew a ratio between two
-// millisecond-scale measurements badly enough to fail a correct build.
 
 import { describe, expect, it } from 'vitest';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
@@ -25,19 +26,22 @@ const PERF_GATE = process.env['PERF_GATE'] === '1';
 
 const SMALL_BAND = 4_000;
 const LARGE_BAND = 8_000;
-// Linear work doubles when the band doubles. A quadratic term put the observed
-// ratio near 2.7; the ceiling leaves room for timer noise and allocation
-// effects while still failing if the per-column scan comes back.
-const MAX_RATIO = 2.4;
+const REPEATS = 40;
+/// Linear work doubles when the band doubles. The ceiling leaves room for timer
+// noise and for the allocation the wider band does per entry, while still
+// failing if the per-column scan comes back and squares the ratio.
+const MAX_RATIO = 3;
 
+/** Total time to hide `count` columns on each of `REPEATS` fresh worksheets. */
 const timeHideColumns = (count: number): number => {
-  const wb = createWorkbook();
-  const ws = addWorksheet(wb, 'S');
+  const sheets = Array.from({ length: REPEATS }, () => addWorksheet(createWorkbook(), 'S'));
   const start = performance.now();
-  hideColumns(ws, 1, count);
+  for (const ws of sheets) hideColumns(ws, 1, count);
   const elapsed = performance.now() - start;
-  if (ws.columnDimensions.size !== count) {
-    throw new Error(`expected ${count} entries, got ${ws.columnDimensions.size}`);
+  for (const ws of sheets) {
+    if (ws.columnDimensions.size !== count) {
+      throw new Error(`expected ${count} entries, got ${ws.columnDimensions.size}`);
+    }
   }
   return elapsed;
 };
@@ -47,12 +51,9 @@ describe('bulk column-dimension scaling', () => {
     timeHideColumns(SMALL_BAND); // warm-up, so the first measured run is not the JIT's
     const small = timeHideColumns(SMALL_BAND);
     const large = timeHideColumns(LARGE_BAND);
-    // Guard against a divide-by-almost-zero when the small run is too fast to
-    // time; the ratio only means something once there is something to measure.
-    const ratio = large / Math.max(small, 0.5);
-    // eslint-disable-next-line no-console
+    const ratio = large / small;
     console.log(
-      `hideColumns: ${SMALL_BAND} cols ${small.toFixed(1)}ms, ${LARGE_BAND} cols ${large.toFixed(1)}ms, ratio ${ratio.toFixed(2)}`,
+      `hideColumns x${REPEATS}: ${SMALL_BAND} cols ${small.toFixed(1)}ms, ${LARGE_BAND} cols ${large.toFixed(1)}ms, ratio ${ratio.toFixed(2)}`,
     );
     if (PERF_GATE) expect(ratio).toBeLessThan(MAX_RATIO);
   });

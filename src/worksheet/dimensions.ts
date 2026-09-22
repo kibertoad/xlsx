@@ -3,19 +3,24 @@
 // `worksheet/dimensions.py`.
 //
 // **Stage 1**: width / height / hidden / customWidth / customHeight / bestFit /
-// outlineLevel + style fall-back. Multi-`<col>` runs collapse per-column
-// entries when adjacent equal entries are persisted (writer side). The reader
-// keeps one entry per `<col>` element, so a loaded sheet can hold runs spanning
-// thousands of columns; editing one column inside such a run splits it rather
-// than dropping it.
+// outlineLevel + style fall-back. The reader keeps one entry per `<col>`
+// element and the writer emits one `<col>` per entry, sorted by `min`; neither
+// side merges adjacent equal entries or splits a wide one. A loaded sheet can
+// therefore hold runs spanning thousands of columns, and editing one column
+// inside such a run splits it rather than dropping it.
 
 /**
  * Single-column-or-range dimension entry. Mirrors the OOXML `<col>` element.
- * The `min`/`max` pair always covers a contiguous run; the worksheet's
- * `columnDimensions` Map keys by `min`, so finding the run that covers an
- * arbitrary column is a scan of the runs rather than a lookup. The bulk helpers
- * in `./worksheet.js` pair a whole band against the runs in one pass instead of
- * scanning once per column.
+ * The `min`/`max` pair always covers a contiguous run, and the worksheet's
+ * `columnDimensions` Map keys each entry by its own `min`, so finding the run
+ * that covers an arbitrary column is a scan of the entries rather than a
+ * lookup. The bulk helpers in `./worksheet.js` pair a whole band against the
+ * runs in one pass instead of scanning once per column.
+ *
+ * Runs are expected not to overlap. Writing an overlapping run straight into
+ * the Map is allowed and the first entry covering a column wins, but an edit
+ * inside the overlap can only keep one of the two runs' fields for the columns
+ * they share.
  */
 export interface ColumnDimension {
   /** 1-based first column the entry covers (inclusive). */
