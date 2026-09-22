@@ -1590,10 +1590,94 @@ export function getColumnDimension(ws: Worksheet, col: number): ColumnDimension 
   return undefined;
 }
 
+/** The fields a `<col>` entry carries beyond the span it applies to. */
+type ColumnDimensionPatch = Partial<Omit<ColumnDimension, 'min' | 'max'>>;
+
+/** A run's own fields, without the span, as the `patch` callbacks want them. */
+const columnPatchOf = (dim: ColumnDimension | undefined): ColumnDimensionPatch => {
+  if (dim === undefined) return {};
+  const { min: _min, max: _max, ...patch } = dim;
+  return patch;
+};
+
 /**
- * Set a single-column ColumnDimension entry covering `col`. Shadows any
- * existing run that overlaps — runs are not split for now (callers that need
- * range-spanning entries can write directly into `ws.columnDimensions`).
+ * Rewrite the entries for `cols`, deriving each column's new fields from
+ * whatever run covered it before. `patch` returns the fields to keep; an
+ * `undefined` or empty result leaves the column with no entry of its own.
+ *
+ * A run wider than the columns being rewritten is split rather than dropped:
+ * the parts of `[min, max]` that nobody asked about keep the run's fields under
+ * their own keys. A loaded `<col min="1" max="16384" width="12"/>` therefore
+ * survives an edit to one column in the middle of it.
+ *
+ * One pass over the existing runs, pairing each against the target columns by
+ * binary search, so rewriting a band costs O(runs * log cols + cols) rather
+ * than one scan of the whole map per column.
+ */
+const rewriteColumnEntries = (
+  ws: Worksheet,
+  cols: ReadonlyArray<number>,
+  patch: (existing: ColumnDimension | undefined, col: number) => ColumnDimensionPatch | undefined,
+): void => {
+  if (cols.length === 0) return;
+  const targets = [...new Set(cols)].sort((a, b) => a - b);
+  for (const col of targets) validateRowCol(1, col);
+
+  // Index of the first target >= `from`, or targets.length when there is none.
+  const lowerBound = (from: number): number => {
+    let lo = 0;
+    let hi = targets.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((targets[mid] as number) < from) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+
+  const coveringRun = new Map<number, ColumnDimension>();
+  const remainders: ColumnDimension[] = [];
+  for (const [key, dim] of [...ws.columnDimensions]) {
+    let i = lowerBound(dim.min);
+    if (i >= targets.length || (targets[i] as number) > dim.max) continue;
+    ws.columnDimensions.delete(key);
+    // Walk the targets inside this run, recording it as their base and keeping
+    // the gaps between them as runs in their own right.
+    let gapStart = dim.min;
+    for (; i < targets.length; i++) {
+      const col = targets[i] as number;
+      if (col > dim.max) break;
+      coveringRun.set(col, dim);
+      if (col > gapStart) remainders.push({ ...dim, min: gapStart, max: col - 1 });
+      gapStart = col + 1;
+    }
+    if (gapStart <= dim.max) remainders.push({ ...dim, min: gapStart, max: dim.max });
+  }
+
+  for (const col of targets) {
+    const fields = patch(coveringRun.get(col), col);
+    if (fields === undefined) continue;
+    const entry = makeColumnDimension(col, fields);
+    // `makeColumnDimension` drops undefined fields, so an all-undefined patch
+    // leaves nothing but the span, which is not worth an entry.
+    if (Object.keys(entry).length > 2) ws.columnDimensions.set(col, entry);
+  }
+  // After the targets, so a remainder can never overwrite one: a split run's
+  // pieces and its rewritten columns are disjoint by construction, but the
+  // insertion order is what keeps that true if the file held overlapping runs.
+  for (const piece of remainders) {
+    if (!ws.columnDimensions.has(piece.min)) ws.columnDimensions.set(piece.min, piece);
+  }
+};
+
+/**
+ * Set a single-column ColumnDimension entry covering `col`. `opts` replaces the
+ * column's fields rather than merging with them.
+ *
+ * An existing run that spans `col` and other columns is split: `col` gets its
+ * own entry and the rest of the run keeps its fields. Callers that want a
+ * range-spanning entry of their own can still write directly into
+ * `ws.columnDimensions`.
  */
 export function setColumnDimension(
   ws: Worksheet,
@@ -1601,26 +1685,47 @@ export function setColumnDimension(
   opts: Partial<Omit<ColumnDimension, 'min' | 'max'>>,
 ): ColumnDimension {
   validateRowCol(1, col);
-  // Strip any existing entry that covers this column. Multi-col runs that
-  // straddle `col` are dropped wholesale — phase-5 minimum scope.
-  for (const [key, dim] of ws.columnDimensions) {
-    if (col >= dim.min && col <= dim.max) ws.columnDimensions.delete(key);
-  }
   const entry = makeColumnDimension(col, opts);
-  ws.columnDimensions.set(col, entry);
-  return entry;
+  rewriteColumnEntries(ws, [col], () => opts);
+  // `rewriteColumnEntries` skips an entry with no fields; this returns what the
+  // column would carry either way, which is what callers read.
+  return ws.columnDimensions.get(col) ?? entry;
 }
 
 /** Convenience: set a column's width, leaving other fields untouched. */
 export function setColumnWidth(ws: Worksheet, col: number, width: number): ColumnDimension {
   const existing = getColumnDimension(ws, col);
-  return setColumnDimension(ws, col, { ...existing, width, customWidth: true });
+  return setColumnDimension(ws, col, { ...columnPatchOf(existing), width, customWidth: true });
 }
+
+/**
+ * `[fromCol, toCol]` as the column list the rewrite primitive takes, validated
+ * the way each bulk helper used to validate it for itself.
+ */
+const columnBand = (fn: string, fromCol: number, toCol: number): number[] => {
+  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
+    throw new OpenXmlSchemaError(`${fn}: invalid column range [${fromCol}, ${toCol}]`);
+  }
+  const cols: number[] = [];
+  for (let c = fromCol; c <= toCol; c++) cols.push(c);
+  return cols;
+};
+
+/** Drop `keys` from a run's fields, leaving `undefined` when nothing is left. */
+const withoutColumnFields = (
+  existing: ColumnDimension | undefined,
+  keys: ReadonlyArray<keyof ColumnDimensionPatch>,
+): ColumnDimensionPatch | undefined => {
+  if (existing === undefined) return undefined;
+  const patch = columnPatchOf(existing);
+  for (const key of keys) delete patch[key];
+  return Object.keys(patch).length === 0 ? undefined : patch;
+};
 
 /** Convenience: hide a column. */
 export function hideColumn(ws: Worksheet, col: number): ColumnDimension {
   const existing = getColumnDimension(ws, col);
-  return setColumnDimension(ws, col, { ...existing, hidden: true });
+  return setColumnDimension(ws, col, { ...columnPatchOf(existing), hidden: true });
 }
 
 /**
@@ -1629,31 +1734,22 @@ export function hideColumn(ws: Worksheet, col: number): ColumnDimension {
  * remain).
  */
 export function unhideColumn(ws: Worksheet, col: number): void {
-  const existing = getColumnDimension(ws, col);
-  if (!existing) return;
-  const { hidden: _drop, ...rest } = existing;
-  const { min: _min, max: _max, ...passthrough } = rest;
-  if (Object.keys(passthrough).length === 0) {
-    ws.columnDimensions.delete(existing.min);
-  } else {
-    setColumnDimension(ws, col, passthrough);
-  }
+  unhideColumns(ws, col, col);
 }
 
 /** Bulk-hide every column in `[fromCol, toCol]`. */
 export function hideColumns(ws: Worksheet, fromCol: number, toCol: number): void {
-  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
-    throw new OpenXmlSchemaError(`hideColumns: invalid column range [${fromCol}, ${toCol}]`);
-  }
-  for (let c = fromCol; c <= toCol; c++) hideColumn(ws, c);
+  rewriteColumnEntries(ws, columnBand('hideColumns', fromCol, toCol), (existing) => ({
+    ...columnPatchOf(existing),
+    hidden: true,
+  }));
 }
 
 /** Bulk-unhide every column in `[fromCol, toCol]`. */
 export function unhideColumns(ws: Worksheet, fromCol: number, toCol: number): void {
-  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
-    throw new OpenXmlSchemaError(`unhideColumns: invalid column range [${fromCol}, ${toCol}]`);
-  }
-  for (let c = fromCol; c <= toCol; c++) unhideColumn(ws, c);
+  rewriteColumnEntries(ws, columnBand('unhideColumns', fromCol, toCol), (existing) =>
+    withoutColumnFields(existing, ['hidden']),
+  );
 }
 
 /**
@@ -1738,10 +1834,10 @@ export function groupColumns(ws: Worksheet, fromCol: number, toCol: number, leve
   if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
     throw new OpenXmlSchemaError(`groupColumns: invalid column range [${fromCol}, ${toCol}]`);
   }
-  for (let c = fromCol; c <= toCol; c++) {
-    const existing = getColumnDimension(ws, c);
-    setColumnDimension(ws, c, { ...existing, outlineLevel: level });
-  }
+  rewriteColumnEntries(ws, columnBand('groupColumns', fromCol, toCol), (existing) => ({
+    ...columnPatchOf(existing),
+    outlineLevel: level,
+  }));
 }
 
 /**
@@ -1749,22 +1845,9 @@ export function groupColumns(ws: Worksheet, fromCol: number, toCol: number, leve
  * `outlineLevel` field from each affected ColumnDimension.
  */
 export function ungroupColumns(ws: Worksheet, fromCol: number, toCol: number): void {
-  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
-    throw new OpenXmlSchemaError(`ungroupColumns: invalid column range [${fromCol}, ${toCol}]`);
-  }
-  for (let c = fromCol; c <= toCol; c++) {
-    const existing = getColumnDimension(ws, c);
-    if (!existing) continue;
-    const { outlineLevel: _drop, ...rest } = existing;
-    // setColumnDimension expects the partial-without-min-max shape.
-    const { min: _min, max: _max, ...passthrough } = rest;
-    if (Object.keys(passthrough).length === 0) {
-      // Pure outline-only entry — drop it entirely.
-      ws.columnDimensions.delete(existing.min);
-    } else {
-      setColumnDimension(ws, c, passthrough);
-    }
-  }
+  rewriteColumnEntries(ws, columnBand('ungroupColumns', fromCol, toCol), (existing) =>
+    withoutColumnFields(existing, ['outlineLevel']),
+  );
 }
 
 /**
@@ -1806,13 +1889,11 @@ export function expandRowGroup(ws: Worksheet, fromRow: number, toRow: number): v
  * from {@link groupColumns} for the collapse to render correctly.
  */
 export function collapseColumnGroup(ws: Worksheet, fromCol: number, toCol: number): void {
-  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
-    throw new OpenXmlSchemaError(`collapseColumnGroup: invalid column range [${fromCol}, ${toCol}]`);
-  }
-  for (let c = fromCol; c <= toCol; c++) {
-    const existing = getColumnDimension(ws, c);
-    setColumnDimension(ws, c, { ...existing, hidden: true, collapsed: true });
-  }
+  rewriteColumnEntries(ws, columnBand('collapseColumnGroup', fromCol, toCol), (existing) => ({
+    ...columnPatchOf(existing),
+    hidden: true,
+    collapsed: true,
+  }));
 }
 
 /**
@@ -1820,20 +1901,9 @@ export function collapseColumnGroup(ws: Worksheet, fromCol: number, toCol: numbe
  * column in `[fromCol, toCol]`. Leaves `outlineLevel` intact.
  */
 export function expandColumnGroup(ws: Worksheet, fromCol: number, toCol: number): void {
-  if (!Number.isInteger(fromCol) || !Number.isInteger(toCol) || fromCol < 1 || toCol < fromCol) {
-    throw new OpenXmlSchemaError(`expandColumnGroup: invalid column range [${fromCol}, ${toCol}]`);
-  }
-  for (let c = fromCol; c <= toCol; c++) {
-    const existing = getColumnDimension(ws, c);
-    if (!existing) continue;
-    const { hidden: _h, collapsed: _coll, ...rest } = existing;
-    const { min: _min, max: _max, ...passthrough } = rest;
-    if (Object.keys(passthrough).length === 0) {
-      ws.columnDimensions.delete(existing.min);
-    } else {
-      setColumnDimension(ws, c, passthrough);
-    }
-  }
+  rewriteColumnEntries(ws, columnBand('expandColumnGroup', fromCol, toCol), (existing) =>
+    withoutColumnFields(existing, ['hidden', 'collapsed']),
+  );
 }
 
 /**
