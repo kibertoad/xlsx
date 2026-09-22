@@ -24,7 +24,12 @@ import { OpenXmlSchemaError } from './exceptions.js';
 const ILLEGAL_RE =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: by design, these are the codepoints we replace
   /[\x00-\x1F\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
-const ESCAPED_PATTERN_RE = /(_)(x[0-9A-Fa-f]{4}_)/g;
+// Matches only the opening underscore of an `_xHHHH_` sequence, via a
+// lookahead, so the sequence's own trailing underscore stays unconsumed. Two
+// sequences can share that underscore (`_x0041_x0042_` is `_x0041_` followed
+// by `_x0042_`), and a form that consumed it protected the first sequence and
+// left the second exposed.
+const ESCAPED_PATTERN_RE = /_(?=x[0-9A-Fa-f]{4}_)/g;
 
 const toHex4 = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');
 
@@ -37,7 +42,7 @@ const toHex4 = (n: number): string => n.toString(16).toUpperCase().padStart(4, '
 export function escapeCellString(s: string): string {
   // Re-escape any existing `_xHHHH_` so it round-trips; the underscore
   // becomes `_x005F_` and the rest of the sequence is left as-is.
-  const protectedString = s.replace(ESCAPED_PATTERN_RE, '_x005F_$2');
+  const protectedString = s.replace(ESCAPED_PATTERN_RE, '_x005F_');
   return protectedString.replace(ILLEGAL_RE, (ch) => `_x${toHex4(ch.charCodeAt(0))}_`);
 }
 

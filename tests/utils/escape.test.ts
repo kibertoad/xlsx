@@ -37,6 +37,33 @@ describe('escapeCellString / unescapeCellString', () => {
     expect(unescapeCellString(esc)).toBe(literal);
   });
 
+  it('protects adjacent _xHHHH_ sequences that share an underscore', () => {
+    // `_x0041_x0042_` is two sequences whose second one starts on the first
+    // one's trailing underscore. Protecting only the first left `x0042_`
+    // exposed, and the read side decoded it: the cell came back `_x0041B`.
+    const literal = '_x0041_x0042_';
+    const esc = escapeCellString(literal);
+    expect(esc).toBe('_x005F_x0041_x005F_x0042_');
+    expect(unescapeCellString(esc)).toBe(literal);
+  });
+
+  it('protects a literal _x005F_ that opens another sequence', () => {
+    const literal = '_x005F_x0041_';
+    expect(unescapeCellString(escapeCellString(literal))).toBe(literal);
+  });
+
+  it('round-trips a run of three sequences sharing underscores', () => {
+    const literal = 'a_x0044_x0045_x0046_b';
+    expect(unescapeCellString(escapeCellString(literal))).toBe(literal);
+  });
+
+  it('leaves an underscore that opens no sequence alone', () => {
+    for (const s of ['_x0041', 'x0041_', '__x0041__', '_xZZZZ_', '_x041_']) {
+      expect(escapeCellString(s)).toBe(s.replace('_x0041_', '_x005F_x0041_'));
+      expect(unescapeCellString(escapeCellString(s))).toBe(s);
+    }
+  });
+
   it('round-trips a mix of legal and illegal characters', () => {
     const original = 'A\u0000B_x0042_C\u0007';
     const round = unescapeCellString(escapeCellString(original));
