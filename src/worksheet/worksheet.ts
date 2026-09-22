@@ -1384,6 +1384,11 @@ export function getRangeValues(ws: Worksheet, range: RangeRef): (CellValue | nul
  * cells that fit within the target's extent are copied; if larger, only the
  * source's extent is filled.
  *
+ * Source and target may overlap on the same sheet. Every source cell is read
+ * before the first one is written, so a copy that shifts by less than its own
+ * height or width lands the values the caller asked for rather than the ones
+ * the copy had already written.
+ *
  * Returns the number of cells copied.
  */
 export function copyRange(
@@ -1398,39 +1403,75 @@ export function copyRange(
   const dst = parseRange(target);
   const dr = dst.minRow - src.minRow;
   const dc = dst.minCol - src.minCol;
+  const snap = snapshotRange(ws, src, dst);
+  // Replay from the snapshot, not from `ws.rows`: with overlapping ranges on
+  // one sheet the write loop would otherwise re-read cells it had already
+  // overwritten, and a copy one row down turned [1, 2, 3] into [1, 1, 1].
+  for (const entry of snap) {
+    const newCell = setCell(dest, entry.row + dr, entry.col + dc, entry.value, entry.styleId);
+    // hyperlinkId / commentId index into the *source* worksheet's
+    // `hyperlinks` / `legacyComments` arrays. Carrying them across sheets
+    // would point at unrelated entries on the destination (or a missing
+    // slot), so we keep them only on a same-sheet copy. The actual link /
+    // comment records aren't part of the copied range, so callers needing
+    // cross-sheet link semantics should re-issue setHyperlink on the dest.
+    if (sameSheet) {
+      if (entry.hyperlinkId !== undefined) newCell.hyperlinkId = entry.hyperlinkId;
+      if (entry.commentId !== undefined) newCell.commentId = entry.commentId;
+    }
+  }
+  return snap.length;
+}
+
+/** One populated source cell, detached from the `Cell` that held it. */
+interface RangeSnapshotEntry {
+  readonly row: number;
+  readonly col: number;
+  readonly value: CellValue;
+  readonly styleId: number;
+  readonly hyperlinkId?: number;
+  readonly commentId?: number;
+}
+
+/**
+ * Populated cells of `src`, clamped to whichever of `src` / `dst` is smaller on
+ * each axis, captured before any write. Shared by {@link copyRange} and
+ * {@link moveRange}: both land cells that can sit on top of the ones they still
+ * have to read.
+ *
+ * The fields are copied out rather than the `Cell` kept by reference. `setCell`
+ * writes through an existing cell in place, so landing on a coordinate that is
+ * still queued for reading would rewrite the entry the snapshot holds for it.
+ * `value` is shared, which is safe: the object-shaped variants are frozen and
+ * `setCell` replaces the whole field rather than mutating it.
+ */
+const snapshotRange = (ws: Worksheet, src: CellRange, dst: CellRange): RangeSnapshotEntry[] => {
   const maxRowOffset = Math.min(src.maxRow - src.minRow, dst.maxRow - dst.minRow);
   const maxColOffset = Math.min(src.maxCol - src.minCol, dst.maxCol - dst.minCol);
-  let n = 0;
+  const snap: RangeSnapshotEntry[] = [];
   for (let i = 0; i <= maxRowOffset; i++) {
     const srcRow = ws.rows.get(src.minRow + i);
     if (!srcRow) continue;
     for (let j = 0; j <= maxColOffset; j++) {
       const srcCell = srcRow.get(src.minCol + j);
       if (!srcCell) continue;
-      const dstRow = src.minRow + i + dr;
-      const dstCol = src.minCol + j + dc;
-      const newCell = setCell(dest, dstRow, dstCol, srcCell.value, srcCell.styleId);
-      // hyperlinkId / commentId index into the *source* worksheet's
-      // `hyperlinks` / `legacyComments` arrays. Carrying them across sheets
-      // would point at unrelated entries on the destination (or a missing
-      // slot), so we keep them only on a same-sheet copy. The actual link /
-      // comment records aren't part of the copied range — callers needing
-      // cross-sheet link semantics should re-issue setHyperlink on the dest.
-      if (sameSheet) {
-        if (srcCell.hyperlinkId !== undefined) newCell.hyperlinkId = srcCell.hyperlinkId;
-        if (srcCell.commentId !== undefined) newCell.commentId = srcCell.commentId;
-      }
-      n++;
+      snap.push({
+        row: src.minRow + i,
+        col: src.minCol + j,
+        value: srcCell.value,
+        styleId: srcCell.styleId,
+        ...(srcCell.hyperlinkId !== undefined ? { hyperlinkId: srcCell.hyperlinkId } : {}),
+        ...(srcCell.commentId !== undefined ? { commentId: srcCell.commentId } : {}),
+      });
     }
   }
-  return n;
-}
+  return snap;
+};
 
 /**
  * Move every populated cell from `source` to `target`. Equivalent to
  * `copyRange` followed by clearing the source. When the ranges overlap on the
- * same sheet, the copy walks in the direction that preserves data — high-to-low
- * along any axis where the move shifts forward, low-to-high otherwise — so
+ * same sheet, every source cell is read before the first one is written, so
  * cells aren't overwritten before they've been read. Returns the number of
  * cells moved.
  */
@@ -1450,16 +1491,7 @@ export function moveRange(
   const maxColOffset = Math.min(src.maxCol - src.minCol, dst.maxCol - dst.minCol);
   // Snapshot the source cells so overlapping moves on the same sheet don't read
   // post-write values during the copy.
-  const snap: Array<{ row: number; col: number; cell: Cell }> = [];
-  for (let i = 0; i <= maxRowOffset; i++) {
-    const srcRow = ws.rows.get(src.minRow + i);
-    if (!srcRow) continue;
-    for (let j = 0; j <= maxColOffset; j++) {
-      const srcCell = srcRow.get(src.minCol + j);
-      if (!srcCell) continue;
-      snap.push({ row: src.minRow + i, col: src.minCol + j, cell: srcCell });
-    }
-  }
+  const snap = snapshotRange(ws, src, dst);
   // Clear the entire source band on the source sheet first so the pre-existing
   // source cells are gone before we land copies on top.
   for (let i = 0; i <= maxRowOffset; i++) {
@@ -1474,13 +1506,10 @@ export function moveRange(
   // cross-sheet rationale: those indexes are scoped to the source sheet's
   // own hyperlink / comment arrays and don't translate.
   for (const entry of snap) {
-    const { row, col, cell } = entry;
-    const dstRow = row + dr;
-    const dstCol = col + dc;
-    const newCell = setCell(dest, dstRow, dstCol, cell.value, cell.styleId);
+    const newCell = setCell(dest, entry.row + dr, entry.col + dc, entry.value, entry.styleId);
     if (sameSheet) {
-      if (cell.hyperlinkId !== undefined) newCell.hyperlinkId = cell.hyperlinkId;
-      if (cell.commentId !== undefined) newCell.commentId = cell.commentId;
+      if (entry.hyperlinkId !== undefined) newCell.hyperlinkId = entry.hyperlinkId;
+      if (entry.commentId !== undefined) newCell.commentId = entry.commentId;
     }
   }
   return snap.length;

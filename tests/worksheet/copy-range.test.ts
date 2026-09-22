@@ -75,6 +75,61 @@ describe('copyRange', () => {
     expect(a.rows.get(3)?.get(3)).toBeUndefined();
   });
 
+  it('copies down into an overlapping target without re-reading its own writes', () => {
+    // A1:A3 shifted one row down. The write loop used to read `ws.rows` as it
+    // went, so A2 was already the copy of A1 by the time it was read, and
+    // [1, 2, 3] collapsed to [1, 1, 1].
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setCell(ws, 1, 1, 1);
+    setCell(ws, 2, 1, 2);
+    setCell(ws, 3, 1, 3);
+    expect(copyRange(ws, 'A1:A3', 'A2:A4')).toBe(3);
+    expect(getRangeValues(ws, 'A1:A4')).toEqual([[1], [1], [2], [3]]);
+  });
+
+  it('copies up into an overlapping target', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setCell(ws, 2, 1, 1);
+    setCell(ws, 3, 1, 2);
+    setCell(ws, 4, 1, 3);
+    expect(copyRange(ws, 'A2:A4', 'A1:A3')).toBe(3);
+    expect(getRangeValues(ws, 'A1:A4')).toEqual([[1], [2], [3], [3]]);
+  });
+
+  it('copies right into an overlapping target', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setCell(ws, 1, 1, 1);
+    setCell(ws, 1, 2, 2);
+    setCell(ws, 1, 3, 3);
+    expect(copyRange(ws, 'A1:C1', 'B1:D1')).toBe(3);
+    expect(getRangeValues(ws, 'A1:D1')).toEqual([[1, 1, 2, 3]]);
+  });
+
+  it('copies onto itself as a no-op', () => {
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    setCell(ws, 1, 1, 1);
+    setCell(ws, 2, 1, 2);
+    expect(copyRange(ws, 'A1:A2', 'A1:A2')).toBe(2);
+    expect(getRangeValues(ws, 'A1:A2')).toEqual([[1], [2]]);
+  });
+
+  it('carries a hyperlinkId through an overlapping same-sheet copy', () => {
+    // The snapshot holds the source Cell objects, so the ids have to be read
+    // off them rather than off whatever now sits at the source coordinate.
+    const wb = createWorkbook();
+    const ws = addWorksheet(wb, 'A');
+    const a1 = setCell(ws, 1, 1, 'link');
+    a1.hyperlinkId = 7;
+    setCell(ws, 2, 1, 'plain');
+    copyRange(ws, 'A1:A2', 'A2:A3');
+    expect(ws.rows.get(2)?.get(1)?.hyperlinkId).toBe(7);
+    expect(ws.rows.get(3)?.get(1)?.hyperlinkId).toBeUndefined();
+  });
+
   it('overwrites existing cells in the target extent', () => {
     const wb = createWorkbook();
     const ws = addWorksheet(wb, 'A');
