@@ -15,11 +15,13 @@ import {
   type Stylesheet,
 } from '../styles/stylesheet.js';
 import { stylesheetToBytes } from '../styles/stylesheet-writer.js';
+import { isValidColumnNumber, MAX_COL } from '../utils/coordinate.js';
 import { escapeXmlAttr } from '../utils/escape.js';
-import { OpenXmlIoError } from '../utils/exceptions.js';
+import { OpenXmlIoError, OpenXmlSchemaError } from '../utils/exceptions.js';
 import { utf8ByteLength } from '../utils/utf8.js';
 import { makeSharedStrings } from '../workbook/shared-strings.js';
 import { validateSheetTitle } from '../workbook/workbook.js';
+import { isUsableDimensionSize } from '../worksheet/worksheet.js';
 import { serializeCell } from '../worksheet/writer.js';
 import {
   ARC_CONTENT_TYPES,
@@ -224,6 +226,16 @@ const makeWriteOnlyWorksheet = (state: WorkbookState, title: string, sheetId: nu
 
   const setColumnWidth = (col: number, width: number): void => {
     if (closed) throw new OpenXmlIoError('setColumnWidth: worksheet already closed');
+    // This path formats `<col>` itself instead of going through
+    // `setColumnDimension`, so the grid bound and the size rule have to be
+    // checked here as well. Same error type as the modelled setter, so one
+    // `catch` covers a caller that writes through both writers.
+    if (!isValidColumnNumber(col)) {
+      throw new OpenXmlSchemaError(`setColumnWidth: col ${col} out of range [1, ${MAX_COL}]`);
+    }
+    if (!isUsableDimensionSize(width)) {
+      throw new OpenXmlSchemaError(`setColumnWidth: width must be a non-negative finite number; got ${String(width)}`);
+    }
     if (headerFlushed) {
       throw new OpenXmlIoError(
         'setColumnWidth: must be called before the first appendRow — column widths are emitted as part of the worksheet header',

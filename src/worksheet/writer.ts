@@ -161,7 +161,7 @@ export function writeWorksheetXml(ws: Worksheet, ctx: WorksheetWriteContext, emi
     const row = ws.rows.get(rowIdx);
     const dim = ws.rowDimensions.get(rowIdx);
     if ((!row || row.size === 0) && !dim) continue;
-    const dimAttrs = dim ? serializeRowDimensionAttrs(dim) : '';
+    const dimAttrs = dim ? serializeRowDimensionAttrs(dim, rowIdx) : '';
     if (!row || row.size === 0) {
       emit(`<row r="${rowIdx}"${dimAttrs}/>`);
       continue;
@@ -606,12 +606,27 @@ const serializeCols = (cols: ReadonlyMap<number, ColumnDimension>): string => {
   return parts.join('');
 };
 
+/**
+ * `columnDimensions` and `rowDimensions` are documented as directly writable,
+ * so a size reaches here without necessarily having passed a setter. Excel
+ * opens a part carrying `width="NaN"` and turns the column into
+ * `width="0" hidden="1"`, so the column vanishes with nothing to say why. A
+ * negative size is one a loaded worksheet can carry, so it is written back
+ * untouched rather than failing the save.
+ */
+const assertWritableSize = (element: string, attr: string, value: number): void => {
+  if (!Number.isFinite(value)) {
+    throw new OpenXmlSchemaError(`worksheet: ${element} ${attr} must be a finite number; got ${String(value)}`);
+  }
+};
+
 const serializeColumnDimension = (dim: ColumnDimension): string => {
   let attrs = ` min="${dim.min}" max="${dim.max}"`;
   // Excel rejects `<col>` without `width` — even hidden columns need it.
   // Default to the workbook's stock 9.140625 (Calibri 11pt) so the viewport
   // width stays consistent with what Excel itself emits.
   const width = dim.width ?? 9.140625;
+  assertWritableSize(`<col min="${dim.min}" max="${dim.max}">`, 'width', width);
   attrs += ` width="${width}"`;
   if (dim.style !== undefined) attrs += ` style="${dim.style}"`;
   if (dim.hidden) attrs += ' hidden="1"';
@@ -1123,9 +1138,12 @@ const serializeHyperlinks = (links: ReadonlyArray<Hyperlink>, rels: Relationship
   return parts.join('');
 };
 
-const serializeRowDimensionAttrs = (dim: RowDimension): string => {
+const serializeRowDimensionAttrs = (dim: RowDimension, rowIdx: number): string => {
   let attrs = '';
-  if (dim.height !== undefined) attrs += ` ht="${dim.height}"`;
+  if (dim.height !== undefined) {
+    assertWritableSize(`<row r="${rowIdx}">`, 'ht', dim.height);
+    attrs += ` ht="${dim.height}"`;
+  }
   if (dim.customHeight) attrs += ' customHeight="1"';
   if (dim.hidden) attrs += ' hidden="1"';
   if (dim.outlineLevel !== undefined) attrs += ` outlineLevel="${dim.outlineLevel}"`;
