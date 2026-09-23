@@ -11,6 +11,7 @@ import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getC
 import type { Relationships } from '../packaging/relationships.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
 import { isExcelErrorToken } from '../utils/cell-error.js';
+import { requireCellTextFits } from '../utils/cell-text.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import {
   escapeXmlAttr as escapeXmlAttrShared,
@@ -380,6 +381,12 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
     // from there, and a formatted string repeated across cells costs one slot
     // instead of one copy per cell.
     const runs = (value as { kind: 'rich-text'; runs: import('../cell/rich-text.js').RichText }).runs;
+    // The ceiling is on the cell's text, so the runs count together. Adding up
+    // the run lengths answers that without joining them, which would copy the
+    // text of every rich-text cell in the sheet to run a check that passes.
+    let runLength = 0;
+    for (const run of runs) runLength += run.text.length;
+    requireCellTextFits(runLength, 'rich text', ref);
     if (stringWriter) {
       const text = stringWriter({ kind: 'rich-text', runs });
       return `<c r="${ref}"${styleAttr} t="${text.type}">${text.xml}</c>`;
@@ -395,6 +402,7 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
     return `<c r="${ref}"${styleAttr} t="b"><v>${value ? '1' : '0'}</v></c>`;
   }
   if (typeof value === 'string') {
+    requireCellTextFits(value.length, 'string', ref);
     if (stringWriter) {
       const text = stringWriter(value);
       return `<c r="${ref}"${styleAttr} t="${text.type}">${text.xml}</c>`;
@@ -489,6 +497,7 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
       // needs both the type and the `<v/>`: that is what Excel displays for a
       // formula it cannot recalculate.
       valueAttr = ' t="str"';
+      requireCellTextFits(cached.length, 'cached formula result', ref);
       const text = escapeXmlTextVerbatim(cached, 'worksheet: cached formula result', ref);
       vEl = text.length > 0 ? `<v>${text}</v>` : '<v/>';
     }

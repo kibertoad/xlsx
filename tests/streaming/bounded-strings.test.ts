@@ -92,7 +92,9 @@ describe('write-only shared-string chunking', () => {
       const sink = toBuffer();
       const wb = await createWriteOnlyWorkbook(sink);
       const ws = await wb.addWorksheet('S');
-      const value = prefix + '\u{1F600}'.repeat(20_000);
+      // 24,000 code units: past the 16,384-unit slice a pair can straddle, and
+      // inside the 32,767 Excel accepts in one cell.
+      const value = prefix + '\u{1F600}'.repeat(12_000);
       await ws.appendRow([value]);
       await ws.close();
       await wb.finalize();
