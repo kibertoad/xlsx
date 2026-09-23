@@ -60,7 +60,10 @@ export const ERROR_CODES: ReadonlySet<string> = new Set([
  * - any other string → 's'
  * - `null` / `undefined` → 'n' (empty)
  *
- * Throws nothing — returns 'n' as the no-information fallback.
+ * Throws nothing: 'n' is the no-information fallback. It reports the spelling
+ * and nothing more, so 'f' is not a promise that the formula constructors will
+ * accept the text: `'='` and `'==A1'` classify as 'f' and `setFormula` rejects
+ * both.
  */
 export function inferCellType(value: unknown): CellDataType {
   if (typeof value === 'boolean') return 'b';

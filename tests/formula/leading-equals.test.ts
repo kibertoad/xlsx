@@ -7,8 +7,10 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  bindValue,
   type FormulaValue,
   makeArrayFormula,
+  makeCell,
   makeDataTableFormula,
   makeFormula,
   makeSharedFormula,
@@ -24,7 +26,7 @@ import { workbookToBytes } from '../../src/io/save.js';
 import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import { makeStylesheet } from '../../src/styles/stylesheet.js';
 import { makeSharedStrings } from '../../src/workbook/shared-strings.js';
-import { addDefinedName } from '../../src/workbook/defined-names.js';
+import { addDefinedName, makeDefinedName } from '../../src/workbook/defined-names.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import { makeCfRule, makeConditionalFormatting } from '../../src/worksheet/conditional-formatting.js';
 import { makeDataValidation } from '../../src/worksheet/data-validations.js';
@@ -43,8 +45,8 @@ import {
 const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
-const sheetXml = (rows: string): string =>
-  `<worksheet xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheetData>${rows}</sheetData></worksheet>`;
+const sheetXml = (rows: string, afterSheetData = ''): string =>
+  `<worksheet xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheetData>${rows}</sheetData>${afterSheetData}</worksheet>`;
 
 const sheetText = (ws: Worksheet): string =>
   new TextDecoder().decode(worksheetToBytes(ws, { sharedStrings: makeSharedStrings(), styles: makeStylesheet() }));
@@ -95,6 +97,42 @@ describe('formula values normalise a leading =', () => {
     expect(makeDataTableFormula('', { ref: 'A1:A3' }).formula).toBe('');
   });
 
+  it('rejects a second = rather than stripping that one too', () => {
+    // `'==A1'` is invalid in Excel's formula bar as well, so there is nothing
+    // to recover: stripping again would store `A1`, a formula the caller never
+    // wrote, and keeping it would store the `=` this whole module removes.
+    const cell = makeCell(1, 1);
+    expect(() => makeFormula('==A1')).toThrow(OpenXmlSchemaError);
+    expect(() => makeArrayFormula('A1:A3', '= =TRANSPOSE(B1:D1)')).toThrow(OpenXmlSchemaError);
+    expect(() => makeSharedFormula(0, '==A1*2')).toThrow(OpenXmlSchemaError);
+    expect(() => makeDataTableFormula('==TABLE(B1,C1)', { ref: 'A1:A3' })).toThrow(OpenXmlSchemaError);
+    expect(() => setFormula(cell, '==A1')).toThrow(OpenXmlSchemaError);
+    expect(() => setArrayFormula(cell, 'A1:A3', '==A1')).toThrow(OpenXmlSchemaError);
+    expect(() => setSharedFormula(cell, 0, '==A1')).toThrow(OpenXmlSchemaError);
+    expect(() => setDataTableFormula(cell, '==TABLE(B1,C1)', { ref: 'A1:A3' })).toThrow(OpenXmlSchemaError);
+    // `bindValue` routes any string starting with `=` to the formula path, so
+    // it reports the same problem instead of landing `<f>=A1</f>` on the cell.
+    expect(() => bindValue(cell, '==A1')).toThrow(OpenXmlSchemaError);
+  });
+
+  it('names the call in the rejection', () => {
+    expect(() => makeFormula('==A1')).toThrow(/^makeFormula: /);
+    expect(() => makeSharedFormula(0, '==A1')).toThrow(/^makeSharedFormula: /);
+    expect(() => makeDataTableFormula('==TABLE(B1,C1)', { ref: 'A1:A3' })).toThrow(/^makeDataTableFormula: /);
+  });
+
+  it('bounds the text it quotes back, which is a whole formula', () => {
+    const long = `==${'A'.repeat(500)}`;
+    let message = '';
+    try {
+      makeFormula(long);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message).toContain('(502 chars)');
+    expect(message).not.toContain('A'.repeat(50));
+  });
+
   it('freezes the value it returns', () => {
     expect(Object.isFrozen(makeFormula('A1'))).toBe(true);
     expect(Object.isFrozen(makeArrayFormula('A1:A2', 'A1'))).toBe(true);
@@ -131,8 +169,25 @@ describe('<f> never carries a leading =', () => {
     expect(sheetText(ws)).toContain('<f t="dataTable" ref="A2:A3"/>');
   });
 
+  it('rejects a hand-built value carrying a second =, naming the cell', () => {
+    const ws = makeWorksheet('Sheet1');
+    setCell(ws, 7, 2, { kind: 'formula', t: 'normal', formula: '==A1' });
+    expect(() => sheetText(ws)).toThrow(/<f> at B7/);
+  });
+
   it('drops it on the way back out of a file that had one', () => {
     const ws = parseWorksheetXml(sheetXml('<row r="1"><c r="A1"><f>=SUM(B1:B2)</f></c></row>'), 'Sheet1', {
+      sharedStrings: [],
+    });
+    expect(formulaAt(ws, 1, 1).formula).toBe('SUM(B1:B2)');
+    expect(sheetText(ws)).toContain('<f>SUM(B1:B2)</f>');
+  });
+
+  it('repairs a file whose <f> carries a second =, rather than failing the load', () => {
+    // One malformed `<f>` must not cost the whole workbook: the file is
+    // already outside the spec, and every reading of the expression is the
+    // same once the prefix is gone.
+    const ws = parseWorksheetXml(sheetXml('<row r="1"><c r="A1"><f>==SUM(B1:B2)</f></c></row>'), 'Sheet1', {
       sharedStrings: [],
     });
     expect(formulaAt(ws, 1, 1).formula).toBe('SUM(B1:B2)');
@@ -205,6 +260,81 @@ describe('the other elements that carry OOXML formula text', () => {
     const xml = new TextDecoder().decode(unzipSync(await workbookToBytes(wb))['xl/workbook.xml']);
     expect(xml).toContain('<definedName name="Constructed">Sheet1!$A$1</definedName>');
     expect(xml).toContain('<definedName name="HandBuilt">Sheet1!$A$2</definedName>');
+  });
+});
+
+describe('a second = in the other elements that carry formula text', () => {
+  it('is rejected by each constructor, naming where the text came from', () => {
+    expect(() => makeDefinedName({ name: 'Doubled', value: '==Sheet1!$A$1' })).toThrow(
+      /^makeDefinedName "Doubled": /,
+    );
+    expect(() => makeCfRule({ type: 'expression', priority: 3, formulas: ['==$A$1>0'] })).toThrow(
+      /^makeCfRule at priority 3: /,
+    );
+    expect(() => makeDataValidation({ type: 'custom', sqref: 'A1', formula1: '==$A$1>0' })).toThrow(
+      /^makeDataValidation formula1: /,
+    );
+    expect(() =>
+      makeDataValidation({ type: 'whole', operator: 'between', sqref: 'A1', formula1: '$A$2', formula2: '==$A$3' }),
+    ).toThrow(/^makeDataValidation formula2: /);
+  });
+
+  it('is rejected on save when a hand-built value carries it, naming the element', async () => {
+    const dvSheet = makeWorksheet('Sheet1');
+    const dv = makeDataValidation({ type: 'custom', sqref: 'A1', formula1: '$A$1>0' });
+    addDataValidation(dvSheet, { ...dv, formula1: '==$A$1>0' });
+    expect(() => sheetText(dvSheet)).toThrow(/<formula1> at A1/);
+
+    const cfSheet = makeWorksheet('Sheet1');
+    const rule = makeCfRule({ type: 'expression', priority: 4, formulas: [] });
+    addConditionalFormatting(
+      cfSheet,
+      makeConditionalFormatting({ sqref: 'A1:A5', rules: [{ ...rule, formulas: ['==$A$1>0'] }] }),
+    );
+    expect(() => sheetText(cfSheet)).toThrow(/<formula> at priority 4/);
+
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Sheet1');
+    wb.definedNames.push({ name: 'HandBuilt', value: '==Sheet1!$A$2' });
+    await expect(workbookToBytes(wb)).rejects.toThrow(/<definedName> "HandBuilt"/);
+  });
+
+  it('is repaired, not refused, when it comes out of a file', () => {
+    const ws = parseWorksheetXml(
+      sheetXml(
+        '',
+        '<conditionalFormatting sqref="A1:A5"><cfRule type="expression" priority="1">' +
+          '<formula>==$A$1&gt;0</formula></cfRule></conditionalFormatting>' +
+          '<dataValidations count="1"><dataValidation type="custom" sqref="A1">' +
+          '<formula1>==$A$1&gt;0</formula1></dataValidation></dataValidations>',
+      ),
+      'Sheet1',
+      { sharedStrings: [] },
+    );
+    expect(ws.conditionalFormatting[0]?.rules[0]?.formulas[0]).toBe('$A$1>0');
+    expect(ws.dataValidations[0]?.formula1).toBe('$A$1>0');
+
+    const xml = sheetText(ws);
+    expect(xml).toContain('<formula>$A$1&gt;0</formula>');
+    expect(xml).toContain('<formula1>$A$1&gt;0</formula1>');
+  });
+
+  it('is repaired in a <definedName> a producer wrote wrong', async () => {
+    const { unzipSync, zipSync } = await import('fflate');
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Sheet1');
+    wb.definedNames.push(makeDefinedName({ name: 'Total', value: 'Sheet1!$A$1' }));
+
+    const archive = unzipSync(await workbookToBytes(wb));
+    const part = 'xl/workbook.xml';
+    const entry = archive[part];
+    if (!entry) throw new Error(`no ${part} in the package`);
+    archive[part] = new TextEncoder().encode(
+      new TextDecoder().decode(entry).replace('>Sheet1!$A$1<', '>==Sheet1!$A$1<'),
+    );
+
+    const reloaded = await loadWorkbook(fromBuffer(zipSync(archive)));
+    expect(reloaded.definedNames[0]?.value).toBe('Sheet1!$A$1');
   });
 });
 
