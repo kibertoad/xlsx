@@ -23,7 +23,14 @@ import {
 } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
 import type { AutoFilter } from './auto-filter.js';
-import { type CellRange, parseRange, rangeContainsCell, rangesOverlap, rangeToString } from './cell-range.js';
+import {
+  type CellRange,
+  parseRange,
+  rangeContainsCell,
+  rangesOverlap,
+  rangeToString,
+  shiftRange,
+} from './cell-range.js';
 import type { LegacyComment } from './comments.js';
 import { makeLegacyComment } from './comments.js';
 import type { ConditionalFormatting } from './conditional-formatting.js';
@@ -1375,16 +1382,30 @@ export function getRangeValues(ws: Worksheet, range: RangeRef): (CellValue | nul
 /**
  * Copy every populated cell from `source` to `target` (within the same
  * worksheet, or across worksheets via `targetWs`). Cells are shallow-cloned:
- * `value` and `styleId` carry over but `row`/`col` are rewritten. The target's
- * existing cells in the destination extent are overwritten; cells outside are
- * untouched.
+ * `value` and `styleId` carry over but `row` / `col` are rewritten.
  *
- * The source and target ranges define the top-left corner — their dimensions
+ * The source and target ranges define the top-left corner; their dimensions
  * need not match. If the target range is smaller than the source, only the
  * cells that fit within the target's extent are copied; if larger, only the
  * source's extent is filled.
  *
- * Returns the number of cells copied.
+ * The landing rectangle is replaced whole, the way pasting over a selection in
+ * Excel replaces it: a coordinate whose source cell is empty ends up empty
+ * rather than keeping what the destination held. Cells outside the landing
+ * rectangle are untouched.
+ *
+ * Source and target may overlap on the same sheet. Every source cell is read
+ * before the first one is written, so a copy that shifts by less than its own
+ * height or width lands the values the caller asked for rather than the ones
+ * the copy had already written.
+ *
+ * `targetWs` has to belong to the same workbook as `ws`. `styleId` is an index
+ * into that workbook's `cellXfs` and nothing here can retarget it, so cells
+ * copied into a second workbook's sheet arrive wearing whichever style happens
+ * to occupy the same slot over there.
+ *
+ * Returns the number of populated cells copied. Coordinates blanked because
+ * their source cell was empty don't count.
  */
 export function copyRange(
   ws: Worksheet,
@@ -1398,41 +1419,31 @@ export function copyRange(
   const dst = parseRange(target);
   const dr = dst.minRow - src.minRow;
   const dc = dst.minCol - src.minCol;
-  const maxRowOffset = Math.min(src.maxRow - src.minRow, dst.maxRow - dst.minRow);
-  const maxColOffset = Math.min(src.maxCol - src.minCol, dst.maxCol - dst.minCol);
-  let n = 0;
-  for (let i = 0; i <= maxRowOffset; i++) {
-    const srcRow = ws.rows.get(src.minRow + i);
-    if (!srcRow) continue;
-    for (let j = 0; j <= maxColOffset; j++) {
-      const srcCell = srcRow.get(src.minCol + j);
-      if (!srcCell) continue;
-      const dstRow = src.minRow + i + dr;
-      const dstCol = src.minCol + j + dc;
-      const newCell = setCell(dest, dstRow, dstCol, srcCell.value, srcCell.styleId);
-      // hyperlinkId / commentId index into the *source* worksheet's
-      // `hyperlinks` / `legacyComments` arrays. Carrying them across sheets
-      // would point at unrelated entries on the destination (or a missing
-      // slot), so we keep them only on a same-sheet copy. The actual link /
-      // comment records aren't part of the copied range — callers needing
-      // cross-sheet link semantics should re-issue setHyperlink on the dest.
-      if (sameSheet) {
-        if (srcCell.hyperlinkId !== undefined) newCell.hyperlinkId = srcCell.hyperlinkId;
-        if (srcCell.commentId !== undefined) newCell.commentId = srcCell.commentId;
-      }
-      n++;
-    }
-  }
-  return n;
+  const band = copiedExtent(src, dst);
+  const landing = shiftRange(band, dr, dc);
+  // Overlapping on one sheet, reading as we write would re-read cells already
+  // overwritten, and a copy one row down turned [1, 2, 3] into [1, 1, 1].
+  // Detaching first also keeps the clear below from eating a source cell that
+  // hasn't been read yet. Nowhere else can the source move under us, so stream
+  // it and skip the intermediate array.
+  const cells = sameSheet && rangesOverlap(band, landing) ? detachCells(ws, band) : getCellsInRange(ws, band);
+  clearRange(dest, landing);
+  return landCells(dest, cells, dr, dc, sameSheet);
 }
 
 /**
- * Move every populated cell from `source` to `target`. Equivalent to
- * `copyRange` followed by clearing the source. When the ranges overlap on the
- * same sheet, the copy walks in the direction that preserves data — high-to-low
- * along any axis where the move shifts forward, low-to-high otherwise — so
- * cells aren't overwritten before they've been read. Returns the number of
- * cells moved.
+ * Move every populated cell from `source` to `target`, clearing the source
+ * band behind it. Extent clamping, whole-rectangle replacement at the landing
+ * site and the same-workbook requirement on `targetWs` all match
+ * {@link copyRange}.
+ *
+ * Not a copy followed by a clear: where the ranges overlap on one sheet, a
+ * trailing clear of the source would take cells the move had just landed
+ * there. The source band is read, then cleared, then written, so
+ * `moveRange(ws, 'A1:A3', 'A2:A4')` over `[1, 2, 3]` leaves `[_, 1, 2, 3]`
+ * where copy-then-clear leaves `[_, _, _, 3]`.
+ *
+ * Returns the number of populated cells moved.
  */
 export function moveRange(
   ws: Worksheet,
@@ -1446,45 +1457,80 @@ export function moveRange(
   const dst = parseRange(target);
   const dr = dst.minRow - src.minRow;
   const dc = dst.minCol - src.minCol;
-  const maxRowOffset = Math.min(src.maxRow - src.minRow, dst.maxRow - dst.minRow);
-  const maxColOffset = Math.min(src.maxCol - src.minCol, dst.maxCol - dst.minCol);
-  // Snapshot the source cells so overlapping moves on the same sheet don't read
-  // post-write values during the copy.
-  const snap: Array<{ row: number; col: number; cell: Cell }> = [];
-  for (let i = 0; i <= maxRowOffset; i++) {
-    const srcRow = ws.rows.get(src.minRow + i);
-    if (!srcRow) continue;
-    for (let j = 0; j <= maxColOffset; j++) {
-      const srcCell = srcRow.get(src.minCol + j);
-      if (!srcCell) continue;
-      snap.push({ row: src.minRow + i, col: src.minCol + j, cell: srcCell });
-    }
-  }
-  // Clear the entire source band on the source sheet first so the pre-existing
-  // source cells are gone before we land copies on top.
-  for (let i = 0; i <= maxRowOffset; i++) {
-    const rowIdx = src.minRow + i;
-    const srcRow = ws.rows.get(rowIdx);
-    if (!srcRow) continue;
-    for (let j = 0; j <= maxColOffset; j++) srcRow.delete(src.minCol + j);
-    if (srcRow.size === 0) ws.rows.delete(rowIdx);
-  }
-  // Replay the snapshot into the destination — value, styleId, and (only on
-  // a same-sheet move) hyperlinkId / commentId. See copyRange for the
-  // cross-sheet rationale: those indexes are scoped to the source sheet's
-  // own hyperlink / comment arrays and don't translate.
-  for (const entry of snap) {
-    const { row, col, cell } = entry;
-    const dstRow = row + dr;
-    const dstCol = col + dc;
-    const newCell = setCell(dest, dstRow, dstCol, cell.value, cell.styleId);
-    if (sameSheet) {
-      if (cell.hyperlinkId !== undefined) newCell.hyperlinkId = cell.hyperlinkId;
-      if (cell.commentId !== undefined) newCell.commentId = cell.commentId;
-    }
-  }
-  return snap.length;
+  const band = copiedExtent(src, dst);
+  // Always detached, never streamed: the source band is cleared before the
+  // write, so a lazy read would reach coordinates that are already gone.
+  const cells = detachCells(ws, band);
+  clearRange(ws, band);
+  clearRange(dest, shiftRange(band, dr, dc));
+  return landCells(dest, cells, dr, dc, sameSheet);
 }
+
+/**
+ * The part of `src` that a copy to `dst` actually reads: `src` clamped to
+ * whichever rectangle is smaller on each axis, still anchored at `src`'s
+ * top-left. Shifting the result by the copy's offset gives the landing
+ * rectangle, which keeps the cells read and the cells replaced derived from
+ * one calculation instead of two that have to be kept in step.
+ */
+const copiedExtent = (src: CellRange, dst: CellRange): CellRange => ({
+  minRow: src.minRow,
+  minCol: src.minCol,
+  maxRow: src.minRow + Math.min(src.maxRow - src.minRow, dst.maxRow - dst.minRow),
+  maxCol: src.minCol + Math.min(src.maxCol - src.minCol, dst.maxCol - dst.minCol),
+});
+
+/**
+ * Lift the cells of `band` out of `ws.rows` so a later write can't rewrite one
+ * that is still queued for reading: `setCell` writes through an existing cell
+ * in place, and `clearRange` drops it outright.
+ *
+ * `value` is shared with the original rather than cloned, the same aliasing
+ * `setCell` already creates by storing a caller's `Date` directly. Mutating
+ * one of the object-shaped variants through either cell is visible through the
+ * other.
+ */
+const detachCells = (ws: Worksheet, band: CellRange): Cell[] => {
+  const detached: Cell[] = [];
+  for (const cell of getCellsInRange(ws, band)) {
+    const copy = makeCell(cell.row, cell.col, cell.value, cell.styleId);
+    if (cell.hyperlinkId !== undefined) copy.hyperlinkId = cell.hyperlinkId;
+    if (cell.commentId !== undefined) copy.commentId = cell.commentId;
+    detached.push(copy);
+  }
+  return detached;
+};
+
+/**
+ * Write `cells` into `dest` offset by (dr, dc), returning how many landed.
+ * Callers clear the landing rectangle first, so every write starts from a
+ * fresh cell and can't inherit a hyperlink or comment from whatever used to
+ * sit there.
+ *
+ * `carryIds` is false across sheets: hyperlinkId / commentId index into the
+ * source worksheet's own `hyperlinks` / `legacyComments` arrays, so on another
+ * sheet they'd point at an unrelated record or past the end. The link and
+ * comment records themselves aren't part of the copied range, so callers
+ * needing cross-sheet link semantics re-issue setHyperlink on the destination.
+ */
+const landCells = (
+  dest: Worksheet,
+  cells: Iterable<Cell>,
+  dr: number,
+  dc: number,
+  carryIds: boolean,
+): number => {
+  let n = 0;
+  for (const cell of cells) {
+    const landed = setCell(dest, cell.row + dr, cell.col + dc, cell.value, cell.styleId);
+    if (carryIds) {
+      if (cell.hyperlinkId !== undefined) landed.hyperlinkId = cell.hyperlinkId;
+      if (cell.commentId !== undefined) landed.commentId = cell.commentId;
+    }
+    n++;
+  }
+  return n;
+};
 
 /**
  * Read all populated values in a single column. Returns one `(CellValue |

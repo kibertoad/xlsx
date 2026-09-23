@@ -133,6 +133,9 @@ dist
 # Stores VSCode versions used for testing VSCode extensions
 .vscode-test
 
+# JetBrains per-user workspace state
+.idea/
+
 # pnpm
 .pnpm-store
 # Nix flake / direnv local state
