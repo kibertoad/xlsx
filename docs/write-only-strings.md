@@ -39,8 +39,9 @@ Public method signatures and cell values are unchanged. ZIP bytes, string IDs,
 and the shared/inline representation may differ from earlier releases; code
 that inspects raw XML must accept both forms. With the same row order, options,
 and pinned `mtime`, output remains deterministic within this implementation.
-Streaming reads preserve text values but flatten rich-text formatting, as they
-do for shared strings; model-based reads preserve the runs.
+Streaming reads report the same cell values model-based reads do, rich text
+included: a shared or inline string built from `<r>` runs arrives as
+`{ kind: 'rich-text', runs }` rather than as the runs joined.
 
 ## Memory scope and tradeoffs
 

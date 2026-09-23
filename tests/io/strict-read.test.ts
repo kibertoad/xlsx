@@ -32,9 +32,8 @@ for (const file of ['sample.strict.xlsx', 'SimpleStrict.xlsx']) {
           if (ref?.kind !== 'worksheet') throw new Error('expected worksheet');
           for (const cell of row) {
             const value = getCell(ref.sheet, cell.row, cell.col)?.value ?? null;
-            const expected = typeof value === 'object' && value !== null && !(value instanceof Date)
-              ? value.kind === 'formula' ? value.cachedValue ?? null
-                : value.kind === 'rich-text' ? value.runs.map((r) => r.text).join('') : value
+            const expected = typeof value === 'object' && value !== null && !(value instanceof Date) && value.kind === 'formula'
+              ? value.cachedValue ?? null
               : value;
             expect(cell.value).toEqual(expected);
           }
