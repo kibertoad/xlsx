@@ -1,6 +1,7 @@
 // Tests for getDefinedNameTarget — DefinedName.value → parsed legs.
 
 import { describe, expect, it } from 'vitest';
+import { OpenXmlSchemaError } from '../../src/utils/exceptions.js';
 import {
   addDefinedName,
   addDefinedNameForRange,
@@ -41,6 +42,27 @@ describe('getDefinedNameTarget', () => {
     expect(targets?.[0]?.sheet).toBe('Data');
     expect(targets?.[0]?.range).toBe('$1:$1');
     expect(targets?.[1]?.range).toBe('$A:$A');
+  });
+
+  it('resolves an unqualified leg against the sheet the name is scoped to', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Data');
+    addWorksheet(wb, 'Report');
+    addDefinedName(wb, { name: '_xlnm.Print_Area', value: "$A$1:$E$20,'Data'!B2", scope: 1 });
+    const targets = getDefinedNameTarget(wb, '_xlnm.Print_Area', 1);
+    expect(targets?.map((t) => t.sheet)).toEqual(['Report', 'Data']);
+    expect(targets?.[0]).toEqual({
+      sheet: 'Report',
+      range: '$A$1:$E$20',
+      bounds: { minRow: 1, minCol: 1, maxRow: 20, maxCol: 5 },
+    });
+  });
+
+  it('still throws on an unqualified leg of a workbook-scoped name', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Data');
+    addDefinedName(wb, { name: 'Z', value: 'A1:B2' });
+    expect(() => getDefinedNameTarget(wb, 'Z')).toThrow(OpenXmlSchemaError);
   });
 
   it('returns undefined when the defined name does not exist', () => {

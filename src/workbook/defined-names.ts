@@ -125,6 +125,10 @@ export const getDefinedName = (
  * `Sheet!$1:$1,Sheet!$A:$A`) yield one entry per leg; a plain `Sheet!A1:B5`
  * yields a single-element array.
  *
+ * A leg with no sheet prefix on a sheet-scoped name resolves to the sheet the
+ * scope points at. Files written by other tools, and by earlier versions of
+ * `setPrintArea`, store `_xlnm.Print_Area` that way.
+ *
  * Returns `undefined` when the name doesn't exist; throws when the value can't
  * be parsed (e.g. a constant or a non-range formula — defined names are
  * sometimes used for things like `=42` or `=SUM(A:A)` which aren't ranges).
@@ -164,7 +168,13 @@ export const getDefinedNameTarget = (
     current += c;
   }
   if (current.length > 0) legs.push(current);
-  return legs.map((leg) => parseSheetRange(leg));
+  return legs.map((leg) => parseDefinedNameLeg(wb, dn, leg));
+};
+
+const parseDefinedNameLeg = (wb: Workbook, dn: DefinedName, leg: string): DefinedNameTarget => {
+  const scopeTitle = dn.scope === undefined ? undefined : wb.sheets[dn.scope]?.sheet.title;
+  if (scopeTitle === undefined || leg.includes('!')) return parseSheetRange(leg);
+  return parseSheetRange(`${quoteSheetName(scopeTitle)}!${leg.trim()}`);
 };
 
 /**
