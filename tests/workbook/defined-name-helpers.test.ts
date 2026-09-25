@@ -84,6 +84,27 @@ describe('setPrintArea / setPrintTitles', () => {
     expect(targets?.map((t) => t.range)).toEqual(['A1:B2', 'D1:E2']);
   });
 
+  it('setPrintArea drops a leading = before qualifying', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    expect(setPrintArea(wb, 0, '=A1:E20').value).toBe('Report!A1:E20');
+  });
+
+  it('setPrintArea trims every leg, qualified or not', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Quarter 1');
+    setPrintArea(wb, 0, "A1:B2, 'Quarter 1'!D1:E2");
+    const targets = getDefinedNameTarget(wb, '_xlnm.Print_Area', 0);
+    expect(targets?.map((t) => t.sheet)).toEqual(['Quarter 1', 'Quarter 1']);
+  });
+
+  it('setPrintArea throws on an empty leg', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    expect(() => setPrintArea(wb, 0, 'A1:B2,,D1:E2')).toThrow(OpenXmlSchemaError);
+    expect(() => setPrintArea(wb, 0, '')).toThrow(OpenXmlSchemaError);
+  });
+
   it('setPrintArea throws when sheetIndex names no sheet', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Report');

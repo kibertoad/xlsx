@@ -273,9 +273,13 @@ export const setPrintArea = (wb: Workbook, sheetIndex: number, ref: string): Def
     );
   }
   const title = sheet.sheet.title;
-  const value = splitDefinedNameLegs(ref)
-    .map((leg) => (leg.includes('!') ? leg : formatSheetQualifiedRef(title, leg.trim())))
-    .join(',');
+  // Normalised before qualifying: `'=A1:E20'` would otherwise become
+  // `Report!=A1:E20`, which makeDefinedName can no longer repair.
+  const legs = splitDefinedNameLegs(normalizeFormulaText(ref)).map((leg) => leg.trim());
+  if (legs.length === 0 || legs.includes('')) {
+    throw new OpenXmlSchemaError(`setPrintArea: "${ref}" has an empty range`);
+  }
+  const value = legs.map((leg) => (leg.includes('!') ? leg : formatSheetQualifiedRef(title, leg))).join(',');
   return addDefinedName(wb, {
     name: '_xlnm.Print_Area',
     value,
