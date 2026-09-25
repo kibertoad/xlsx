@@ -20,6 +20,7 @@ import {
   setFormula,
   setSharedFormula,
 } from '../../src/cell/cell.js';
+import { inferCellType } from '../../src/utils/inference.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
@@ -113,6 +114,14 @@ describe('formula values normalise a leading =', () => {
     // `bindValue` routes any string starting with `=` to the formula path, so
     // it reports the same problem instead of landing `<f>=A1</f>` on the cell.
     expect(() => bindValue(cell, '==A1')).toThrow(OpenXmlSchemaError);
+    expect(() => bindValue(cell, '= ')).toThrow(OpenXmlSchemaError);
+  });
+
+  it('binds a lone = as text, as Excel stores it', () => {
+    const cell = makeCell(1, 1);
+    bindValue(cell, '=');
+    expect(cell.value).toBe('=');
+    expect(inferCellType('=')).toBe('s');
   });
 
   it('names the call in the rejection', () => {
