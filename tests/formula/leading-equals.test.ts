@@ -329,9 +329,9 @@ describe('a second = in the other elements that carry formula text', () => {
     const part = 'xl/workbook.xml';
     const entry = archive[part];
     if (!entry) throw new Error(`no ${part} in the package`);
-    archive[part] = new TextEncoder().encode(
-      new TextDecoder().decode(entry).replace('>Sheet1!$A$1<', '>==Sheet1!$A$1<'),
-    );
+    const patched = new TextDecoder().decode(entry).replace('>Sheet1!$A$1<', () => '>==Sheet1!$A$1<');
+    expect(patched).toContain('>==Sheet1!$A$1</definedName>');
+    archive[part] = new TextEncoder().encode(patched);
 
     const reloaded = await loadWorkbook(fromBuffer(zipSync(archive)));
     expect(reloaded.definedNames[0]?.value).toBe('Sheet1!$A$1');
