@@ -26,7 +26,7 @@ export interface DefinedName {
 export function makeDefinedName(opts: Partial<DefinedName> & { name: string; value: string }): DefinedName {
   return {
     name: opts.name,
-    value: normalizeFormulaText(opts.value),
+    value: normalizeFormulaText(opts.value, `makeDefinedName "${opts.name}"`),
     ...(opts.scope !== undefined ? { scope: opts.scope } : {}),
     ...(opts.hidden !== undefined ? { hidden: opts.hidden } : {}),
     ...(opts.comment !== undefined ? { comment: opts.comment } : {}),
@@ -35,7 +35,7 @@ export function makeDefinedName(opts: Partial<DefinedName> & { name: string; val
 
 // ---- Workbook ergonomic helpers -----------------------------------------
 
-import { type CellRangeBoundaries, formatSheetQualifiedRef, parseSheetRange } from '../utils/coordinate.js';
+import { type CellRangeBoundaries, parseSheetRange, quoteSheetName } from '../utils/coordinate.js';
 import type { Worksheet } from '../worksheet/worksheet.js';
 import { getRangeAddress } from '../worksheet/worksheet.js';
 import type { Workbook } from './workbook.js';
@@ -254,16 +254,17 @@ export const listPrintTitles = (wb: Workbook): ReadonlyArray<DefinedName> =>
  * Define the print-area for a given sheet. Excel uses the built-in
  * `_xlnm.Print_Area` defined name with sheet scope.
  *
- * `ref` may be a plain range (`'A1:E20'`), which is qualified with the title of
- * the sheet at `sheetIndex`, or an already sheet-qualified one
- * (`"'Report'!$A$1:$E$20"`), which is stored as given. A multi-area print range
- * is a comma-separated list and each leg is qualified on its own, since Excel
- * reads an unqualified leg as belonging to whatever sheet is active rather than
- * to this one.
+ * `ref` may be a plain range (`'A1:E20'`), which is qualified with the quoted
+ * title of the sheet at `sheetIndex` (`'Report'!A1:E20`), or an already
+ * sheet-qualified one (`"'Report'!$A$1:$E$20"`), which is stored as given. A
+ * multi-area print range is a comma-separated list and each leg is qualified on
+ * its own, since Excel reads an unqualified leg as belonging to whatever sheet
+ * is active rather than to this one.
  *
- * Throws {@link OpenXmlSchemaError} when `sheetIndex` names no sheet on `wb`:
- * the value has to carry that sheet's title, and a name scoped to a sheet that
- * does not exist is one Excel reports as an error in the Name Manager.
+ * Throws {@link OpenXmlSchemaError} when `sheetIndex` names no worksheet on
+ * `wb`, when `ref` or one of its legs is empty, or when a qualified leg names a
+ * different sheet. Excel treats a print area that points outside its own
+ * worksheet as invalid.
  */
 export const setPrintArea = (wb: Workbook, sheetIndex: number, ref: string): DefinedName => {
   const sheet = wb.sheets[sheetIndex];
@@ -273,13 +274,32 @@ export const setPrintArea = (wb: Workbook, sheetIndex: number, ref: string): Def
     );
   }
   const title = sheet.sheet.title;
+  if (sheet.kind !== 'worksheet') {
+    throw new OpenXmlSchemaError(
+      `setPrintArea: sheetIndex ${sheetIndex} is the chartsheet "${title}", which has no cells to print`,
+    );
+  }
   // Normalised before qualifying: `'=A1:E20'` would otherwise become
-  // `Report!=A1:E20`, which makeDefinedName can no longer repair.
-  const legs = splitDefinedNameLegs(normalizeFormulaText(ref)).map((leg) => leg.trim());
+  // `'Report'!=A1:E20`, which makeDefinedName can no longer repair.
+  const legs = splitDefinedNameLegs(normalizeFormulaText(ref, 'setPrintArea')).map((leg) => leg.trim());
   if (legs.length === 0 || legs.includes('')) {
     throw new OpenXmlSchemaError(`setPrintArea: "${ref}" has an empty range`);
   }
-  const value = legs.map((leg) => (leg.includes('!') ? leg : formatSheetQualifiedRef(title, leg))).join(',');
+  // Excel quotes the title for built-in names whether or not it needs it, and
+  // an unquoted `A1` or `TRUE` title would read as a cell or a boolean.
+  const prefix = quoteSheetName(title);
+  const value = legs
+    .map((leg) => {
+      if (!leg.includes('!')) return `${prefix}!${leg}`;
+      const legSheet = parseSheetRange(leg).sheet;
+      if (legSheet.toLowerCase() !== title.toLowerCase()) {
+        throw new OpenXmlSchemaError(
+          `setPrintArea: "${leg}" names sheet "${legSheet}", but the print area belongs to "${title}"`,
+        );
+      }
+      return leg;
+    })
+    .join(',');
   return addDefinedName(wb, {
     name: '_xlnm.Print_Area',
     value,
@@ -298,10 +318,15 @@ export const setPrintTitles = (
   opts: { rows?: string; cols?: string; sheetName: string },
 ): DefinedName => {
   const parts: string[] = [];
-  // The wire form is "Sheet!$1:$1,Sheet!$A:$A"; both refs share the sheet
-  // prefix.
-  if (opts.cols !== undefined) parts.push(`'${opts.sheetName}'!${opts.cols}`);
-  if (opts.rows !== undefined) parts.push(`'${opts.sheetName}'!${opts.rows}`);
+  // The wire form is "'Sheet'!$1:$1,'Sheet'!$A:$A"; both refs share the sheet
+  // prefix, quoted the way Excel quotes it for this built-in name whether or
+  // not the title needs it. `quoteSheetName` doubles an apostrophe inside the
+  // title, which a raw `'${title}'` did not: `Bob's Sheet` produced
+  // `'Bob's Sheet'!$1:$1`, a reference neither Excel nor `parseSheetRange`
+  // can read.
+  const prefix = quoteSheetName(opts.sheetName);
+  if (opts.cols !== undefined) parts.push(`${prefix}!${opts.cols}`);
+  if (opts.rows !== undefined) parts.push(`${prefix}!${opts.rows}`);
   if (parts.length === 0) {
     throw new OpenXmlSchemaError('setPrintTitles: at least one of rows or cols must be set');
   }

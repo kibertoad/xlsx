@@ -101,23 +101,18 @@ export function sharedStringCount(table: SharedStringsTable): number {
 
 // ---- read ------------------------------------------------------------------
 
-/** Concatenate every `<t>` text node found inside an arbitrary XmlNode tree. */
+/**
+ * Concatenate the `<t>` children of a `CT_Rst` body. Each element is decoded on
+ * its own, so text carried by two `<t>` cannot combine into an `_xHHHH_`
+ * sequence that was in neither half: that is how the writer escaped them, and
+ * how the streaming reader (src/streaming/read-only.ts) decodes them.
+ */
 const collectText = (node: XmlNode): string => {
-  // Most common case: a direct `<si><t>x</t></si>` — bypass the recursion.
-  if (node.children.length === 1) {
-    const only = node.children[0];
-    if (only && only.name === T_TAG) return unescapeCellString(only.text ?? '');
-  }
   let out = '';
   for (const child of node.children) {
-    if (child.name === T_TAG) {
-      out += child.text ?? '';
-    } else if (child.name === R_TAG) {
-      const t = findChild(child, T_TAG);
-      if (t?.text) out += t.text;
-    }
+    if (child.name === T_TAG) out += unescapeCellString(child.text ?? '');
   }
-  return unescapeCellString(out);
+  return out;
 };
 
 /**

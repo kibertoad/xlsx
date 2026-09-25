@@ -219,9 +219,13 @@ export async function* iterParse(input: SaxInput): AsyncIterableIterator<SaxEven
   parser.on('closetag', (node: SaxesCloseTag) => {
     queue.push({ kind: 'end', name: qname(node.uri, node.local) });
   });
-  parser.on('text', (text: string) => {
+  const pushText = (text: string): void => {
     if (text.length > 0) queue.push({ kind: 'text', text });
-  });
+  };
+  parser.on('text', pushText);
+  // A CDATA section is character data like any other. saxes reports it on its
+  // own event, so without this `<t><![CDATA[a<b]]></t>` would read as empty.
+  parser.on('cdata', pushText);
 
   const drain = function* (): IterableIterator<SaxEvent> {
     for (;;) {

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { fromBuffer } from '../../src/io/node.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { workbookToBytes } from '../../src/io/save.js';
-import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
+import { addChartsheet, addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
 import {
   addDefinedName,
   getDefinedName,
@@ -53,7 +53,7 @@ describe('setPrintArea / setPrintTitles', () => {
     expect(dn.name).toBe('_xlnm.Print_Area');
     // Excel reads an unqualified print area as belonging to whatever sheet is
     // active, so the value has to name the sheet the scope points at.
-    expect(dn.value).toBe('Report!A1:E20');
+    expect(dn.value).toBe("'Report'!A1:E20");
     expect(dn.scope).toBe(0);
   });
 
@@ -63,16 +63,38 @@ describe('setPrintArea / setPrintTitles', () => {
     expect(setPrintArea(wb, 0, '$A$1:$E$20').value).toBe("'Quarter 1'!$A$1:$E$20");
   });
 
+  it('setPrintArea quotes a title that would otherwise read as a cell or a boolean', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'A1');
+    addWorksheet(wb, 'TRUE');
+    expect(setPrintArea(wb, 0, 'A1:E20').value).toBe("'A1'!A1:E20");
+    expect(setPrintArea(wb, 1, 'A1:E20').value).toBe("'TRUE'!A1:E20");
+  });
+
+  it('setPrintArea doubles an apostrophe in the title', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, "Bob's Sheet");
+    expect(setPrintArea(wb, 0, 'A1:E20').value).toBe("'Bob''s Sheet'!A1:E20");
+  });
+
   it('setPrintArea leaves an already-qualified ref alone', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Report');
     expect(setPrintArea(wb, 0, "'Report'!$A$1:$E$20").value).toBe("'Report'!$A$1:$E$20");
+    expect(setPrintArea(wb, 0, 'report!A1:E20').value).toBe('report!A1:E20');
+  });
+
+  it('setPrintArea throws when a leg names a different sheet', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    addWorksheet(wb, 'Other');
+    expect(() => setPrintArea(wb, 0, 'A1:B2,Other!D1:E2')).toThrow(OpenXmlSchemaError);
   });
 
   it('setPrintArea qualifies every leg of a multi-area range', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Report');
-    expect(setPrintArea(wb, 0, 'A1:B2,D1:E2').value).toBe('Report!A1:B2,Report!D1:E2');
+    expect(setPrintArea(wb, 0, 'A1:B2,D1:E2').value).toBe("'Report'!A1:B2,'Report'!D1:E2");
   });
 
   it('setPrintArea writes a value getDefinedNameTarget can read back', () => {
@@ -87,7 +109,7 @@ describe('setPrintArea / setPrintTitles', () => {
   it('setPrintArea drops a leading = before qualifying', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Report');
-    expect(setPrintArea(wb, 0, '=A1:E20').value).toBe('Report!A1:E20');
+    expect(setPrintArea(wb, 0, '=A1:E20').value).toBe("'Report'!A1:E20");
   });
 
   it('setPrintArea trims every leg, qualified or not', () => {
@@ -111,6 +133,13 @@ describe('setPrintArea / setPrintTitles', () => {
     expect(() => setPrintArea(wb, 3, 'A1:E20')).toThrow(OpenXmlSchemaError);
   });
 
+  it('setPrintArea throws when sheetIndex names a chartsheet', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, 'Report');
+    addChartsheet(wb, 'Chart1');
+    expect(() => setPrintArea(wb, 1, 'A1:E20')).toThrow(OpenXmlSchemaError);
+  });
+
   it('setPrintTitles formats both rows + cols with sheet prefix', () => {
     const wb = createWorkbook();
     addWorksheet(wb, 'Report');
@@ -125,6 +154,25 @@ describe('setPrintArea / setPrintTitles', () => {
     expect(dnRows.value).toBe("'A'!$1:$1");
     const dnCols = setPrintTitles(wb, 0, { cols: '$A:$A', sheetName: 'A' });
     expect(dnCols.value).toBe("'A'!$A:$A");
+  });
+
+  it('doubles an apostrophe in the sheet name so the reference stays readable', () => {
+    // `Bob's Sheet` is a title `validateSheetTitle` accepts. A raw `'${title}'`
+    // produced `'Bob's Sheet'!$1:$1`, which closes the quoted name after
+    // `Bob` and leaves `s Sheet'!$1:$1` as garbage.
+    const wb = createWorkbook();
+    addWorksheet(wb, "Bob's Sheet");
+    const dn = setPrintTitles(wb, 0, { rows: '$1:$1', sheetName: "Bob's Sheet" });
+    expect(dn.value).toBe("'Bob''s Sheet'!$1:$1");
+  });
+
+  it('writes a Print_Titles value getDefinedNameTarget can read back', () => {
+    const wb = createWorkbook();
+    addWorksheet(wb, "Bob's Sheet");
+    setPrintTitles(wb, 0, { rows: '$1:$1', cols: '$A:$A', sheetName: "Bob's Sheet" });
+    const targets = getDefinedNameTarget(wb, '_xlnm.Print_Titles', 0);
+    expect(targets?.map((t) => t.sheet)).toEqual(["Bob's Sheet", "Bob's Sheet"]);
+    expect(targets?.map((t) => t.range)).toEqual(['$A:$A', '$1:$1']);
   });
 
   it('setPrintTitles throws OpenXmlSchemaError when neither rows nor cols is supplied', () => {
@@ -143,7 +191,7 @@ describe('setPrintArea / setPrintTitles', () => {
     const wb2 = await loadWorkbook(fromBuffer(bytes));
     const pa = getDefinedName(wb2, '_xlnm.Print_Area', 0);
     const pt = getDefinedName(wb2, '_xlnm.Print_Titles', 0);
-    expect(pa?.value).toBe('A!A1:E20');
+    expect(pa?.value).toBe("'A'!A1:E20");
     expect(pt?.value).toBe("'A'!$1:$1");
   });
 });

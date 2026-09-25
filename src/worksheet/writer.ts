@@ -11,6 +11,7 @@ import { type Cell, type CellValue, type ExcelErrorCode, type FormulaValue, getC
 import type { Relationships } from '../packaging/relationships.js';
 import type { Stylesheet } from '../styles/stylesheet.js';
 import { isExcelErrorToken } from '../utils/cell-error.js';
+import { requireCellTextFits } from '../utils/cell-text.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import {
   escapeXmlAttr as escapeXmlAttrShared,
@@ -160,7 +161,7 @@ export function writeWorksheetXml(ws: Worksheet, ctx: WorksheetWriteContext, emi
     const row = ws.rows.get(rowIdx);
     const dim = ws.rowDimensions.get(rowIdx);
     if ((!row || row.size === 0) && !dim) continue;
-    const dimAttrs = dim ? serializeRowDimensionAttrs(dim) : '';
+    const dimAttrs = dim ? serializeRowDimensionAttrs(dim, rowIdx) : '';
     if (!row || row.size === 0) {
       emit(`<row r="${rowIdx}"${dimAttrs}/>`);
       continue;
@@ -380,6 +381,12 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
     // from there, and a formatted string repeated across cells costs one slot
     // instead of one copy per cell.
     const runs = (value as { kind: 'rich-text'; runs: import('../cell/rich-text.js').RichText }).runs;
+    // The ceiling is on the cell's text, so the runs count together. Adding up
+    // the run lengths answers that without joining them, which would copy the
+    // text of every rich-text cell in the sheet to run a check that passes.
+    let runLength = 0;
+    for (const run of runs) runLength += run.text.length;
+    requireCellTextFits(runLength, 'rich text', ref);
     if (stringWriter) {
       const text = stringWriter({ kind: 'rich-text', runs });
       return `<c r="${ref}"${styleAttr} t="${text.type}">${text.xml}</c>`;
@@ -395,6 +402,7 @@ export const serializeCell = (cell: Cell, ctx: WorksheetWriteContext, stringWrit
     return `<c r="${ref}"${styleAttr} t="b"><v>${value ? '1' : '0'}</v></c>`;
   }
   if (typeof value === 'string') {
+    requireCellTextFits(value.length, 'string', ref);
     if (stringWriter) {
       const text = stringWriter(value);
       return `<c r="${ref}"${styleAttr} t="${text.type}">${text.xml}</c>`;
@@ -458,7 +466,7 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
   // dynamic array. We never synthesise a prefix here — we only echo what the
   // source contained — so we can't emit a form Excel didn't itself author.
   const fAttrStr = fAttrs.length > 0 ? ` ${fAttrs.join(' ')}` : '';
-  const normalized = normalizeFormulaText(f.formula);
+  const normalized = normalizeFormulaText(f.formula, `worksheet: <f> at ${ref}`);
   if ((f.t === 'normal' || f.t === 'array') && normalized.length === 0) {
     throw new OpenXmlSchemaError(`worksheet: ${f.t} formula must not be empty at ${ref}`);
   }
@@ -489,6 +497,7 @@ const serializeFormulaCell = (ref: string, styleAttr: string, f: FormulaValue): 
       // needs both the type and the `<v/>`: that is what Excel displays for a
       // formula it cannot recalculate.
       valueAttr = ' t="str"';
+      requireCellTextFits(cached.length, 'cached formula result', ref);
       const text = escapeXmlTextVerbatim(cached, 'worksheet: cached formula result', ref);
       vEl = text.length > 0 ? `<v>${text}</v>` : '<v/>';
     }
@@ -597,12 +606,27 @@ const serializeCols = (cols: ReadonlyMap<number, ColumnDimension>): string => {
   return parts.join('');
 };
 
+/**
+ * `columnDimensions` and `rowDimensions` are documented as directly writable,
+ * so a size reaches here without necessarily having passed a setter. Excel
+ * opens a part carrying `width="NaN"` and turns the column into
+ * `width="0" hidden="1"`, so the column vanishes with nothing to say why. A
+ * negative size is one a loaded worksheet can carry, so it is written back
+ * untouched rather than failing the save.
+ */
+const assertWritableSize = (element: string, attr: string, value: number): void => {
+  if (!Number.isFinite(value)) {
+    throw new OpenXmlSchemaError(`worksheet: ${element} ${attr} must be a finite number; got ${String(value)}`);
+  }
+};
+
 const serializeColumnDimension = (dim: ColumnDimension): string => {
   let attrs = ` min="${dim.min}" max="${dim.max}"`;
   // Excel rejects `<col>` without `width` — even hidden columns need it.
   // Default to the workbook's stock 9.140625 (Calibri 11pt) so the viewport
   // width stays consistent with what Excel itself emits.
   const width = dim.width ?? 9.140625;
+  assertWritableSize(`<col min="${dim.min}" max="${dim.max}">`, 'width', width);
   attrs += ` width="${width}"`;
   if (dim.style !== undefined) attrs += ` style="${dim.style}"`;
   if (dim.hidden) attrs += ' hidden="1"';
@@ -665,7 +689,8 @@ const serializeCfRule = (rule: ConditionalFormattingRule): string => {
   const inner: string[] = [];
   for (const f of rule.formulas) {
     const at = `priority ${rule.priority}`;
-    const text = escapeXmlTextVerbatim(normalizeFormulaText(f), 'worksheet: conditional-formatting formula', at);
+    const normalized = normalizeFormulaText(f, `worksheet: <formula> at ${at}`);
+    const text = escapeXmlTextVerbatim(normalized, 'worksheet: conditional-formatting formula', at);
     inner.push(`<formula>${text}</formula>`);
   }
   if (rule.innerXml) inner.push(rule.innerXml);
@@ -697,11 +722,13 @@ const serializeDataValidation = (dv: DataValidation): string => {
 
   const formulas: string[] = [];
   if (dv.formula1 !== undefined) {
-    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula1), 'worksheet: data-validation formula1', sqref);
+    const normalized = normalizeFormulaText(dv.formula1, `worksheet: <formula1> at ${sqref}`);
+    const text = escapeXmlTextVerbatim(normalized, 'worksheet: data-validation formula1', sqref);
     formulas.push(`<formula1>${text}</formula1>`);
   }
   if (dv.formula2 !== undefined) {
-    const text = escapeXmlTextVerbatim(normalizeFormulaText(dv.formula2), 'worksheet: data-validation formula2', sqref);
+    const normalized = normalizeFormulaText(dv.formula2, `worksheet: <formula2> at ${sqref}`);
+    const text = escapeXmlTextVerbatim(normalized, 'worksheet: data-validation formula2', sqref);
     formulas.push(`<formula2>${text}</formula2>`);
   }
   if (formulas.length === 0) return `<dataValidation${attrs}/>`;
@@ -1111,9 +1138,12 @@ const serializeHyperlinks = (links: ReadonlyArray<Hyperlink>, rels: Relationship
   return parts.join('');
 };
 
-const serializeRowDimensionAttrs = (dim: RowDimension): string => {
+const serializeRowDimensionAttrs = (dim: RowDimension, rowIdx: number): string => {
   let attrs = '';
-  if (dim.height !== undefined) attrs += ` ht="${dim.height}"`;
+  if (dim.height !== undefined) {
+    assertWritableSize(`<row r="${rowIdx}">`, 'ht', dim.height);
+    attrs += ` ht="${dim.height}"`;
+  }
   if (dim.customHeight) attrs += ' customHeight="1"';
   if (dim.hidden) attrs += ' hidden="1"';
   if (dim.outlineLevel !== undefined) attrs += ` outlineLevel="${dim.outlineLevel}"`;

@@ -120,7 +120,7 @@ export function makeCfRule(
   return {
     type: opts.type,
     priority: opts.priority,
-    formulas: (opts.formulas ?? []).map((f) => normalizeFormulaText(f)),
+    formulas: (opts.formulas ?? []).map((f) => normalizeFormulaText(f, `makeCfRule at priority ${opts.priority}`)),
     ...(opts.dxfId !== undefined ? { dxfId: opts.dxfId } : {}),
     ...(opts.stopIfTrue !== undefined ? { stopIfTrue: opts.stopIfTrue } : {}),
     ...(opts.operator !== undefined ? { operator: opts.operator } : {}),

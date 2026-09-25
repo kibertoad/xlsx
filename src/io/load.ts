@@ -32,6 +32,7 @@ import {
 } from '../packaging/relationships.js';
 import { parseStylesheetXml } from '../styles/stylesheet-reader.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
+import { repairFormulaTextFromFile } from '../utils/formula-text.js';
 import type { DefinedName } from '../workbook/defined-names.js';
 import { makeDefinedName } from '../workbook/defined-names.js';
 import { parseSharedStringsXml, type SharedStringsTable } from '../workbook/shared-strings.js';
@@ -270,7 +271,7 @@ function parseDefinedNames(workbookRoot: XmlNode): DefinedName[] {
   for (const node of findChildren(wrapper, DEFINED_NAME_TAG)) {
     const name = node.attrs['name'];
     if (!name) throw new OpenXmlSchemaError("workbook.xml: <definedName> is missing 'name'");
-    const value = node.text ?? '';
+    const value = repairFormulaTextFromFile(node.text ?? '');
     const opts: Partial<DefinedName> & { name: string; value: string } = { name, value };
     const scopeAttr = node.attrs['localSheetId'];
     if (scopeAttr !== undefined) {
