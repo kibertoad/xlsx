@@ -136,18 +136,23 @@ export const getDefinedNameTarget = (
 ): DefinedNameTarget[] | undefined => {
   const dn = getDefinedName(wb, name, scope);
   if (!dn) return undefined;
-  // Defined-name values use `,` as the leg separator. Sheet titles can
-  // themselves contain commas inside `'...'` quotes — split on commas that
-  // aren't inside an unbalanced single-quoted segment.
+  return splitDefinedNameLegs(dn.value).map((leg) => parseSheetRange(leg));
+};
+
+/**
+ * Split a defined-name value on the `,` that separates its legs. A sheet title
+ * can hold a comma of its own inside `'...'` quotes, so only commas outside a
+ * quoted segment count. A doubled `''` is the escape for a literal apostrophe
+ * and does not end the segment.
+ */
+const splitDefinedNameLegs = (value: string): string[] => {
   const legs: string[] = [];
   let current = '';
   let inQuote = false;
-  for (let i = 0; i < dn.value.length; i++) {
-    const c = dn.value[i];
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
     if (c === "'") {
-      // Doubled `''` inside a quoted run is the escape for a literal apostrophe
-      // — skip the second one without flipping the state.
-      if (inQuote && dn.value[i + 1] === "'") {
+      if (inQuote && value[i + 1] === "'") {
         current += "''";
         i++;
         continue;
@@ -164,7 +169,7 @@ export const getDefinedNameTarget = (
     current += c;
   }
   if (current.length > 0) legs.push(current);
-  return legs.map((leg) => parseSheetRange(leg));
+  return legs;
 };
 
 /**
@@ -248,11 +253,56 @@ export const listPrintTitles = (wb: Workbook): ReadonlyArray<DefinedName> =>
 /**
  * Define the print-area for a given sheet. Excel uses the built-in
  * `_xlnm.Print_Area` defined name with sheet scope.
+ *
+ * `ref` may be a plain range (`'A1:E20'`), which is qualified with the quoted
+ * title of the sheet at `sheetIndex` (`'Report'!A1:E20`), or an already
+ * sheet-qualified one (`"'Report'!$A$1:$E$20"`), which is stored as given. A
+ * multi-area print range is a comma-separated list and each leg is qualified on
+ * its own, since Excel reads an unqualified leg as belonging to whatever sheet
+ * is active rather than to this one.
+ *
+ * Throws {@link OpenXmlSchemaError} when `sheetIndex` names no worksheet on
+ * `wb`, when `ref` or one of its legs is empty, or when a qualified leg names a
+ * different sheet. Excel treats a print area that points outside its own
+ * worksheet as invalid.
  */
 export const setPrintArea = (wb: Workbook, sheetIndex: number, ref: string): DefinedName => {
+  const sheet = wb.sheets[sheetIndex];
+  if (sheet === undefined) {
+    throw new OpenXmlSchemaError(
+      `setPrintArea: sheetIndex ${sheetIndex} names no sheet on this workbook (it has ${wb.sheets.length})`,
+    );
+  }
+  const title = sheet.sheet.title;
+  if (sheet.kind !== 'worksheet') {
+    throw new OpenXmlSchemaError(
+      `setPrintArea: sheetIndex ${sheetIndex} is the chartsheet "${title}", which has no cells to print`,
+    );
+  }
+  // Normalised before qualifying: `'=A1:E20'` would otherwise become
+  // `'Report'!=A1:E20`, which makeDefinedName can no longer repair.
+  const legs = splitDefinedNameLegs(normalizeFormulaText(ref, 'setPrintArea')).map((leg) => leg.trim());
+  if (legs.length === 0 || legs.includes('')) {
+    throw new OpenXmlSchemaError(`setPrintArea: "${ref}" has an empty range`);
+  }
+  // Excel quotes the title for built-in names whether or not it needs it, and
+  // an unquoted `A1` or `TRUE` title would read as a cell or a boolean.
+  const prefix = quoteSheetName(title);
+  const value = legs
+    .map((leg) => {
+      if (!leg.includes('!')) return `${prefix}!${leg}`;
+      const legSheet = parseSheetRange(leg).sheet;
+      if (legSheet.toLowerCase() !== title.toLowerCase()) {
+        throw new OpenXmlSchemaError(
+          `setPrintArea: "${leg}" names sheet "${legSheet}", but the print area belongs to "${title}"`,
+        );
+      }
+      return leg;
+    })
+    .join(',');
   return addDefinedName(wb, {
     name: '_xlnm.Print_Area',
-    value: ref,
+    value,
     scope: sheetIndex,
   });
 };
