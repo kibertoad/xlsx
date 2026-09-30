@@ -139,6 +139,8 @@ describe('translateRange', () => {
     ['$DEF:$FOV', 25, 25, '$DEF:$FOV'],
     ['HA:$JA', -5, -15, 'GL:$JA'],
     ['named1', -33, 33, 'named1'],
+    ['Sheet1!named1', -33, 33, 'Sheet1!named1'],
+    ["'My Sheet'!named1", 1, 1, "'My Sheet'!named1"],
     ['A15', -3, 4, 'E12'],
     ['$AB303', 3, 2, '$AB306'],
     ['YY$101', 4, 2, 'ZA$101'],
@@ -176,6 +178,10 @@ describe('translateFormula', () => {
     ['', 'A1', 'B2', ''],
   ])('translate %s from %s → %s', (formula, origin, dest, expected) => {
     expect(translateFormula(formula, origin, { dest })).toBe(expected);
+  });
+
+  it('keeps the sheet on a sheet-qualified name', () => {
+    expect(translateFormula("=SUM('My Sheet'!myName)+A1", 'A1', { dest: 'A2' })).toBe("=SUM('My Sheet'!myName)+A2");
   });
 
   it('explicit row/col delta', () => {
