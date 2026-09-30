@@ -12,7 +12,7 @@ import {
   translateRow,
   translatorRender,
 } from '../../src/formula/translate.js';
-import { MAX_ROW } from '../../src/utils/coordinate.js';
+import { MAX_COL, MAX_ROW } from '../../src/utils/coordinate.js';
 
 // --- regex tests (mirrors openpyxl test_translate.test_*_re) ---------------
 
@@ -87,16 +87,18 @@ describe('translateRow', () => {
     expect(translateRow(input, delta as number)).toBe(expected);
   });
 
-  it('throws when shift would underflow', () => {
-    expect(() => translateRow('12', -15)).toThrowError(TranslatorError);
+  it('wraps a shift above row 1 to the bottom of the grid', () => {
+    expect(translateRow('12', -15)).toBe('1048573');
   });
 
-  it('throws when shift would overflow past the last row', () => {
-    // translateCol has always raised at both ends, because there are no column
-    // letters past XFD to hand back. This direction used to produce A1048581,
-    // a reference no spreadsheet can resolve.
-    expect(() => translateRow('1048576', 1)).toThrowError(TranslatorError);
-    expect(() => translateRow('1', MAX_ROW)).toThrowError(TranslatorError);
+  it('wraps a shift past the last row to the top of the grid', () => {
+    expect(translateRow('1048576', 1)).toBe('1');
+    expect(translateRow('1', MAX_ROW)).toBe('1');
+  });
+
+  it('throws on a delta that is not a whole number of rows', () => {
+    expect(() => translateRow('3', Number.NaN)).toThrowError(TranslatorError);
+    expect(() => translateRow('3', 1.5)).toThrowError(TranslatorError);
   });
 
   it('still allows a shift that lands on the last row', () => {
@@ -119,23 +121,43 @@ describe('translateCol', () => {
     expect(translateCol(input, delta as number)).toBe(expected);
   });
 
-  it('throws when shift would underflow', () => {
-    expect(() => translateCol('AA', -100)).toThrowError(TranslatorError);
+  it('wraps a shift left of A to the right edge of the grid', () => {
+    expect(translateCol('AA', -100)).toBe('XCI');
   });
 
-  it('throws when shift would overflow past the last column', () => {
-    expect(() => translateCol('XFD', 1)).toThrowError(TranslatorError);
+  it('wraps a shift past XFD to the left edge of the grid', () => {
+    expect(translateCol('XFD', 1)).toBe('A');
+    expect(translateCol('A', MAX_COL)).toBe('A');
+  });
+
+  it('throws on a delta that is not a whole number of columns', () => {
+    expect(() => translateCol('A', Number.NaN)).toThrowError(TranslatorError);
+    expect(() => translateCol('A', 1.5)).toThrowError(TranslatorError);
   });
 });
 
+// Expected values are what Excel 16 shows after loading the same shift as a
+// two-cell shared formula.
 describe('translateFormula against the grid edges', () => {
-  it('refuses to shift a reference off the bottom', () => {
-    expect(() => translateFormula('=A1048576', 'A1', { rowDelta: 5 })).toThrowError(TranslatorError);
+  it.each([
+    ['=B1048576', '=B1'],
+    ['=B1048576+1', '=B1+1'],
+    ['=B1048576+C1', '=B1+C2'],
+    ['=$B$1048576+B1', '=$B$1048576+B2'],
+    ['=SUM(B1048570:B1048576)', '=SUM(B1048571:B1)'],
+    ['=SUM(B1:B1048576)', '=SUM(B2:B1)'],
+    ['=A2000000', '=A2000000'],
+  ])('%s one row down → %s', (formula, expected) => {
+    expect(translateFormula(formula, 'A1048575', { dest: 'A1048576' })).toBe(expected);
   });
 
-  it('refuses to shift a row range off the bottom', () => {
-    expect(() => translateFormula('=SUM(1048570:1048576)', 'A1', { rowDelta: 10 })).toThrowError(
-      TranslatorError,
+  it('wraps a reference shifted past XFD', () => {
+    expect(translateFormula('=XFD1', 'XFC1', { dest: 'XFD1' })).toBe('=A1');
+  });
+
+  it('leaves a token past the grid untouched, since Excel reads it as a name', () => {
+    expect(translateFormula('=ZZZ1+A2000000:A2000001', 'A1', { rowDelta: 1, colDelta: 1 })).toBe(
+      '=ZZZ1+A2000000:A2000001',
     );
   });
 
@@ -185,8 +207,8 @@ describe('translateRange', () => {
     expect(translateRange(input, rd as number, cd as number)).toBe(expected);
   });
 
-  it('row-range fall-off raises', () => {
-    expect(() => translateRange('1:5', -2, 3)).toThrowError(TranslatorError);
+  it('wraps a row range shifted above row 1', () => {
+    expect(translateRange('1:5', -2, 3)).toBe('1048575:3');
   });
 });
 

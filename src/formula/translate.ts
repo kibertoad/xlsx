@@ -1,10 +1,11 @@
 // Shared / array formula translator. TS port of openpyxl
 // `formula/translate.py`. Walks the tokens produced by `tokenize`, shifts
 // the OPERAND-RANGE cell refs by `(row_delta, col_delta)`, and re-renders
-// the formula. Absolute (`$`-prefixed) anchors stay put; falling off any edge
-// of the grid raises `TranslatorError`. **Never evaluates.**
+// the formula. Absolute (`$`-prefixed) anchors stay put; a relative reference
+// shifted off an edge of the grid wraps to the opposite edge, as Excel does
+// ([MS-XLSB] RgceLocRel). **Never evaluates.**
 
-import { columnIndexFromLetter, columnLetterFromIndex, coordinateToTuple, MAX_ROW } from '../utils/coordinate.js';
+import { columnIndexFromLetter, columnLetterFromIndex, coordinateToTuple, MAX_COL, MAX_ROW } from '../utils/coordinate.js';
 import { OpenXmlError } from '../utils/exceptions.js';
 import { LITERAL, OPERAND, RANGE, renderTokens, type Token, tokenize } from './tokenizer.js';
 
@@ -19,44 +20,46 @@ export const COL_RANGE_RE = /^(\$?[A-Za-z]{1,3}):(\$?[A-Za-z]{1,3})$/;
 /** `A1`, `$AB$15` — single cell ref. */
 export const CELL_REF_RE = /^(\$?[A-Za-z]{1,3})(\$?[1-9][0-9]{0,6})$/;
 
-/**
- * Shift a row-snippet (`"3"` or `"$3"`) by `rdelta` rows. Absolute
- * anchors return verbatim; falling off either end of the grid raises
- * `TranslatorError`.
- *
- * The bottom bound is where this leaves openpyxl, which checks only for row 0
- * and below. {@link translateCol} has always raised at both ends, because
- * `columnLetterFromIndex` has no letters past XFD to hand back, so without the
- * check here a translation past row 1048576 was the one direction that quietly
- * produced a reference no spreadsheet can resolve.
- */
-export function translateRow(rowStr: string, rdelta: number): string {
-  if (rowStr.startsWith('$')) return rowStr;
-  const newRow = Number.parseInt(rowStr, 10) + rdelta;
-  if (newRow <= 0 || newRow > MAX_ROW) {
-    throw new TranslatorError('Formula out of range');
+/** Bring a 1-based index shifted past either end of a grid of `size` back onto it. */
+function wrapIndex(index: number, size: number): number {
+  return ((((index - 1) % size) + size) % size) + 1;
+}
+
+function assertWholeDelta(delta: number, axis: 'row' | 'column'): void {
+  if (!Number.isInteger(delta)) {
+    throw new TranslatorError(`Cannot translate formula: ${axis} delta ${delta} is not a whole number`);
   }
-  return String(newRow);
 }
 
 /**
- * Shift a column-snippet (`"A"` or `"$A"`) by `cdelta` columns. Absolute
- * anchors return verbatim; out-of-range raises `TranslatorError`.
+ * Shift a row-snippet (`"3"` or `"$3"`) by `rdelta` rows, wrapping past row 1
+ * or row 1048576. Absolute anchors return verbatim. Expects a row on the grid.
+ */
+export function translateRow(rowStr: string, rdelta: number): string {
+  if (rowStr.startsWith('$')) return rowStr;
+  assertWholeDelta(rdelta, 'row');
+  return String(wrapIndex(Number.parseInt(rowStr, 10) + rdelta, MAX_ROW));
+}
+
+/**
+ * Shift a column-snippet (`"A"` or `"$A"`) by `cdelta` columns, wrapping past
+ * A or XFD. Absolute anchors return verbatim. Expects a column on the grid.
  */
 export function translateCol(colStr: string, cdelta: number): string {
   if (colStr.startsWith('$')) return colStr;
-  let idx: number;
-  try {
-    idx = columnIndexFromLetter(colStr);
-  } catch {
-    throw new TranslatorError('Formula out of range');
-  }
-  const newIdx = idx + cdelta;
-  try {
-    return columnLetterFromIndex(newIdx);
-  } catch {
-    throw new TranslatorError('Formula out of range');
-  }
+  assertWholeDelta(cdelta, 'column');
+  return columnLetterFromIndex(wrapIndex(columnIndexFromLetter(colStr) + cdelta, MAX_COL));
+}
+
+const LAST_COL_LETTER = columnLetterFromIndex(MAX_COL);
+
+function isRowOnGrid(rowStr: string): boolean {
+  return Number.parseInt(rowStr.replace('$', ''), 10) <= MAX_ROW;
+}
+
+function isColOnGrid(colStr: string): boolean {
+  const letters = colStr.replace('$', '').toUpperCase();
+  return letters.length < LAST_COL_LETTER.length || letters <= LAST_COL_LETTER;
 }
 
 /**
@@ -79,15 +82,20 @@ export function stripWsName(rangeStr: string): [string, string] {
  * - `A1:B2` (with `:`) → recurse on each side, allowing named-range endpoints
  * - `A1` → cell ref
  * - anything else → assumed named range, returned verbatim
+ *
+ * A token shaped like a reference but naming a row or column past the grid
+ * (`A2000000`) is a name to Excel, so it is returned verbatim too.
  */
 export function translateRange(rangeStr: string, rdelta: number, cdelta: number): string {
   const [wsPart, rest] = stripWsName(rangeStr);
   const rowMatch = ROW_RANGE_RE.exec(rest);
   if (rowMatch !== null) {
+    if (!isRowOnGrid(rowMatch[1] as string) || !isRowOnGrid(rowMatch[2] as string)) return rangeStr;
     return `${wsPart}${translateRow(rowMatch[1] as string, rdelta)}:${translateRow(rowMatch[2] as string, rdelta)}`;
   }
   const colMatch = COL_RANGE_RE.exec(rest);
   if (colMatch !== null) {
+    if (!isColOnGrid(colMatch[1] as string) || !isColOnGrid(colMatch[2] as string)) return rangeStr;
     return `${wsPart}${translateCol(colMatch[1] as string, cdelta)}:${translateCol(colMatch[2] as string, cdelta)}`;
   }
   if (rest.indexOf(':') !== -1) {
@@ -96,6 +104,7 @@ export function translateRange(rangeStr: string, rdelta: number, cdelta: number)
   }
   const cellMatch = CELL_REF_RE.exec(rest);
   if (cellMatch === null) return rest; // assume named range
+  if (!isColOnGrid(cellMatch[1] as string) || !isRowOnGrid(cellMatch[2] as string)) return rangeStr;
   return `${wsPart}${translateCol(cellMatch[1] as string, cdelta)}${translateRow(cellMatch[2] as string, rdelta)}`;
 }
 
