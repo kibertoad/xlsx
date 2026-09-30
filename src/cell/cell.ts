@@ -8,7 +8,7 @@
 
 import { columnLetterFromIndex, MAX_COL, MAX_ROW } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
-import { normalizeFormulaText, startsWithEquals } from '../utils/formula-text.js';
+import { normalizeFormulaText, spellsFormula } from '../utils/formula-text.js';
 import { ERROR_CODES } from '../utils/inference.js';
 import { type RichText, richTextToString } from './rich-text.js';
 
@@ -108,9 +108,15 @@ export function setCellValue(c: Cell, value: CellValue): void {
 
 /**
  * "Smart" setter: infers the cell value from a JS runtime value.
- * - `string` starting with `=` → formula
+ * - `string` starting with `=` → formula, except a lone `'='`, which is text
  * - `string` matching an Excel error token → error variant
  * - other primitives / Date / null pass through verbatim
+ *
+ * This follows what Excel does with the same text typed into a cell. A string
+ * sent down the formula path has to be a formula: `'==A1'` and `'= '` throw
+ * here the way {@link setFormula} throws for them, as Excel refuses them too.
+ * Data that may legitimately start with `=` (a CSV column holding `'==>'`)
+ * belongs in {@link setCellValue}, which infers nothing.
  *
  * Intentionally not the default — explicit is clearer for typed code, and
  * inferring on every write costs measurable time on the worksheet write hot
@@ -118,7 +124,7 @@ export function setCellValue(c: Cell, value: CellValue): void {
  */
 export function bindValue(c: Cell, value: number | string | boolean | Date | null): void {
   if (typeof value === 'string') {
-    if (startsWithEquals(value)) {
+    if (spellsFormula(value)) {
       setFormula(c, value);
       return;
     }
@@ -138,7 +144,7 @@ export function bindValue(c: Cell, value: number | string | boolean | Date | nul
 // own normalises to exactly that, so the kinds whose text is required reject it
 // here rather than at save time.
 const requireFormulaText = (fn: string, formula: string): string => {
-  const text = normalizeFormulaText(formula);
+  const text = normalizeFormulaText(formula, fn);
   if (text.length === 0) {
     throw new OpenXmlSchemaError(`${fn}: formula text must not be empty (got ${JSON.stringify(formula)})`);
   }
@@ -151,7 +157,9 @@ const requireFormulaText = (fn: string, formula: string): string => {
  * {@link setFormula} is the same thing applied to a cell you already hold.
  *
  * A leading `=` is stripped, so `'=SUM(A1:A3)'` and `'SUM(A1:A3)'` are
- * interchangeable.
+ * interchangeable. Exactly one comes off: text that still starts with `=`
+ * after that (`'==A1'`) is rejected with an {@link OpenXmlSchemaError}, since
+ * it is not a formula Excel accepts either and `A1` is not what it meant.
  *
  * A cached value is optional. Without one, Excel, LibreOffice and Google
  * Sheets compute the result on open, but viewers that never calculate (Quick
@@ -211,7 +219,7 @@ export function makeSharedFormula(
   return Object.freeze({
     kind: 'formula',
     t: 'shared',
-    formula: formula === undefined ? '' : normalizeFormulaText(formula),
+    formula: formula === undefined ? '' : normalizeFormulaText(formula, 'makeSharedFormula'),
     si,
     ...(ref !== undefined ? { ref } : {}),
     ...(opts?.cachedValue !== undefined ? { cachedValue: opts.cachedValue } : {}),
@@ -287,7 +295,7 @@ export function makeDataTableFormula(formula: string, opts: DataTableFormulaOpts
   return Object.freeze({
     kind: 'formula',
     t: 'dataTable',
-    formula: normalizeFormulaText(formula),
+    formula: normalizeFormulaText(formula, 'makeDataTableFormula'),
     ref: opts.ref,
     ...(opts.r1 !== undefined ? { r1: opts.r1 } : {}),
     ...(opts.r2 !== undefined ? { r2: opts.r2 } : {}),

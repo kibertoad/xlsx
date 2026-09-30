@@ -63,6 +63,16 @@ describe('iterParse — basics', () => {
     const text = events.find((e) => e.kind === 'text');
     expect(text?.kind === 'text' && text.text).toBe('& < >');
   });
+
+  it('reports a CDATA section as text', async () => {
+    expect(await collect('<t>x<![CDATA[a<b]]>y</t>')).toEqual([
+      { kind: 'start', name: 't', attrs: {} },
+      { kind: 'text', text: 'x' },
+      { kind: 'text', text: 'a<b' },
+      { kind: 'text', text: 'y' },
+      { kind: 'end', name: 't' },
+    ]);
+  });
 });
 
 describe('iterParse — security', () => {
@@ -116,13 +126,13 @@ describe('iterParse — declaration context across input shapes', () => {
   });
 
   it.each([
-    '<r><!-- <!DOCTYPE html> --><t>ok</t></r>',
-    '<r><![CDATA[<!ENTITY foo>]]><t>ok</t></r>',
-    '<!-- <!DOCTYPE html> --><r><t>ok</t></r>',
-    '<?note <!ENTITY foo> ?><r><t>ok</t></r>',
-    '<?xml version="1.0"?><!-- <fake/> --><r><t>ok</t></r>',
-  ])('accepts literal markup regardless of chunk boundaries: %s', async (xml) => {
-    const expected = await collect('<r><t>ok</t></r>');
+    ['<r><!-- <!DOCTYPE html> --><t>ok</t></r>', '<r><t>ok</t></r>'],
+    ['<r><t><![CDATA[<!ENTITY foo>]]></t></r>', '<r><t>&lt;!ENTITY foo&gt;</t></r>'],
+    ['<!-- <!DOCTYPE html> --><r><t>ok</t></r>', '<r><t>ok</t></r>'],
+    ['<?note <!ENTITY foo> ?><r><t>ok</t></r>', '<r><t>ok</t></r>'],
+    ['<?xml version="1.0"?><!-- <fake/> --><r><t>ok</t></r>', '<r><t>ok</t></r>'],
+  ])('accepts literal markup regardless of chunk boundaries: %s', async (xml, equivalent) => {
+    const expected = await collect(equivalent);
     expect(await collect(xml)).toEqual(expected);
     expect(await collect(new TextEncoder().encode(xml))).toEqual(expected);
     expect(await collect(stream([xml]))).toEqual(expected);

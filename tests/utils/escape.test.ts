@@ -37,6 +37,43 @@ describe('escapeCellString / unescapeCellString', () => {
     expect(unescapeCellString(esc)).toBe(literal);
   });
 
+  it('protects adjacent _xHHHH_ sequences that share an underscore', () => {
+    // In `_x0041_x0042_` one underscore closes the first sequence and opens
+    // the second, and a reader decodes left to right without overlapping, so
+    // an opener left unprotected comes back decoded: `_x0041B`.
+    const cases: Array<[string, string]> = [
+      ['_x0041_x0042_', '_x005F_x0041_x005F_x0042_'],
+      ['a_x0044_x0045_x0046_b', 'a_x005F_x0044_x005F_x0045_x005F_x0046_b'],
+      ['_x005F_x0041_', '_x005F_x005F_x005F_x0041_'],
+      ['__x0041__', '__x005F_x0041__'],
+    ];
+    for (const [literal, escaped] of cases) {
+      expect(escapeCellString(literal)).toBe(escaped);
+      expect(unescapeCellString(escaped)).toBe(literal);
+    }
+  });
+
+  it('protects a sequence whose closing underscore comes from an escaped character', () => {
+    // `\n` goes out as `_x000A_`, which puts an underscore straight after
+    // `SKU_x0041` and hands the reader a sequence the text never contained.
+    const cases: Array<[string, string]> = [
+      ['SKU_x0041\nrest', 'SKU_x005F_x0041_x000A_rest'],
+      ['col_x0009\tval', 'col_x005F_x0009_x0009_val'],
+      ['_x0041\u0001', '_x005F_x0041_x0001_'],
+    ];
+    for (const [literal, escaped] of cases) {
+      expect(escapeCellString(literal)).toBe(escaped);
+      expect(unescapeCellString(escaped)).toBe(literal);
+    }
+  });
+
+  it('leaves an underscore that opens no sequence alone', () => {
+    for (const s of ['_x0041', 'x0041_', '_xZZZZ_', '_x041_', '_x00411_']) {
+      expect(escapeCellString(s)).toBe(s);
+      expect(unescapeCellString(s)).toBe(s);
+    }
+  });
+
   it('round-trips a mix of legal and illegal characters', () => {
     const original = 'A\u0000B_x0042_C\u0007';
     const round = unescapeCellString(escapeCellString(original));

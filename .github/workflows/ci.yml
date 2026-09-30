@@ -120,7 +120,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # PERF_GATE=1 promotes the throughput / heap regressions in tests/perf/
-      # from informational to fatal. CI runners are noisy compared to the M1
-      # baseline the gates are calibrated against; revisit the thresholds in
-      # the perf config if this turns flaky on a specific Node minor.
-      - run: PERF_GATE=1 pnpm test:perf
+      # from informational to fatal.
+      #
+      # Two attempts, because the fleet produces two shapes of noise. A runner
+      # uniformly slower than the median is handled inside the read gate, which
+      # divides its throughput by a machine probe. A stall confined to one
+      # measurement window is not, and that is what the second attempt covers.
+      # A real regression fails both.
+      - name: Perf gate, retried once
+        run: PERF_GATE=1 pnpm test:perf || PERF_GATE=1 pnpm test:perf

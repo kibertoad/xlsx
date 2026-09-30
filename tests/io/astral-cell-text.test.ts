@@ -2,33 +2,19 @@
 // `unescapeCellString` rebuilds a split surrogate pair on the way in, so a
 // load-save-load comparison reports success whatever the file on disk says.
 
-import { type Unzipped, unzipSync, zipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { makeRichText } from '../../src/cell/rich-text.js';
 import { loadWorkbook } from '../../src/io/load.js';
 import { fromBuffer } from '../../src/io/node.js';
 import { workbookToBytes } from '../../src/io/save.js';
 import { addWorksheet, createWorkbook } from '../../src/workbook/workbook.js';
-import { getCell, setCell, type Worksheet } from '../../src/worksheet/worksheet.js';
+import { getCell, setCell } from '../../src/worksheet/worksheet.js';
+import { expectSheet, partText, SHEET_PART, SST_PART } from './_helpers.js';
 
-const decoder = new TextDecoder();
 const encoder = new TextEncoder();
 const EMOJI = 'hi \u{1F600} there';
 const SPLIT = 'hi _xD83D__xDE00_ there';
-const SHEET_PART = 'xl/worksheets/sheet1.xml';
-const SST_PART = 'xl/sharedStrings.xml';
-
-const expectSheet = (ws: Worksheet | import('../../src/chartsheet/chartsheet.js').Chartsheet | undefined): Worksheet => {
-  if (!ws) throw new Error('expected worksheet');
-  if (!('rows' in ws)) throw new Error('expected worksheet, got chartsheet');
-  return ws;
-};
-
-const partText = (archive: Unzipped, path: string): string => {
-  const entry = archive[path];
-  if (!entry) throw new Error(`no ${path} in the package`);
-  return decoder.decode(entry);
-};
 
 describe('astral characters in cell text', () => {
   it('writes a shared string with the character intact', async () => {

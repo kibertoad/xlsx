@@ -3,8 +3,8 @@
 // Excel emits cell strings with control characters and other illegal
 // XML 1.0 codepoints encoded as `_xHHHH_` (uppercase hex). The
 // underscore itself is a literal in normal text but a sequence opener
-// in escape position; an existing `_xHHHH_` in the input is therefore
-// re-escaped to `_x005F_xHHHH_` so it round-trips losslessly.
+// in escape position; an underscore that opens one in the input is
+// therefore written as `_x005F_` so the text round-trips losslessly.
 
 import { OpenXmlSchemaError } from './exceptions.js';
 
@@ -21,23 +21,33 @@ import { OpenXmlSchemaError } from './exceptions.js';
 // The `u` flag makes the class match code points rather than UTF-16 code
 // units, so a well-formed surrogate pair is a single character outside
 // D800-DFFF and passes through intact.
-const ILLEGAL_RE =
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: by design, these are the codepoints we replace
-  /[\x00-\x1F\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
-const ESCAPED_PATTERN_RE = /(_)(x[0-9A-Fa-f]{4}_)/g;
+//
+// The class lives in a string so the lookahead below can share it. A codepoint
+// this pass escapes but the lookahead does not know about is how text grows a
+// sequence the reader then decodes.
+const ILLEGAL_CLASS = '[\\x00-\\x1F\\u{D800}-\\u{DFFF}\\u{FFFE}\\u{FFFF}]';
+const ILLEGAL_RE = new RegExp(ILLEGAL_CLASS, 'gu');
+
+// An underscore opens a sequence when four hex digits and a closer follow it.
+// The closer is either a literal underscore or an illegal codepoint, since
+// escaping that codepoint puts an underscore in its place: `SKU_x0041` + `\n`
+// goes out as `SKU_x0041_x000A_`, whose `_x0041_` a reader decodes to `A`.
+// Matching the opener alone leaves the closer free to open the next sequence,
+// which is how `_x0041_x0042_` gets both of its halves protected.
+const SEQUENCE_OPENER_RE = new RegExp(`_(?=x[0-9A-Fa-f]{4}(?:_|${ILLEGAL_CLASS}))`, 'gu');
 
 const toHex4 = (n: number): string => n.toString(16).toUpperCase().padStart(4, '0');
 
 /**
- * Escape a string for safe storage in an OOXML cell. Already-escaped
- * sequences (`_xHHHH_`) are protected by escaping their leading
- * underscore; illegal codepoints are replaced with their `_xHHHH_`
- * representation.
+ * Escape a string for safe storage in an OOXML cell. An underscore that opens
+ * an `_xHHHH_` sequence becomes `_x005F_`; illegal codepoints are replaced
+ * with their `_xHHHH_` representation. {@link unescapeCellString} recovers the
+ * input for any string.
  */
 export function escapeCellString(s: string): string {
-  // Re-escape any existing `_xHHHH_` so it round-trips; the underscore
-  // becomes `_x005F_` and the rest of the sequence is left as-is.
-  const protectedString = s.replace(ESCAPED_PATTERN_RE, '_x005F_$2');
+  // Protection runs first: the sequences the illegal pass emits are the
+  // writer's own and have to stay decodable.
+  const protectedString = s.replace(SEQUENCE_OPENER_RE, '_x005F_');
   return protectedString.replace(ILLEGAL_RE, (ch) => `_x${toHex4(ch.charCodeAt(0))}_`);
 }
 

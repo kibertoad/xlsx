@@ -27,7 +27,7 @@ import { unknownCellType } from '../utils/cell-text.js';
 import { dateToExcel, durationToExcel } from '../utils/datetime.js';
 import { coordinateToTuple, derivedRowNumber, rowNumberFromAttr, tupleToCoordinate } from '../utils/coordinate.js';
 import { OpenXmlSchemaError } from '../utils/exceptions.js';
-import { normalizeFormulaText } from '../utils/formula-text.js';
+import { repairFormulaTextFromFile } from '../utils/formula-text.js';
 import { parseXsdBoolean } from '../utils/xsd-boolean.js';
 import { localNameOf, MARKUP_COMPAT_NS, qname, REL_NS, SHEET_MAIN_NS } from '../xml/namespaces.js';
 import { isWhitespaceOnly, parseXml, rejectDtdDeclarations } from '../xml/parser.js';
@@ -1958,8 +1958,9 @@ const handleFormula = (
   //
   // The leading `=` is the exception: `<f>` text must not carry one, and the
   // shared-formula cache below has to hold the same text as the cell it came
-  // from.
-  const formula = normalizeFormulaText(fText ?? '');
+  // from. A file that carries one is repaired rather than refused, here and
+  // for the other elements that hold formula text.
+  const formula = repairFormulaTextFromFile(fText ?? '');
   const opts = cached !== undefined ? {
     cachedValue: cached,
     ...(cachedType === 'e' ? { cachedValueType: 'error' as const } : {}),
@@ -2126,9 +2127,9 @@ const parseDataValidation = (node: XmlNode): DataValidation => {
   const prompt = node.attrs['prompt'];
   if (prompt !== undefined) opts.prompt = prompt;
   const f1 = findChild(node, FORMULA1_TAG);
-  if (f1?.text !== undefined) opts.formula1 = f1.text;
+  if (f1?.text !== undefined) opts.formula1 = repairFormulaTextFromFile(f1.text);
   const f2 = findChild(node, FORMULA2_TAG);
-  if (f2?.text !== undefined) opts.formula2 = f2.text;
+  if (f2?.text !== undefined) opts.formula2 = repairFormulaTextFromFile(f2.text);
   return makeDataValidation(opts);
 };
 
@@ -2201,7 +2202,7 @@ const parseCfRule = (node: XmlNode): ConditionalFormattingRule | undefined => {
   if (node.attrs['timePeriod']) opts.timePeriod = node.attrs['timePeriod'] as TimePeriod;
 
   const formulas: string[] = [];
-  for (const f of findChildren(node, FORMULA_TAG)) formulas.push(f.text ?? '');
+  for (const f of findChildren(node, FORMULA_TAG)) formulas.push(repairFormulaTextFromFile(f.text ?? ''));
   if (formulas.length > 0) opts.formulas = formulas;
 
   if (VISUAL_RULE_TYPES.has(type)) {

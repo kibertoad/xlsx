@@ -922,7 +922,8 @@ function serializeWorkbookXml(wb: Workbook, sheetRIds: ReadonlyArray<string>): s
       if (dn.scope !== undefined) attrs += ` localSheetId="${dn.scope}"`;
       if (dn.hidden) attrs += ' hidden="1"';
       if (dn.comment !== undefined) attrs += ` comment="${escapeAttr(dn.comment)}"`;
-      parts.push(`<definedName${attrs}>${escapeText(normalizeFormulaText(dn.value))}</definedName>`);
+      const value = normalizeFormulaText(dn.value, `workbook: <definedName> "${dn.name}"`);
+      parts.push(`<definedName${attrs}>${escapeText(value)}</definedName>`);
     }
     parts.push('</definedNames>');
   }

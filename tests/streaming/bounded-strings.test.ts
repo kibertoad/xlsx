@@ -15,7 +15,8 @@ describe('write-only string retention', () => {
     for (let i = 0; i < 100_000; i++) await first.appendRow([`v${i}`]);
     await first.close();
     const second = await wb.addWorksheet('Second');
-    await second.appendRow(['v0', 'new', { kind: 'rich-text', runs: [{ text: 'rich', font: { b: true } }] }]);
+    const bold = { kind: 'rich-text' as const, runs: [{ text: 'rich', font: { b: true } }] };
+    await second.appendRow(['v0', 'new', bold]);
     const special = ' \t\n\r\u0001<&>_x0041_😀 ';
     const rich = { kind: 'rich-text' as const, runs: [
       { text: special, font: { b: true } }, { text: '_x0' }, { text: '041_' },
@@ -49,7 +50,7 @@ describe('write-only string retention', () => {
     try {
       const values = [];
       for await (const row of streamed.openWorksheet('Second').iterValues()) values.push(row);
-      expect(values).toEqual([['v0', 'new', 'rich'], ['', special, `${special}_x0041_`]]);
+      expect(values).toEqual([['v0', 'new', bold], ['', special, rich]]);
     } finally {
       await streamed.close();
     }
@@ -91,7 +92,9 @@ describe('write-only shared-string chunking', () => {
       const sink = toBuffer();
       const wb = await createWriteOnlyWorkbook(sink);
       const ws = await wb.addWorksheet('S');
-      const value = prefix + '\u{1F600}'.repeat(20_000);
+      // 24,000 code units: past the 16,384-unit slice a pair can straddle, and
+      // inside the 32,767 Excel accepts in one cell.
+      const value = prefix + '\u{1F600}'.repeat(12_000);
       await ws.appendRow([value]);
       await ws.close();
       await wb.finalize();

@@ -51,6 +51,17 @@ describe('parseSharedStringsXml — plain strings', () => {
     expect(t.index.get('b')).toBe(2);
   });
 
+  it('decodes each <t> of a multi-part <si> on its own', () => {
+    // More than one `<t>` in a `CT_Rst` is off-schema but readable. Decoding
+    // the concatenation instead would let two halves combine into an
+    // `_xHHHH_` sequence neither of them held, and would disagree with the
+    // streaming reader, which decodes per element.
+    const t = parseSharedStringsXml(
+      '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>a_x005F</t><t>_x0041_</t></si></sst>',
+    );
+    expect(t.entries).toEqual(['a_x005FA']);
+  });
+
   it('preserves rich-text runs <r><t>...</t></r> as a discriminated entry', () => {
     const t = parseSharedStringsXml(
       '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><r><t>foo</t></r><r><t>bar</t></r></si></sst>',
