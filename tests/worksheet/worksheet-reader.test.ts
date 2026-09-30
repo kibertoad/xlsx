@@ -138,6 +138,23 @@ describe('parseWorksheetXml — formulas', () => {
     expect(v2.si).toBe(0);
   });
 
+  it('wraps a shared formula filled down past the last row, as Excel does', () => {
+    const xml = wrap(`<sheetData>
+      <row r="1048575"><c r="A1048575"><f t="shared" si="0" ref="A1048575:A1048576">B1048576</f></c></row>
+      <row r="1048576"><c r="A1048576"><f t="shared" si="0"/></c></row>
+    </sheetData>`);
+    const ws = parseWorksheetXml(xml, 'S', { sharedStrings: [] });
+    expect((getCell(ws, 1048576, 1)?.value as FormulaValue).formula).toBe('B1');
+  });
+
+  it('wraps a shared formula filled right past column XFD, as Excel does', () => {
+    const xml = wrap(`<sheetData>
+      <row r="1"><c r="XFC1"><f t="shared" si="0" ref="XFC1:XFD1">XFD1</f></c><c r="XFD1"><f t="shared" si="0"/></c></row>
+    </sheetData>`);
+    const ws = parseWorksheetXml(xml, 'S', { sharedStrings: [] });
+    expect((getCell(ws, 1, 16384)?.value as FormulaValue).formula).toBe('A1');
+  });
+
   it('keeps the sheet on a sheet-qualified name in a shared formula', () => {
     const xml = wrap(`<sheetData>
       <row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">Data!total+B1</f></c></row>
