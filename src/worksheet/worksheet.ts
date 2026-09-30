@@ -350,20 +350,12 @@ export function deleteCell(ws: Worksheet, row: number, col: number): void {
 }
 
 /**
- * Delete the populated cells of `range` for which `keep` is false, pruning any
+ * Delete the populated cells of `bounds` for which `keep` is false, pruning any
  * row map that empties. Returns how many were deleted.
  *
- * A range can be far larger than the cells inside it: `'A:A'` is 1_048_576
- * coordinates and `'A1:XFD1048576'` is seventeen billion, both of which Excel
- * lets a caller name. Walking every coordinate of one costs time proportional
- * to its area whatever the sheet holds, so each axis is enumerated whichever
- * way is smaller: over the range when the range is narrower than the sparse
- * store, and over the store when it is not. That keeps a whole-column merge on
- * a handful of cells cheap without making a two-by-two clear on a
- * million-row sheet expensive.
- *
- * Deleting from a Map while iterating it is defined behaviour: the iterator
- * visits each remaining entry once and skips what has been removed.
+ * A range can name far more coordinates than the sheet holds (`'A1:XFD1048576'`
+ * is seventeen billion), so each axis walks whichever is smaller, the range or
+ * the populated store. The cost is bounded by both.
  */
 const deleteCellsInRange = (
   ws: Worksheet,
@@ -1061,11 +1053,12 @@ export function ensureCellByCoord(ws: Worksheet, coord: string): Cell {
  */
 export function mergeCells(ws: Worksheet, refOrRange: RangeRef): CellRange {
   const range = parseRange(refOrRange);
+  const ref = rangeToString(range);
   for (const existing of ws.mergedCells) {
-    if (rangeToString(existing) === rangeToString(range)) return existing;
+    if (rangeToString(existing) === ref) return existing;
     if (rangesOverlap(existing, range)) {
       throw new OpenXmlSchemaError(
-        `mergeCells: range ${rangeToString(range)} overlaps existing merged range ${rangeToString(existing)}`,
+        `mergeCells: range ${ref} overlaps existing merged range ${rangeToString(existing)}`,
       );
     }
   }
