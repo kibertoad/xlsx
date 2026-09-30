@@ -103,7 +103,7 @@ export function translateRange(rangeStr: string, rdelta: number, cdelta: number)
     return wsPart + pieces.join(':');
   }
   const cellMatch = CELL_REF_RE.exec(rest);
-  if (cellMatch === null) return rest; // assume named range
+  if (cellMatch === null) return rangeStr; // assume named range
   if (!isColOnGrid(cellMatch[1] as string) || !isRowOnGrid(cellMatch[2] as string)) return rangeStr;
   return `${wsPart}${translateCol(cellMatch[1] as string, cdelta)}${translateRow(cellMatch[2] as string, rdelta)}`;
 }

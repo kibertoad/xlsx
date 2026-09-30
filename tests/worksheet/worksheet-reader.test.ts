@@ -155,6 +155,15 @@ describe('parseWorksheetXml — formulas', () => {
     expect((getCell(ws, 1, 16384)?.value as FormulaValue).formula).toBe('A1');
   });
 
+  it('keeps the sheet on a sheet-qualified name in a shared formula', () => {
+    const xml = wrap(`<sheetData>
+      <row r="1"><c r="A1"><f t="shared" si="0" ref="A1:A2">Data!total+B1</f></c></row>
+      <row r="2"><c r="A2"><f t="shared" si="0"/></c></row>
+    </sheetData>`);
+    const ws = parseWorksheetXml(xml, 'S', { sharedStrings: [] });
+    expect((getCell(ws, 2, 1)?.value as FormulaValue).formula).toBe('Data!total+B2');
+  });
+
   it('rejects orphaned shared-formula reference', () => {
     const xml = wrap(`<sheetData>
       <row r="1"><c r="A1"><f t="shared" si="0"/></c></row>
