@@ -2,4 +2,4 @@
 "@office-kit/xlsx": minor
 ---
 
-Remove `WriteOnlyOptions.estimatedMaxRow`. It was documented as "Reserved, currently ignored", so passing it never did anything. Delete the property from any `createWriteOnlyWorkbook` options object; nothing else changes.
+Breaking (types only): remove `WriteOnlyOptions.estimatedMaxRow`. It was documented as "Reserved, currently ignored", so passing it never did anything. TypeScript callers that pass it get an excess-property error; delete the property from the `createWriteOnlyWorkbook` options object. Runtime behaviour is unchanged.
